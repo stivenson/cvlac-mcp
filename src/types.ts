@@ -29,6 +29,48 @@ export interface AchievementItem {
   description: string;
 }
 
+export interface ProjectItem {
+  title: string;
+  description: string;
+  tipoProyecto: 'ID' | 'IN' | 'EX' | 'CR';
+  startYear: string;
+  startMonth: string;
+  endYear?: string;
+  endMonth?: string;
+  institution?: string;
+  link?: string;
+  // Financiación
+  tipoFinanciacion?: 'FI' | 'SO'; // Financiado | Solidario
+  fuenteFinanciacion?: 'IN' | 'EX'; // Interna | Externa
+  tipoParticipacionInstitucion?: 'FI' | 'EJ' | 'FI_EJ'; // Financiadora | Ejecutora | Ambas
+  nroActoAdministrativo?: string;
+  fechaActoAdministrativo?: string; // DD/MM/YYYY
+  valorSinContrapartida?: string; // numeric string
+  participacion?: string; // e.g. "Investigador Principal", "Coinvestigador", "Estudiante de pregrado"
+}
+
+export interface SoftwareItem {
+  name: string;
+  year: string;
+  month?: string;
+  tipoSoftware?: '211' | '212' | '219'; // Computacional | Multimedia | Otra
+  url?: string;
+}
+
+export interface EventoCientificoItem {
+  name: string;
+  startDate: string; // DD/MM/YYYY
+  endDate?: string;  // DD/MM/YYYY
+  lugar?: string;
+  ciudad?: string;
+  codMunicipio?: string; // Código DANE: 54001=Cúcuta, 11001=Bogotá, 05001=Medellín
+  tipoEvento?: string; // OT=Otro, CO=Congreso, SE=Seminario, TA=Taller
+  ambito?: 'N' | 'I' | 'R'; // Nacional | Internacional | Regional
+  rol?: 'PO' | 'PM' | 'OR' | 'AS'; // Ponente | Ponente magistral | Organizador | Asistente
+  institution?: string;
+  resumen?: string;
+}
+
 export interface SkillsData {
   languages: string[];
   frontend: string[];
@@ -48,6 +90,9 @@ export interface PortfolioData {
   experience: ExperienceItem[];
   courses: CourseItem[];
   achievements: AchievementItem[];
+  projects: ProjectItem[];
+  software: SoftwareItem[];
+  eventos: EventoCientificoItem[];
   skills: SkillsData;
 }
 
@@ -57,7 +102,10 @@ export type CvLACSectionName =
   | 'formacion'
   | 'experiencia'
   | 'cursos'
-  | 'reconocimientos';
+  | 'reconocimientos'
+  | 'proyectos'
+  | 'software'
+  | 'eventos';
 
 export interface CvLACFormacionItem {
   institution: string;
@@ -78,7 +126,19 @@ export interface CvLACCursoItem {
 
 export interface CvLACReconocimientoItem {
   title: string;
-  description?: string;
+  year?: string;
+}
+
+export interface CvLACProyectoItem {
+  title: string;
+}
+
+export interface CvLACSoftwareItem {
+  name: string;
+}
+
+export interface CvLACEventoItem {
+  name: string;
 }
 
 export interface CvLACData {
@@ -86,6 +146,9 @@ export interface CvLACData {
   experiencia: CvLACExperienciaItem[];
   cursos: CvLACCursoItem[];
   reconocimientos: CvLACReconocimientoItem[];
+  proyectos: CvLACProyectoItem[];
+  software: CvLACSoftwareItem[];
+  eventos: CvLACEventoItem[];
 }
 
 // ── Diff types ───────────────────────────────────────────────────────────────

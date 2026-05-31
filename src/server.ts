@@ -9,12 +9,15 @@ import { syncTool } from './tools/sync.js';
 import { screenshotTool } from './tools/screenshot.js';
 import type { CvLACSectionName } from './types.js';
 
-const sectionSchema = z.enum(['formacion', 'experiencia', 'cursos', 'reconocimientos']);
+const sectionSchema = z.enum(['formacion', 'experiencia', 'cursos', 'reconocimientos', 'proyectos', 'software', 'eventos']);
 const sectionAllSchema = z.enum([
   'formacion',
   'experiencia',
   'cursos',
   'reconocimientos',
+  'proyectos',
+  'software',
+  'eventos',
   'all',
 ]);
 
@@ -136,6 +139,36 @@ export function createServer(): McpServer {
       const result = await screenshotTool();
       return {
         content: [{ type: 'image', data: result.base64, mimeType: 'image/png' }],
+      };
+    }
+  );
+
+  server.registerTool(
+    'inspect_form',
+    {
+      description: 'Navigate to a CvLAC URL and return the HTML of all form inputs/selects/textareas for debugging field names.',
+      inputSchema: {
+        url: z.string().describe('The CvLAC URL to inspect'),
+      },
+    },
+    async ({ url }) => {
+      const { session } = await import('./browser/session.js');
+      const page = await session.getPage();
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      const fields = await page.evaluate(() => {
+        const els = Array.from(document.querySelectorAll('input, select, textarea, [type="radio"]'));
+        return els.map((el) => {
+          const e = el as HTMLInputElement;
+          return `${e.tagName} name="${e.name}" id="${e.id}" type="${e.type}" value="${e.value}"`;
+        });
+      });
+      const screenshot = await session.takeScreenshot(page);
+      await page.close();
+      return {
+        content: [
+          { type: 'text', text: fields.join('\n') },
+          { type: 'image', data: screenshot, mimeType: 'image/png' },
+        ],
       };
     }
   );

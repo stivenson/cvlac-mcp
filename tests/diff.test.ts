@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeDiff } from '../src/diff.js';
+import { computeDiff, nameMatches } from '../src/diff.js';
 import type { PortfolioData, CvLACData } from '../src/types.js';
 
 const portfolioData: PortfolioData = {
@@ -35,8 +35,14 @@ const portfolioData: PortfolioData = {
       description: 'Ing. de Sistemas con mención por trabajo social',
     },
   ],
+  projects: [],
+  software: [],
+  eventos: [],
   skills: { languages: [], frontend: [], ai: [], cloud: [], devops: [], databases: [] },
 };
+
+/** Empty CvLAC sections that don't participate in a given test case */
+const emptyCvlacExtras = { proyectos: [], software: [], eventos: [] };
 
 describe('computeDiff', () => {
   it('returns all portfolio items as missing when CvLAC is empty', () => {
@@ -45,10 +51,12 @@ describe('computeDiff', () => {
       experiencia: [],
       cursos: [],
       reconocimientos: [],
+      ...emptyCvlacExtras,
     };
     const result = computeDiff(portfolioData, cvlac);
     expect(result.missing.filter((d) => d.section === 'formacion')).toHaveLength(2);
-    expect(result.missing.filter((d) => d.section === 'experiencia')).toHaveLength(1);
+    // experiencia is intentionally excluded from the diff (managed manually in CvLAC)
+    expect(result.missing.filter((d) => d.section === 'experiencia')).toHaveLength(0);
     expect(result.missing.filter((d) => d.section === 'cursos')).toHaveLength(2);
     expect(result.missing.filter((d) => d.section === 'reconocimientos')).toHaveLength(1);
     expect(result.upToDate).toHaveLength(0);
@@ -62,6 +70,7 @@ describe('computeDiff', () => {
       experiencia: [],
       cursos: [],
       reconocimientos: [],
+      ...emptyCvlacExtras,
     };
     const result = computeDiff(portfolioData, cvlac);
     const upToDateFormacion = result.upToDate.filter((d) => d.section === 'formacion');
@@ -80,6 +89,7 @@ describe('computeDiff', () => {
       ],
       cursos: [],
       reconocimientos: [],
+      ...emptyCvlacExtras,
     };
     const result = computeDiff(portfolioData, cvlac);
     const missingExp = result.missing.filter((d) => d.section === 'experiencia');
@@ -92,10 +102,35 @@ describe('computeDiff', () => {
       experiencia: [],
       cursos: [{ name: 'Taller Planeación y Optimización IA (USB)' }],
       reconocimientos: [],
+      ...emptyCvlacExtras,
     };
     const result = computeDiff(portfolioData, cvlac);
     const missingCursos = result.missing.filter((d) => d.section === 'cursos');
     expect(missingCursos).toHaveLength(1);
     expect(missingCursos[0].label).toContain('AWS');
+  });
+});
+
+describe('nameMatches', () => {
+  it('ignores accents and case', () => {
+    expect(nameMatches('Ingeniería de Sistemas', 'INGENIERIA DE SISTEMAS')).toBe(true);
+  });
+
+  it('matches across parenthetical and trailing suffixes', () => {
+    expect(
+      nameMatches(
+        'Curso Práctico de Cloud Computing con AWS',
+        'Curso Práctico de Cloud Computing con AWS (Platzi) - Aprobado abril 2021'
+      )
+    ).toBe(true);
+  });
+
+  it('does not conflate two different AWS courses', () => {
+    expect(
+      nameMatches(
+        'Curso Práctico de AWS Cloud (Platzi)',
+        'Curso Práctico de Cloud Computing con AWS (Platzi)'
+      )
+    ).toBe(false);
   });
 });

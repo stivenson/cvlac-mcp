@@ -3,18 +3,19 @@ import type { CvLACCursoItem } from '../../types.js';
 import { URLS } from '../../browser/navigation.js';
 
 export async function extractCursos(page: Page): Promise<CvLACCursoItem[]> {
-  await page.goto(URLS.cursos, { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto(URLS.cursos, { waitUntil: 'domcontentloaded', timeout: 20000 });
 
   const items = await page.$$eval(
-    'table.itemProd tr, .itemCurso, [class*="complementaria"] tr',
+    'tr.odd, tr.even',
     (rows) =>
       rows
         .map((row) => {
           const cells = Array.from(row.querySelectorAll('td'));
-          if (cells.length < 1) return null;
+          // Columns: [num, nombre, año, ...]
+          if (cells.length < 2) return null;
           return {
-            name: cells[0]?.textContent?.trim() ?? '',
-            date: cells[1]?.textContent?.trim() ?? '',
+            name: cells[1]?.textContent?.trim() ?? '',
+            date: cells[2]?.textContent?.trim() ?? '',
           };
         })
         .filter(Boolean)

@@ -19,10 +19,19 @@ export async function syncTool(opts: SyncOptions = {}): Promise<SyncResult> {
 
   const diff = await diffTool();
 
-  let toApply: DiffItem[] = diff.missing;
-  if (sections && sections.length > 0) {
-    toApply = toApply.filter((d) => sections.includes(d.section));
-  }
+  const filterSections = sections && sections.length > 0 ? sections : null;
+
+  const toApply = filterSections
+    ? diff.missing.filter((d) => filterSections.includes(d.section))
+    : diff.missing;
+
+  const reportMissing = filterSections
+    ? diff.missing.filter((d) => filterSections.includes(d.section))
+    : diff.missing;
+
+  const reportUpToDate = filterSections
+    ? diff.upToDate.filter((d) => filterSections.includes(d.section))
+    : diff.upToDate;
 
   const errors: string[] = [];
   let applied = 0;
@@ -30,13 +39,14 @@ export async function syncTool(opts: SyncOptions = {}): Promise<SyncResult> {
 
   const reportLines: string[] = [
     `## CvLAC Sync Report`,
+    filterSections ? `> Secciones: ${filterSections.join(', ')}` : '',
     ``,
-    `**Missing items (${diff.missing.length}):**`,
-    ...diff.missing.map((d) => `- [${d.section}] ${d.label}`),
+    `**Missing items (${reportMissing.length}):**`,
+    ...reportMissing.map((d) => `- [${d.section}] ${d.label}`),
     ``,
-    `**Already up to date (${diff.upToDate.length}):**`,
-    ...diff.upToDate.map((d) => `- [${d.section}] ${d.label}`),
-  ];
+    `**Already up to date (${reportUpToDate.length}):**`,
+    ...reportUpToDate.map((d) => `- [${d.section}] ${d.label}`),
+  ].filter((l) => l !== '');
 
   if (dryRun) {
     reportLines.push('', '> Dry run — no changes applied.');

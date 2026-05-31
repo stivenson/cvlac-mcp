@@ -4,8 +4,86 @@ import type {
   ExperienceItem,
   CourseItem,
   AchievementItem,
+  ProjectItem,
+  SoftwareItem,
+  EventoCientificoItem,
   SkillsData,
 } from '../types.js';
+
+// NOTE: projects/software/eventos are NOT parsed from the portfolio React bundle.
+// The bundle only exposes clean arrays for education/experience/courses/achievements/skills;
+// these three categories require CvLAC-specific metadata (tipoProyecto, codMunicipio, enum
+// codes, etc.) that the portfolio doesn't carry. They are curated here by hand and kept in
+// sync manually. Verified live (docs/cvlac-findings.md): the current STATIC entries already
+// exist in CvLAC, so the diff reports them as up to date.
+const STATIC_EVENTOS: EventoCientificoItem[] = [
+  {
+    name: 'Congreso de Ingeniería Multimedia - Universidad Simón Bolívar',
+    startDate: '01/04/2025',
+    endDate: '01/04/2025',
+    lugar: 'Universidad Simón Bolívar',
+    ciudad: 'Cúcuta',
+    tipoEvento: 'TA',
+    ambito: 'N',
+    rol: 'PO',
+    institution: 'Universidad Simón Bolívar',
+    resumen: 'Taller: Inteligencia Artificial en el Frontend. Taller práctico de 1.5 horas para estudiantes de Ingeniería Multimedia sobre el uso de herramientas de IA generativa en desarrollo web, incluyendo prompt engineering, generación de componentes con v0.dev y Google AI Studio.',
+  },
+];
+
+const STATIC_SOFTWARE: SoftwareItem[] = [
+  {
+    name: 'Soporte en Crisis TOC - Emotion Game',
+    year: '2025',
+    month: '1',
+    tipoSoftware: '211',
+    url: 'https://stivenson.github.io/toc_support.html',
+  },
+  {
+    name: 'Directorio de Interfaces LLM',
+    year: '2025',
+    month: '1',
+    tipoSoftware: '211',
+    url: 'https://stivenson.github.io/llm-directory.html',
+  },
+  {
+    name: 'cvlac-mcp - MCP Server para automatización de CvLAC',
+    year: '2025',
+    month: '4',
+    tipoSoftware: '211',
+    url: 'https://github.com/stivenson/cvlac-mcp',
+  },
+];
+
+const STATIC_PROJECTS: ProjectItem[] = [
+  {
+    title: 'Soporte en Crisis TOC - Emotion Game',
+    description:
+      'Herramienta digital no clínica de psicoeducación y autorregulación emocional para el Trastorno Obsesivo Compulsivo (TOC), con integración de Large Language Models para scaffolding cognitivo y navegación de estados internos.',
+    tipoProyecto: 'EX',
+    startYear: '2025',
+    startMonth: '1',
+    link: 'https://stivenson.github.io/toc_support.html',
+  },
+  {
+    title: 'Directorio de Interfaces LLM',
+    description:
+      'Directorio curado y categorizado de interfaces de inteligencia artificial incluyendo chats conversacionales, editores, agentes, herramientas de datos, imágenes, video, audio, código, flujos de trabajo y diseño.',
+    tipoProyecto: 'EX',
+    startYear: '2025',
+    startMonth: '1',
+    link: 'https://stivenson.github.io/llm-directory.html',
+  },
+  {
+    title: 'Aplicaciones de IA a problemas regionales - Maestría en IA Uniandes',
+    description:
+      'Proyectos de investigación y desarrollo en el marco de la Maestría en Inteligencia Artificial de la Universidad de los Andes, con enfoque en aplicar IA a problemas reales de la región colombiana.',
+    tipoProyecto: 'ID',
+    startYear: '2024',
+    startMonth: '2',
+    institution: 'Universidad de los Andes',
+  },
+];
 
 const PORTFOLIO_URL = process.env.PORTFOLIO_URL ?? 'https://stivenson.github.io';
 
@@ -39,6 +117,9 @@ export function normalizePortfolioData(bundleText: string): PortfolioData {
     experience: extractExperience(bundleText),
     courses: extractCourses(bundleText),
     achievements: extractAchievements(bundleText),
+    projects: STATIC_PROJECTS,
+    software: STATIC_SOFTWARE,
+    eventos: STATIC_EVENTOS,
     skills: extractSkills(bundleText),
   };
 }
