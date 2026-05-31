@@ -21,17 +21,185 @@ Permite:
 
 ## Tabla de contenido
 
+- [Inicio rápido: instalar y configurar el MCP (Linux, Windows, macOS)](#inicio-rápido-instalar-y-configurar-el-mcp-linux-windows-macos)
 - [Arquitectura](#arquitectura)
 - [Tools MCP disponibles](#tools-mcp-disponibles)
-- [Requisitos](#requisitos)
-- [Instalación](#instalación)
 - [Variables de entorno](#variables-de-entorno)
 - [Uso local](#uso-local)
-- [Integración con Cursor MCP](#integración-con-cursor-mcp)
 - [Flujo recomendado](#flujo-recomendado)
 - [Pruebas y build](#pruebas-y-build)
 - [Troubleshooting](#troubleshooting)
 - [Seguridad y buenas prácticas](#seguridad-y-buenas-prácticas)
+
+---
+
+## Inicio rápido: instalar y configurar el MCP (Linux, Windows, macOS)
+
+Esta es la guía oficial de instalación y configuración. Sigue los pasos en orden; cada uno incluye una verificación para no avanzar con un entorno roto.
+
+### Paso 0 - Prerrequisitos (todas las plataformas)
+
+Necesitas **Node.js 20 o superior**, **npm 10+** y **git**.
+
+| Plataforma | Cómo instalar Node 20+ |
+|---|---|
+| **Linux** (Debian/Ubuntu) | `curl -fsSL https://deb.nodesource.com/setup_20.x \| sudo -E bash - && sudo apt-get install -y nodejs git` |
+| **Linux** (cualquier distro, recomendado) | Instalar [nvm](https://github.com/nvm-sh/nvm) y luego `nvm install 20 && nvm use 20` |
+| **macOS** | `brew install node@20 git` (con [Homebrew](https://brew.sh)) o nvm |
+| **Windows** | `winget install OpenJS.NodeJS.LTS` y `winget install Git.Git` (o instalador desde [nodejs.org](https://nodejs.org)) |
+
+**Verifica** (sirve igual en bash, zsh o PowerShell):
+
+```bash
+node --version   # debe mostrar v20.x o superior
+npm --version    # debe mostrar 10.x o superior
+git --version
+```
+
+### Paso 1 - Clonar el repositorio
+
+El repo es privado; autentícate con tu cuenta de GitHub (vía `gh auth login`, token HTTPS o llave SSH).
+
+**Linux / macOS (bash o zsh):**
+
+```bash
+cd ~/dev            # o la carpeta que prefieras
+git clone https://github.com/stivenson/cvlac-mcp.git
+cd cvlac-mcp
+```
+
+**Windows (PowerShell):**
+
+```powershell
+cd $HOME\dev        # crea la carpeta antes si no existe: mkdir $HOME\dev
+git clone https://github.com/stivenson/cvlac-mcp.git
+cd cvlac-mcp
+```
+
+### Paso 2 - Instalar dependencias y compilar
+
+Igual en las tres plataformas:
+
+```bash
+npm install
+npm run build
+```
+
+**Verifica:** debe existir el archivo de entrada compilado `dist/index.js`.
+
+```bash
+# Linux / macOS
+ls dist/index.js
+```
+
+```powershell
+# Windows (PowerShell)
+Test-Path dist\index.js   # debe imprimir True
+```
+
+### Paso 3 - Instalar el navegador de Playwright
+
+El servidor automatiza CvLAC con Chromium headless. Descárgalo explícitamente (robusto en cualquier SO):
+
+```bash
+npx playwright install chromium
+```
+
+En **Linux**, si faltan librerías del sistema, instala también las dependencias nativas:
+
+```bash
+npx playwright install-deps chromium   # requiere sudo en algunas distros
+```
+
+### Paso 4 - Configurar variables de entorno (`.env`)
+
+Copia la plantilla y edita los valores:
+
+**Linux / macOS:**
+
+```bash
+cp .env.example .env
+```
+
+**Windows (PowerShell):**
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Edita `.env` con tus datos:
+
+```bash
+CVLAC_NOMBRE=TuNombre
+CVLAC_CEDULA=TuDocumento
+CVLAC_PASSWORD=TuPassword
+CVLAC_SESSION_PATH=/ruta/a/tu/.cvlac-session.json
+PORTFOLIO_URL=https://stivenson.github.io
+```
+
+`CVLAC_SESSION_PATH` por plataforma (ejemplos):
+- **Linux:** `/home/TU_USUARIO/.cvlac-session.json`
+- **macOS:** `/Users/TU_USUARIO/.cvlac-session.json`
+- **Windows:** `C:\\Users\\TU_USUARIO\\.cvlac-session.json`
+
+### Paso 5 - Registrar el MCP en Cursor
+
+El servidor corre por **stdio** y su entrypoint real es `dist/index.js`. Añádelo al archivo de configuración MCP de Cursor.
+
+Ubicación del archivo `mcp.json`:
+- **Global** — Linux/macOS: `~/.cursor/mcp.json` · Windows: `%USERPROFILE%\.cursor\mcp.json`
+- **Por proyecto** — `<proyecto>/.cursor/mcp.json`
+
+Contenido (ajusta la ruta de `args` a tu sistema):
+
+```json
+{
+  "mcpServers": {
+    "cvlac-mcp": {
+      "command": "node",
+      "args": ["/home/TU_USUARIO/dev/cvlac-mcp/dist/index.js"],
+      "env": {
+        "CVLAC_NOMBRE": "TuNombre",
+        "CVLAC_CEDULA": "TuDocumento",
+        "CVLAC_PASSWORD": "TuPassword",
+        "CVLAC_SESSION_PATH": "/home/TU_USUARIO/.cvlac-session.json",
+        "PORTFOLIO_URL": "https://stivenson.github.io"
+      }
+    }
+  }
+}
+```
+
+Ruta de `args` según el SO:
+- **Linux:** `"/home/TU_USUARIO/dev/cvlac-mcp/dist/index.js"`
+- **macOS:** `"/Users/TU_USUARIO/dev/cvlac-mcp/dist/index.js"`
+- **Windows:** `"C:\\Users\\TU_USUARIO\\dev\\cvlac-mcp\\dist\\index.js"` (usa dobles barras invertidas en JSON)
+
+> Las credenciales pueden ir en `.env` (Paso 4) **o** en el bloque `env` del `mcp.json`. Si las pones en ambos, `process.env` (lo que define Cursor) tiene prioridad.
+
+### Paso 6 - Verificar la instalación
+
+1. **Build y tests** en verde:
+
+   ```bash
+   npm run build
+   npm test
+   ```
+
+2. **Arranque del servidor** (sanity check; queda esperando por stdio, ciérralo con `Ctrl+C`):
+
+   ```bash
+   node dist/index.js
+   ```
+
+3. **En Cursor:** reinicia/recarga, abre los ajustes de MCP y confirma que `cvlac-mcp` aparece activo (indicador verde) y lista sus tools.
+
+4. **Prueba funcional mínima** desde el chat de Cursor, en este orden:
+   - `login` (debe autenticar y persistir sesión)
+   - `read_portfolio` (debe devolver datos del portafolio)
+   - `diff` (debe reportar `missing` / `upToDate`)
+
+Si los tres responden sin error, el MCP quedó correctamente instalado y configurado.
 
 ---
 
@@ -79,38 +247,17 @@ Secciones soportadas:
 
 ---
 
-## Requisitos
-
-- Node.js 20+
-- npm 10+
-- Acceso a credenciales CvLAC válidas
-- Entorno Linux/macOS recomendado para Playwright
-
----
-
-## Instalación
-
-```bash
-npm install
-```
-
----
-
 ## Variables de entorno
 
-Crea `.env` (puedes copiar de `.env.example`):
+Definidas en `.env` (ver [Paso 4](#paso-4---configurar-variables-de-entorno-env)):
 
-```bash
-CVLAC_NOMBRE=TuNombre
-CVLAC_CEDULA=TuDocumento
-CVLAC_PASSWORD=TuPassword
-CVLAC_SESSION_PATH=/home/TU_USUARIO/.cvlac-session.json
-PORTFOLIO_URL=https://stivenson.github.io
-```
-
-Notas:
-- `CVLAC_SESSION_PATH` guarda `storageState` para reusar sesión.
-- `PORTFOLIO_URL` permite apuntar a otro portafolio si lo necesitas.
+| Variable | Descripción |
+|---|---|
+| `CVLAC_NOMBRE` | Nombre con el que inicias sesión en CvLAC |
+| `CVLAC_CEDULA` | Documento de identidad |
+| `CVLAC_PASSWORD` | Contraseña de CvLAC |
+| `CVLAC_SESSION_PATH` | Ruta donde se guarda `storageState` para reusar sesión |
+| `PORTFOLIO_URL` | Portafolio canónico a comparar (por defecto `https://stivenson.github.io`) |
 
 ---
 
@@ -127,32 +274,6 @@ npm run dev
 ```bash
 npm run build
 npm start
-```
-
----
-
-## Integración con Cursor MCP
-
-Este servidor se ejecuta vía `stdio` y el entrypoint real es `dist/index.js`.
-
-Ejemplo de configuración (referencial):
-
-```json
-{
-  "mcpServers": {
-    "cvlac-mcp": {
-      "command": "node",
-      "args": ["/ruta/a/cvlac-mcp/dist/index.js"],
-      "env": {
-        "CVLAC_NOMBRE": "TuNombre",
-        "CVLAC_CEDULA": "TuDocumento",
-        "CVLAC_PASSWORD": "TuPassword",
-        "CVLAC_SESSION_PATH": "/home/TU_USUARIO/.cvlac-session.json",
-        "PORTFOLIO_URL": "https://stivenson.github.io"
-      }
-    }
-  }
-}
 ```
 
 ---
@@ -197,16 +318,26 @@ npm start
 
 ## Troubleshooting
 
-### `gh`/MCP usa versión vieja
+### El MCP usa una versión vieja del código
 
-- Asegúrate de ejecutar `npm run build`.
+- Asegúrate de ejecutar `npm run build` tras cambiar `src/`.
 - El cliente MCP ejecuta `dist/index.js`, no `src/index.ts`.
+
+### `cvlac-mcp` no aparece en Cursor
+
+- Verifica la ruta absoluta en `args` del `mcp.json` (Paso 5) y que `dist/index.js` exista.
+- En Windows, usa dobles barras invertidas (`\\`) en las rutas dentro del JSON.
+- Reinicia/recarga Cursor tras editar `mcp.json`.
+
+### Errores de Playwright al iniciar el navegador
+
+- Ejecuta `npx playwright install chromium`.
+- En Linux, añade dependencias del sistema con `npx playwright install-deps chromium`.
 
 ### Redirección inesperada a login
 
-- La sesión pudo expirar.
-- Ejecuta `login` nuevamente.
-- Verifica que `.env` tenga credenciales correctas.
+- La sesión pudo expirar. Ejecuta `login` nuevamente.
+- Verifica que `.env` (o el `env` del `mcp.json`) tenga credenciales correctas.
 
 ### Cambios no aplican en formularios
 
