@@ -1,21 +1,20 @@
 import type { Page } from 'playwright';
 import type { CvLACSoftwareItem } from '../../types.js';
 import { URLS } from '../../browser/navigation.js';
+import { extractList, mapRows } from './rows.js';
+
+/** Columns: [num, nombre, año, categoría, ...acciones] */
+function mapSoftware(cells: string[]): CvLACSoftwareItem | null {
+  const name = cells[1] ?? '';
+  if (!name) return null;
+  return { name };
+}
+
+/** Maps the rows of an already-loaded software list page. */
+export async function extractSoftwareFromPage(page: Page): Promise<CvLACSoftwareItem[]> {
+  return mapRows(page, 'software', 2, mapSoftware);
+}
 
 export async function extractSoftware(page: Page): Promise<CvLACSoftwareItem[]> {
-  await page.goto(URLS.software, { waitUntil: 'domcontentloaded', timeout: 20000 });
-
-  const items = await page.$$eval(
-    'tr.odd, tr.even',
-    (rows) =>
-      rows
-        .map((row) => {
-          const cells = Array.from(row.querySelectorAll('td'));
-          if (cells.length < 2) return null;
-          return { name: cells[1]?.textContent?.trim() ?? '' };
-        })
-        .filter(Boolean)
-  ) as CvLACSoftwareItem[];
-
-  return items.filter((i) => i.name.length > 0);
+  return extractList(page, 'software', URLS.software, 2, mapSoftware);
 }

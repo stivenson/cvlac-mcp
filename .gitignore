@@ -10,6 +10,10 @@ dist/
 .env.*
 !.env.example
 
+# Personal configuration and curated data (examples are versioned)
+cvlac.config.json
+data/portfolio-extra.json
+
 # Playwright persistent session & artifacts
 *.cvlac-session.json
 .cvlac-session.json

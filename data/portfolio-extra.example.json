@@ -1,0 +1,48 @@
+{
+  "projects": [
+    {
+      "title": "Nombre del proyecto",
+      "description": "Resumen del proyecto que se guardará en CvLAC.",
+      "tipoProyecto": "ID",
+      "startYear": "2024",
+      "startMonth": "2",
+      "endYear": "2025",
+      "endMonth": "6",
+      "institution": "Nombre exacto de la institución en el catálogo de CvLAC",
+      "link": "https://ejemplo.org/proyecto",
+      "participacion": "Investigador principal"
+    }
+  ],
+  "software": [
+    {
+      "name": "Nombre del software",
+      "year": "2025",
+      "month": "1",
+      "tipoSoftware": "211",
+      "url": "https://ejemplo.org/software",
+      "descripcionTecnica": {
+        "analisis": "Cómo se analizó el problema.",
+        "desarrollo": "Cómo se construyó.",
+        "implementacion": "Cómo se puso en operación.",
+        "validacion": "Cómo se validó.",
+        "plataforma": "Plataforma sobre la que corre.",
+        "ambiente": "Ambiente de ejecución."
+      }
+    }
+  ],
+  "eventos": [
+    {
+      "name": "Nombre del evento científico",
+      "startDate": "01/04/2025",
+      "endDate": "02/04/2025",
+      "lugar": "Sede o auditorio",
+      "ciudad": "Bogotá",
+      "codMunicipio": "11001",
+      "tipoEvento": "CG",
+      "ambito": "N",
+      "rol": "PO",
+      "institution": "Institución organizadora",
+      "resumen": "Descripción de la participación en el evento."
+    }
+  ]
+}

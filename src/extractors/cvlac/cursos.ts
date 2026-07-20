@@ -1,25 +1,20 @@
 import type { Page } from 'playwright';
 import type { CvLACCursoItem } from '../../types.js';
 import { URLS } from '../../browser/navigation.js';
+import { extractList, mapRows } from './rows.js';
+
+/** Columns: [num, nombre, año, categoría, ...acciones] */
+function mapCurso(cells: string[]): CvLACCursoItem | null {
+  const name = cells[1] ?? '';
+  if (!name) return null;
+  return { name, date: cells[2] ?? '' };
+}
+
+/** Maps the rows of an already-loaded cursos list page. */
+export async function extractCursosFromPage(page: Page): Promise<CvLACCursoItem[]> {
+  return mapRows(page, 'cursos', 2, mapCurso);
+}
 
 export async function extractCursos(page: Page): Promise<CvLACCursoItem[]> {
-  await page.goto(URLS.cursos, { waitUntil: 'domcontentloaded', timeout: 20000 });
-
-  const items = await page.$$eval(
-    'tr.odd, tr.even',
-    (rows) =>
-      rows
-        .map((row) => {
-          const cells = Array.from(row.querySelectorAll('td'));
-          // Columns: [num, nombre, año, ...]
-          if (cells.length < 2) return null;
-          return {
-            name: cells[1]?.textContent?.trim() ?? '',
-            date: cells[2]?.textContent?.trim() ?? '',
-          };
-        })
-        .filter(Boolean)
-  ) as CvLACCursoItem[];
-
-  return items.filter((i) => i.name.length > 0);
+  return extractList(page, 'cursos', URLS.cursos, 2, mapCurso);
 }

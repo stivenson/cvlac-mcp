@@ -41,7 +41,7 @@ export interface ProjectItem {
   link?: string;
   // Financiación
   tipoFinanciacion?: 'FI' | 'SO'; // Financiado | Solidario
-  fuenteFinanciacion?: 'IN' | 'EX'; // Interna | Externa
+  fuenteFinanciacion?: 'I' | 'E'; // tpo_fuente_finan: Interna | Externa
   tipoParticipacionInstitucion?: 'FI' | 'EJ' | 'FI_EJ'; // Financiadora | Ejecutora | Ambas
   nroActoAdministrativo?: string;
   fechaActoAdministrativo?: string; // DD/MM/YYYY

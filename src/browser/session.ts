@@ -3,12 +3,16 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import { URLS } from './navigation.js';
+import { createLogger } from '../logger.js';
+
+const log = createLogger('session');
 
 const SESSION_PATH =
   process.env.CVLAC_SESSION_PATH ?? join(homedir(), '.cvlac-session.json');
 
-/** Real Chrome 124 user-agent to avoid bot detection */
+/** Real Chrome user-agent to avoid bot detection */
 const USER_AGENT =
+  process.env.CVLAC_USER_AGENT ??
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 /** Random delay between min and max ms to simulate human behaviour */
@@ -41,6 +45,8 @@ async function withRetry<T>(
 export class BrowserSession {
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
+  /** In-flight login, so concurrent callers wait instead of resetting the context under each other. */
+  private loginInFlight: Promise<void> | null = null;
 
   async getPage(): Promise<Page> {
     if (!this.context) {
@@ -50,8 +56,10 @@ export class BrowserSession {
   }
 
   private async init(): Promise<void> {
+    const headless = process.env.CVLAC_HEADLESS !== 'false';
+    log.debug('launching browser', { headless });
     this.browser = await chromium.launch({
-      headless: true,
+      headless,
       args: [
         '--disable-blink-features=AutomationControlled',
         '--no-sandbox',
@@ -89,9 +97,11 @@ export class BrowserSession {
       const currentUrl = page.url();
       await page.close();
       // If redirected to login page, session is expired
-      if (currentUrl.includes('Login') || currentUrl.includes('logOut')) return false;
-      return true;
-    } catch {
+      const valid = !currentUrl.includes('Login') && !currentUrl.includes('logOut');
+      log.debug('session check', { valid });
+      return valid;
+    } catch (err) {
+      log.debug('session check failed', { error: err instanceof Error ? err.message : String(err) });
       return false;
     }
   }
@@ -102,6 +112,14 @@ export class BrowserSession {
    * Throws on failure.
    */
   async login(force = false): Promise<void> {
+    if (this.loginInFlight) return this.loginInFlight;
+    this.loginInFlight = this.doLogin(force).finally(() => {
+      this.loginInFlight = null;
+    });
+    return this.loginInFlight;
+  }
+
+  private async doLogin(force: boolean): Promise<void> {
     if (!force) {
       const valid = await this.checkSession();
       if (valid) return;
@@ -116,6 +134,8 @@ export class BrowserSession {
         'Missing credentials. Set CVLAC_NOMBRE, CVLAC_CEDULA, CVLAC_PASSWORD in .env'
       );
     }
+
+    log.info('logging in to CvLAC', { force });
 
     await withRetry(async () => {
       const page = await this.getPage();
@@ -153,9 +173,15 @@ export class BrowserSession {
       // Redirect to inicio.do means login was accepted — save session regardless
       // of whether inicio.do itself is temporarily unavailable (503)
       if (!currentUrl.includes('inicio')) {
+        // The page body can echo back submitted credentials, so it is only ever
+        // logged at debug level and never put in the thrown message.
         const bodyText = (await page.textContent('body')) ?? '';
+        log.debug('login rejected', { snippet: bodyText.slice(0, 200).replace(/\s+/g, ' ') });
         await page.close();
-        throw new Error(`Login failed. Page content: ${bodyText.slice(0, 200)}`);
+        throw new Error(
+          'Login rejected by CvLAC. Check CVLAC_NOMBRE, CVLAC_CEDULA and CVLAC_PASSWORD; ' +
+            'run with CVLAC_LOG_LEVEL=debug to see the page response.'
+        );
       }
 
       // Persist session
@@ -167,6 +193,7 @@ export class BrowserSession {
       // Reset context so next getPage() loads fresh cookies from SESSION_PATH
       await this.context!.close();
       this.context = null;
+      log.info('logged in to CvLAC');
     }, 3, 8000);
   }
 

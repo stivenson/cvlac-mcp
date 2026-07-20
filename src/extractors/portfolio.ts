@@ -1,132 +1,115 @@
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
 import type {
   PortfolioData,
   EducationItem,
   ExperienceItem,
   CourseItem,
   AchievementItem,
-  ProjectItem,
-  SoftwareItem,
-  EventoCientificoItem,
   SkillsData,
 } from '../types.js';
+import { loadConfig, portfolioUrl, SERVER_ROOT } from '../config.js';
+import { portfolioExtraSchema, formatIssues, type PortfolioExtra } from '../schemas.js';
+import { createLogger } from '../logger.js';
+import { z } from 'zod';
 
-// NOTE: projects/software/eventos are NOT parsed from the portfolio React bundle.
-// The bundle only exposes clean arrays for education/experience/courses/achievements/skills;
-// these three categories require CvLAC-specific metadata (tipoProyecto, codMunicipio, enum
-// codes, etc.) that the portfolio doesn't carry. They are curated here by hand and kept in
-// sync manually. Verified live (docs/cvlac-findings.md): the current STATIC entries already
-// exist in CvLAC, so the diff reports them as up to date.
-const STATIC_EVENTOS: EventoCientificoItem[] = [
-  {
-    name: 'Congreso de Ingeniería Multimedia - Universidad Simón Bolívar',
-    startDate: '01/04/2025',
-    endDate: '01/04/2025',
-    lugar: 'Universidad Simón Bolívar',
-    ciudad: 'Cúcuta',
-    tipoEvento: 'TA',
-    ambito: 'N',
-    rol: 'PO',
-    institution: 'Universidad Simón Bolívar',
-    resumen: 'Taller: Inteligencia Artificial en el Frontend. Taller práctico de 1.5 horas para estudiantes de Ingeniería Multimedia sobre el uso de herramientas de IA generativa en desarrollo web, incluyendo prompt engineering, generación de componentes con v0.dev y Google AI Studio.',
-  },
-];
+const log = createLogger('portfolio');
 
-const STATIC_SOFTWARE: SoftwareItem[] = [
-  {
-    name: 'Soporte en Crisis TOC - Emotion Game',
-    year: '2025',
-    month: '1',
-    tipoSoftware: '211',
-    url: 'https://stivenson.github.io/toc_support.html',
-  },
-  {
-    name: 'Directorio de Interfaces LLM',
-    year: '2025',
-    month: '1',
-    tipoSoftware: '211',
-    url: 'https://stivenson.github.io/llm-directory.html',
-  },
-  {
-    name: 'cvlac-mcp - MCP Server para automatización de CvLAC',
-    year: '2025',
-    month: '4',
-    tipoSoftware: '211',
-    url: 'https://github.com/stivenson/cvlac-mcp',
-  },
-];
+const EMPTY_EXTRA: PortfolioExtra = { projects: [], software: [], eventos: [] };
 
-const STATIC_PROJECTS: ProjectItem[] = [
-  {
-    title: 'Soporte en Crisis TOC - Emotion Game',
-    description:
-      'Herramienta digital no clínica de psicoeducación y autorregulación emocional para el Trastorno Obsesivo Compulsivo (TOC), con integración de Large Language Models para scaffolding cognitivo y navegación de estados internos.',
-    tipoProyecto: 'EX',
-    startYear: '2025',
-    startMonth: '1',
-    link: 'https://stivenson.github.io/toc_support.html',
-  },
-  {
-    title: 'Directorio de Interfaces LLM',
-    description:
-      'Directorio curado y categorizado de interfaces de inteligencia artificial incluyendo chats conversacionales, editores, agentes, herramientas de datos, imágenes, video, audio, código, flujos de trabajo y diseño.',
-    tipoProyecto: 'EX',
-    startYear: '2025',
-    startMonth: '1',
-    link: 'https://stivenson.github.io/llm-directory.html',
-  },
-  {
-    title: 'Aplicaciones de IA a problemas regionales - Maestría en IA Uniandes',
-    description:
-      'Proyectos de investigación y desarrollo en el marco de la Maestría en Inteligencia Artificial de la Universidad de los Andes, con enfoque en aplicar IA a problemas reales de la región colombiana.',
-    tipoProyecto: 'ID',
-    startYear: '2024',
-    startMonth: '2',
-    institution: 'Universidad de los Andes',
-  },
-];
+const EXTRA_PATH = process.env.CVLAC_PORTFOLIO_EXTRA_PATH ?? join(SERVER_ROOT, 'data', 'portfolio-extra.json');
 
-const PORTFOLIO_URL = process.env.PORTFOLIO_URL ?? 'https://stivenson.github.io';
+/**
+ * Loads proyectos/software/eventos from data/portfolio-extra.json.
+ *
+ * These three categories are not parsed from the portfolio bundle: they need
+ * CvLAC-specific metadata (tipoProyecto, codMunicipio, enum codes) that a
+ * portfolio site has no reason to carry. They are curated by hand instead.
+ */
+export function loadPortfolioExtra(): PortfolioExtra {
+  if (!existsSync(EXTRA_PATH)) {
+    log.warn('no portfolio-extra file; proyectos/software/eventos will be empty', {
+      path: EXTRA_PATH,
+    });
+    return EMPTY_EXTRA;
+  }
+  try {
+    const parsed = portfolioExtraSchema.parse(JSON.parse(readFileSync(EXTRA_PATH, 'utf-8')));
+    log.info('portfolio-extra loaded', {
+      path: EXTRA_PATH,
+      projects: parsed.projects.length,
+      software: parsed.software.length,
+      eventos: parsed.eventos.length,
+    });
+    return parsed;
+  } catch (err) {
+    const detail = err instanceof z.ZodError ? formatIssues(err) : String(err);
+    log.error('portfolio-extra is invalid; ignoring it', { path: EXTRA_PATH, detail });
+    return EMPTY_EXTRA;
+  }
+}
 
 /**
  * Fetches the React bundle from the portfolio site and extracts structured data.
  * The bundle hash changes on deploy — we discover it by parsing the HTML first.
  */
 export async function fetchPortfolioData(): Promise<PortfolioData> {
-  const htmlRes = await fetch(PORTFOLIO_URL);
+  const base = portfolioUrl();
+  const htmlRes = await fetch(base);
   const html = await htmlRes.text();
 
   const bundleMatch = html.match(/src="(\.\/assets\/index-[^"]+\.js)"/);
-  if (!bundleMatch) throw new Error('Could not find React bundle URL in portfolio HTML');
+  if (!bundleMatch) throw new Error(`Could not find React bundle URL in portfolio HTML at ${base}`);
 
-  const bundleUrl = new URL(bundleMatch[1], PORTFOLIO_URL + '/').href;
+  const bundleUrl = new URL(bundleMatch[1], base + '/').href;
 
   const bundleRes = await fetch(bundleUrl);
   const bundleText = await bundleRes.text();
 
-  return normalizePortfolioData(bundleText);
+  return normalizePortfolioData(bundleText, loadPortfolioExtra());
 }
 
 /**
  * Pure function: given the raw JS bundle text, extract structured PortfolioData.
  * Exported separately for unit testing without network calls.
  */
-export function normalizePortfolioData(bundleText: string): PortfolioData {
+export function normalizePortfolioData(
+  bundleText: string,
+  extra: PortfolioExtra = EMPTY_EXTRA
+): PortfolioData {
   return {
     personal: extractPersonal(bundleText),
     education: extractEducation(bundleText),
     experience: extractExperience(bundleText),
     courses: extractCourses(bundleText),
     achievements: extractAchievements(bundleText),
-    projects: STATIC_PROJECTS,
-    software: STATIC_SOFTWARE,
-    eventos: STATIC_EVENTOS,
+    projects: extra.projects,
+    software: extra.software,
+    eventos: extra.eventos,
     skills: extractSkills(bundleText),
   };
 }
 
 function extractPersonal(text: string): PortfolioData['personal'] {
-  const m = text.match(/\{name:"(Stivenson[^"]+)",title:"([^"]+)",location:"([^"]+)"/);
-  if (!m) return { name: 'Stivenson Rincón Mora', title: '', location: '' };
+  const candidates = [
+    ...text.matchAll(/\{name:"([^"]+)",title:"([^"]+)",location:"([^"]+)"/g),
+  ];
+  if (candidates.length === 0) {
+    log.warn('no personal block found in portfolio bundle');
+    return { name: '', title: '', location: '' };
+  }
+
+  // A bundle can hold several {name,title,location} objects (team members, testimonials).
+  // ownerNamePattern says which one belongs to the CV owner.
+  const pattern = loadConfig().ownerNamePattern;
+  const owner = pattern
+    ? candidates.find((m) => m[1].toLowerCase().includes(pattern.toLowerCase()))
+    : undefined;
+  if (pattern && !owner) {
+    log.warn('ownerNamePattern matched no personal block; using the first one', { pattern });
+  }
+
+  const m = owner ?? candidates[0];
   return { name: m[1], title: m[2], location: m[3] };
 }
 
