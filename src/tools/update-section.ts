@@ -133,16 +133,31 @@ async function isLoginPage(page: Page): Promise<boolean> {
   return url.includes('Login') || url.includes('logOut') || url.includes('pre_s_login');
 }
 
-/** Navigate to a URL and ensure we land on the form, re-logging in if redirected */
+/** Navigate to a URL; throws SessionExpiredError if redirected to login (caller must reopen page) */
+class SessionExpiredError extends Error {}
+
 async function gotoForm(page: Page, url: string): Promise<void> {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
   if (await isLoginPage(page)) {
-    // Session expired mid-run — force re-login and retry
+    throw new SessionExpiredError('Session expired');
+  }
+}
+
+/** Navigate with automatic re-login: closes old page, re-logins, opens new page, retries once */
+async function gotoFormWithRelogin(
+  pageRef: { page: Page },
+  url: string
+): Promise<void> {
+  try {
+    await gotoForm(pageRef.page, url);
+  } catch (err) {
+    if (!(err instanceof SessionExpiredError)) throw err;
+    await pageRef.page.close();
     await session.login(true);
-    // After login, context cookies are refreshed; navigate on the same page
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-    if (await isLoginPage(page)) {
-      throw new Error(`Session expired and re-login failed — still on login page after force login`);
+    pageRef.page = await session.getPage();
+    await pageRef.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    if (await isLoginPage(pageRef.page)) {
+      throw new Error('Session expired and re-login failed');
     }
   }
 }
@@ -191,8 +206,24 @@ async function fillFormacion(page: Page, edu: EducationItem): Promise<void> {
   await humanDelay(200, 500);
   await setInstitucion(page, edu.institution);
   await humanDelay(200, 500);
+  // Municipio (*) — required, inject Cúcuta (54001) as default
+  await page.evaluate(() => {
+    const textEl = document.querySelector('input[name="cod_municipio_text"]') as HTMLInputElement | null;
+    if (textEl) {
+      textEl.removeAttribute('readonly');
+      textEl.value = 'Cúcuta';
+      const suffix = textEl.id.replace('_loc_', '');
+      const hiddenEl = document.getElementById('_locValue_' + suffix) as HTMLInputElement | null;
+      if (hiddenEl) hiddenEl.value = '54001';
+    }
+    const all = Array.from(document.querySelectorAll('input[name="cod_municipio"]')) as HTMLInputElement[];
+    for (const el of all) el.value = '54001';
+  });
+  await humanDelay(200, 400);
   await forceSetReadonly(page, 'txt_nme_programa_acad', edu.degree);
   await forceSetReadonlyByName(page, 'txt_nme_titulo_obtenido', edu.degree).catch(() => {});
+  // Intensidad horaria (*) — required, default 1
+  await page.fill('input[name="nro_horas_semanales"]', '1').catch(() => {});
   const { start, end } = parsePeriod(edu.period);
   if (start) await page.selectOption('select[name="nro_ano_inicio"]', start).catch(() => {});
   if (end) await page.selectOption('select[name="nro_ano_obten"]', end).catch(() => {});
@@ -232,6 +263,10 @@ async function fillCurso(page: Page, course: CourseItem): Promise<void> {
 async function fillReconocimiento(page: Page, ach: AchievementItem): Promise<void> {
   await page.fill('input[name="txt_nme_reconocimiento"]', ach.title);
   await humanDelay(200, 400);
+  // Fecha de obtención (*) — required, default current year
+  const year = String(new Date().getFullYear());
+  await page.selectOption('select[name="nro_ano_obtencion"]', year).catch(() => {});
+  await humanDelay(200, 300);
 }
 
 async function fillProyecto(page: Page, proj: ProjectItem): Promise<void> {
@@ -254,11 +289,10 @@ async function fillProyecto(page: Page, proj: ProjectItem): Promise<void> {
     .catch(() => {});
   await humanDelay(200, 400);
 
-  // Institución (readonly picker id_inst + nme_inst)
-  if (proj.institution) {
-    await setInstitucionFields(page, proj.institution, 'id_inst', 'nme_inst');
-    await humanDelay(200, 400);
-  }
+  // Institución principal (*) — required; fall back to Uniandes if not specified
+  const instName = proj.institution ?? 'Universidad de los Andes';
+  await setInstitucionFields(page, instName, 'id_inst', 'nme_inst');
+  await humanDelay(200, 400);
 
   // Financiación (real field names verified live)
   const tipoFin = proj.tipoFinanciacion ?? 'SO';
@@ -266,7 +300,7 @@ async function fillProyecto(page: Page, proj: ProjectItem): Promise<void> {
   await humanDelay(200, 300);
   if (tipoFin === 'FI') {
     await page
-      .click(`input[name="tpo_fuente_finan"][value="${proj.fuenteFinanciacion ?? 'IN'}"]`)
+      .click(`input[name="tpo_fuente_finan"][value="${proj.fuenteFinanciacion ?? 'I'}"]`)
       .catch(() => {});
     // tpo_rol select: F=Financiadora, E=Ejecutora, C=Coejecutora
     const rol = proj.tipoParticipacionInstitucion === 'FI' ? 'F' : 'E';
@@ -487,60 +521,58 @@ async function shot(page: Page): Promise<string> {
   return session.takeScreenshot(page);
 }
 
-async function addItem(page: Page, cfg: SectionConfig, data: unknown, label: string): Promise<UpdateResult> {
-  await gotoForm(page, cfg.createUrl);
+async function addItem(pageRef: { page: Page }, cfg: SectionConfig, data: unknown, label: string): Promise<UpdateResult> {
+  await gotoFormWithRelogin(pageRef, cfg.createUrl);
   await humanDelay();
-  await cfg.fill(page, data);
+  await cfg.fill(pageRef.page, data);
   await humanDelay(400, 800);
-  await clickGuardar(page);
-  const screenshotBase64 = await shot(page);
-  if (landedOnForm(page)) {
+  await clickGuardar(pageRef.page);
+  const screenshotBase64 = await shot(pageRef.page);
+  if (landedOnForm(pageRef.page)) {
     return { success: false, message: `Form validation failed adding "${label}"`, screenshotBase64 };
   }
   return { success: true, message: `Added: ${label}`, screenshotBase64 };
 }
 
-async function updateItem(page: Page, cfg: SectionConfig, data: unknown, label: string): Promise<UpdateResult> {
-  await gotoForm(page, cfg.listUrl);
-  const editHref = await findRowActionHref(page, cfg.matchCellIndex, label, 'Editar');
+async function updateItem(pageRef: { page: Page }, cfg: SectionConfig, data: unknown, label: string): Promise<UpdateResult> {
+  await gotoFormWithRelogin(pageRef, cfg.listUrl);
+  const editHref = await findRowActionHref(pageRef.page, cfg.matchCellIndex, label, 'Editar');
   if (!editHref) {
     return { success: false, message: `No existing item matching "${label}" to update` };
   }
-  await gotoForm(page, BASE_URL + editHref);
+  await gotoFormWithRelogin(pageRef, BASE_URL + editHref);
   await humanDelay();
-  await cfg.fill(page, data);
+  await cfg.fill(pageRef.page, data);
   await humanDelay(400, 800);
-  await clickGuardar(page);
-  const screenshotBase64 = await shot(page);
-  if (landedOnForm(page)) {
+  await clickGuardar(pageRef.page);
+  const screenshotBase64 = await shot(pageRef.page);
+  if (landedOnForm(pageRef.page)) {
     return { success: false, message: `Form validation failed updating "${label}"`, screenshotBase64 };
   }
   return { success: true, message: `Updated: ${label}`, screenshotBase64 };
 }
 
-async function deleteItem(page: Page, cfg: SectionConfig, label: string): Promise<UpdateResult> {
-  await gotoForm(page, cfg.listUrl);
-  const confirmHref = await findRowActionHref(page, cfg.matchCellIndex, label, 'Eliminar');
+async function deleteItem(pageRef: { page: Page }, cfg: SectionConfig, label: string): Promise<UpdateResult> {
+  await gotoFormWithRelogin(pageRef, cfg.listUrl);
+  const confirmHref = await findRowActionHref(pageRef.page, cfg.matchCellIndex, label, 'Eliminar');
   if (!confirmHref) {
     return { success: false, message: `No item matching "${label}" to delete` };
   }
-  // Eliminar → confirm.do page, which exposes a "Borrar" link to delete.do
-  await gotoForm(page, BASE_URL + confirmHref);
-  const deleteHref = await page.evaluate(() => {
+  await gotoFormWithRelogin(pageRef, BASE_URL + confirmHref);
+  const deleteHref = await pageRef.page.evaluate(() => {
     const a = Array.from(document.querySelectorAll('a')).find(
       (el) => /borrar|eliminar/i.test(el.textContent ?? '') || /delete\.do/i.test(el.getAttribute('href') ?? '')
     );
     return a ? a.getAttribute('href') : null;
   });
   if (!deleteHref) {
-    const screenshotBase64 = await shot(page);
+    const screenshotBase64 = await shot(pageRef.page);
     return { success: false, message: `Confirm page had no Borrar/delete link for "${label}"`, screenshotBase64 };
   }
-  await gotoForm(page, BASE_URL + deleteHref);
-  // Verify the row is gone from the list
-  await gotoForm(page, cfg.listUrl);
-  const still = await findRowActionHref(page, cfg.matchCellIndex, label, 'Eliminar');
-  const screenshotBase64 = await shot(page);
+  await gotoFormWithRelogin(pageRef, BASE_URL + deleteHref);
+  await gotoFormWithRelogin(pageRef, cfg.listUrl);
+  const still = await findRowActionHref(pageRef.page, cfg.matchCellIndex, label, 'Eliminar');
+  const screenshotBase64 = await shot(pageRef.page);
   if (still) {
     return { success: false, message: `Delete may have failed; "${label}" still present`, screenshotBase64 };
   }
@@ -548,15 +580,12 @@ async function deleteItem(page: Page, cfg: SectionConfig, label: string): Promis
 }
 
 export async function updateSectionTool(req: UpdateRequest): Promise<UpdateResult> {
-  // Reuse the saved session if it's still valid; gotoForm() re-logs in on demand if a
-  // navigation lands on the login page (stale JSESSIONID). Avoids a slow forced re-login
-  // (and extra bot-detection surface) on every single call.
   await session.login();
-  const page = await session.getPage();
+  const pageRef = { page: await session.getPage() };
 
   const cfg = SECTIONS[req.section];
   if (!cfg) {
-    await page.close();
+    await pageRef.page.close();
     return { success: false, message: `Section "${req.section}" not supported` };
   }
 
@@ -564,21 +593,21 @@ export async function updateSectionTool(req: UpdateRequest): Promise<UpdateResul
     const label = cfg.labelOf(req.data);
     switch (req.action) {
       case 'add':
-        return await addItem(page, cfg, req.data, label);
+        return await addItem(pageRef, cfg, req.data, label);
       case 'update':
-        return await updateItem(page, cfg, req.data, label);
+        return await updateItem(pageRef, cfg, req.data, label);
       case 'delete':
-        return await deleteItem(page, cfg, label);
+        return await deleteItem(pageRef, cfg, label);
       default: {
         const _exhaustive: never = req.action;
         return { success: false, message: `Action "${String(_exhaustive)}" not supported` };
       }
     }
   } catch (err) {
-    const screenshotBase64 = await shot(page);
+    const screenshotBase64 = await shot(pageRef.page);
     const msg = err instanceof Error ? err.message : String(err);
     return { success: false, message: msg, screenshotBase64 };
   } finally {
-    await page.close();
+    await pageRef.page.close();
   }
 }
