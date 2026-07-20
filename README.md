@@ -8,14 +8,20 @@
 ![Build](https://img.shields.io/badge/build-tsc%20passing-brightgreen?style=flat)
 ![License](https://img.shields.io/badge/license-ISC-blue?style=flat)
 
-Servidor MCP (stdio) para sincronizar el perfil de **CvLAC** con un portafolio canónico (por defecto `https://stivenson.github.io`) usando **TypeScript + Playwright**.
+Servidor MCP (stdio) para sincronizar tu perfil de **CvLAC** (MinCiencias) con tu portafolio web, usando **TypeScript + Playwright**.
+
+No trae datos de nadie: tus credenciales, tus valores por defecto y tus proyectos curados viven en archivos locales que el repo ignora. Sirve para cualquier persona con una hoja de vida en CvLAC.
 
 Permite:
 - leer datos en vivo del CvLAC (`read_cvlac`)
 - leer el portafolio (`read_portfolio`)
-- calcular diferencias (`diff`)
+- calcular diferencias (`diff`): faltantes, a actualizar, parecidos y al día
 - aplicar cambios por sección (`update_section`: `add` / `update` / `delete`)
 - sincronizar de forma masiva (`sync`, con `dry_run`)
+
+Dos garantías al escribir: **nunca crea un duplicado sin preguntar** (si ya hay algo igual o parecido devuelve `needs_confirmation` en vez de escribir) y **siempre dice qué campo falló** cuando CvLAC rechaza un formulario.
+
+> **Uso responsable.** Esto automatiza un sitio gubernamental con tu propia cuenta. Úsalo con supervisión humana, revisa cada `dry_run` antes de aplicar y no lo dejes corriendo sin mirar.
 
 ---
 
@@ -57,8 +63,6 @@ git --version
 ```
 
 ### Paso 1 - Clonar el repositorio
-
-El repo es privado; autentícate con tu cuenta de GitHub (vía `gh auth login`, token HTTPS o llave SSH).
 
 **Linux / macOS (bash o zsh):**
 
@@ -134,13 +138,53 @@ CVLAC_NOMBRE=TuNombre
 CVLAC_CEDULA=TuDocumento
 CVLAC_PASSWORD=TuPassword
 CVLAC_SESSION_PATH=/ruta/a/tu/.cvlac-session.json
-PORTFOLIO_URL=https://stivenson.github.io
+PORTFOLIO_URL=https://tu-usuario.github.io
+```
+
+Restringe los permisos del archivo (Linux/macOS):
+
+```bash
+chmod 600 .env
 ```
 
 `CVLAC_SESSION_PATH` por plataforma (ejemplos):
 - **Linux:** `/home/TU_USUARIO/.cvlac-session.json`
 - **macOS:** `/Users/TU_USUARIO/.cvlac-session.json`
 - **Windows:** `C:\\Users\\TU_USUARIO\\.cvlac-session.json`
+
+### Paso 4b - Configurar tus valores por defecto (`cvlac.config.json`)
+
+Varios formularios de CvLAC exigen campos que tu portafolio no tiene (municipio, intensidad horaria, idioma). Se declaran una vez aquí:
+
+```bash
+cp cvlac.config.example.json cvlac.config.json
+```
+
+```json
+{
+  "portfolioUrl": "https://tu-usuario.github.io",
+  "ownerNamePattern": "Tu Nombre",
+  "defaults": {
+    "municipio": { "nombre": "Bogotá", "codigoDane": "11001" },
+    "institucionFallback": "Universidad Nacional de Colombia",
+    "horasSemanales": 1,
+    "idioma": "ES",
+    "pais": "CO"
+  }
+}
+```
+
+Todo es opcional. **Si un valor falta, el campo se deja vacío y la respuesta trae un warning** — el servidor no inventa datos para tu hoja de vida.
+
+### Paso 4c - Curar proyectos, software y eventos (`data/portfolio-extra.json`)
+
+Estas tres secciones no se pueden leer del portafolio: necesitan metadatos que solo existen en CvLAC (tipo de proyecto, código DANE, códigos de enum). Se mantienen a mano:
+
+```bash
+cp data/portfolio-extra.example.json data/portfolio-extra.json
+```
+
+El archivo se valida al cargarse; si un ítem está mal formado, el servidor lo reporta y sigue con las demás secciones.
 
 ### Paso 5 - Registrar el MCP en Cursor
 
@@ -157,14 +201,7 @@ Contenido (ajusta la ruta de `args` a tu sistema):
   "mcpServers": {
     "cvlac-mcp": {
       "command": "node",
-      "args": ["/home/TU_USUARIO/dev/cvlac-mcp/dist/index.js"],
-      "env": {
-        "CVLAC_NOMBRE": "TuNombre",
-        "CVLAC_CEDULA": "TuDocumento",
-        "CVLAC_PASSWORD": "TuPassword",
-        "CVLAC_SESSION_PATH": "/home/TU_USUARIO/.cvlac-session.json",
-        "PORTFOLIO_URL": "https://stivenson.github.io"
-      }
+      "args": ["/home/TU_USUARIO/dev/cvlac-mcp/dist/index.js"]
     }
   }
 }
@@ -175,7 +212,7 @@ Ruta de `args` según el SO:
 - **macOS:** `"/Users/TU_USUARIO/dev/cvlac-mcp/dist/index.js"`
 - **Windows:** `"C:\\Users\\TU_USUARIO\\dev\\cvlac-mcp\\dist\\index.js"` (usa dobles barras invertidas en JSON)
 
-> Las credenciales pueden ir en `.env` (Paso 4) **o** en el bloque `env` del `mcp.json`. Si las pones en ambos, `process.env` (lo que define Cursor) tiene prioridad.
+> **Deja las credenciales solo en `.env`.** El servidor lo carga desde su propio directorio, así que no hace falta repetirlas en `mcp.json` — y ese archivo suele estar en tu home sin permisos restringidos, o sincronizado entre máquinas. Si aun así las pones en el bloque `env`, ganan sobre `.env`.
 
 ### Paso 6 - Verificar la instalación
 
@@ -236,9 +273,9 @@ src/
 - `login`: autentica en CvLAC y persiste sesión.
 - `read_cvlac`: lee una sección o todas (`all`) desde CvLAC.
 - `read_portfolio`: obtiene y parsea el portafolio.
-- `diff`: compara CvLAC vs portafolio y reporta `missing` / `upToDate`.
-- `update_section`: aplica cambio puntual (`add`, `update`, `delete`).
-- `sync`: ejecuta diff + aplica faltantes (con `dry_run` opcional).
+- `diff`: compara CvLAC vs portafolio y reporta cuatro grupos: `missing`, `toUpdate`, `similar` (parecidos a algo existente) y `upToDate`.
+- `update_section`: aplica cambio puntual (`add`, `update`, `delete`). Devuelve `status`, `warnings` por campo y, si detecta un posible duplicado, `needs_confirmation` con los candidatos. `confirm_duplicate:true` fuerza la creación.
+- `sync`: ejecuta diff + aplica `missing` y `toUpdate` (con `dry_run` opcional). Los `similar` nunca se aplican solos.
 - `screenshot`: captura pantalla del estado actual.
 - `inspect_form`: inspecciona campos reales (`input/select/textarea`) de una URL CvLAC.
 
@@ -257,7 +294,18 @@ Definidas en `.env` (ver [Paso 4](#paso-4---configurar-variables-de-entorno-env)
 | `CVLAC_CEDULA` | Documento de identidad |
 | `CVLAC_PASSWORD` | Contraseña de CvLAC |
 | `CVLAC_SESSION_PATH` | Ruta donde se guarda `storageState` para reusar sesión |
-| `PORTFOLIO_URL` | Portafolio canónico a comparar (por defecto `https://stivenson.github.io`) |
+| `PORTFOLIO_URL` | Portafolio a comparar. También configurable como `portfolioUrl` en `cvlac.config.json` |
+
+Opcionales:
+
+| Variable | Descripción |
+|---|---|
+| `CVLAC_HEADLESS` | `false` abre el navegador para ver qué hace |
+| `CVLAC_LOG_LEVEL` | `debug` \| `info` (default) \| `warn` \| `error` \| `silent`. Los logs van a stderr |
+| `CVLAC_LOG_FILE` | Además de stderr, agrega cada línea a este archivo |
+| `CVLAC_USER_AGENT` | Reemplaza el user-agent del navegador |
+| `CVLAC_CONFIG_PATH` | Ubicación alterna de `cvlac.config.json` |
+| `CVLAC_PORTFOLIO_EXTRA_PATH` | Ubicación alterna de `portfolio-extra.json` |
 
 ---
 
@@ -281,11 +329,13 @@ npm start
 ## Flujo recomendado
 
 1. `login`
-2. `read_portfolio`
-3. `read_cvlac`
-4. `diff`
-5. `sync` con `dry_run: true`
-6. Si el reporte es correcto, `sync` sin `dry_run` o `update_section` por ítem
+2. `sync` con `dry_run: true`
+3. Revisar el reporte con una persona: faltantes, a actualizar, **parecidos** y al día
+4. Resolver los parecidos uno a uno — `update` sobre el existente, o `add` con `confirm_duplicate:true`
+5. Aplicar el resto: `sync` sin `dry_run`, o `update_section` por ítem revisando los `warnings`
+6. Verificar con `read_cvlac` de las secciones tocadas, o `screenshot`
+
+Si trabajas con Claude Code, la skill `cvlac-sync` del workspace cliente encapsula este flujo.
 
 ### Diagrama
 
@@ -302,9 +352,11 @@ flowchart LR
 ## Pruebas y build
 
 ```bash
-npm test
+npm test        # suite completa: sin red, sin credenciales, sin CvLAC
 npm run build
 ```
+
+Los tests cubren extractores (contra fixtures HTML anonimizados), el motor de diff, los schemas, la carga de configuración, la redacción de secretos en logs y el reporte de `sync`. Los fixtures llevan datos ficticios a propósito: si capturas HTML real para uno nuevo, anonimízalo antes de commitear.
 
 Comandos disponibles:
 

@@ -4,7 +4,7 @@ Guía para agentes IA que trabajen en este repo (`cvlac-mcp`).
 
 ## Qué es
 
-Servidor **MCP** (stdio) en TypeScript que automatiza el perfil **CvLAC** de MinCiencias usando **Playwright**. Compara el portafolio canónico (`stivenson.github.io`) contra el CvLAC oficial y aplica los ítems faltantes, con supervisión humana.
+Servidor **MCP** (stdio) en TypeScript que automatiza el perfil **CvLAC** de MinCiencias usando **Playwright**. Compara un portafolio web (el que indique `PORTFOLIO_URL`) contra el CvLAC oficial y aplica los ítems faltantes, con supervisión humana. El repo es genérico: cualquier persona con CvLAC puede usarlo configurando sus propios archivos.
 
 El cliente MCP (Claude) ejecuta `dist/index.js`. **El código fuente está en `src/` y se compila a `dist/`.**
 
@@ -24,18 +24,25 @@ npm start          # node dist/index.js
 
 - **ESM + Node16 module resolution.** Todos los imports internos llevan extensión `.js` (aunque el archivo sea `.ts`), p. ej. `import { session } from './browser/session.js'`. No lo quites.
 - **`strict: true`** en tsconfig. Evita `any`; usa los tipos de `src/types.ts`.
-- **Credenciales nunca hardcodeadas.** Se leen de env / `.env` (`CVLAC_NOMBRE`, `CVLAC_CEDULA`, `CVLAC_PASSWORD`, `CVLAC_SESSION_PATH`, `PORTFOLIO_URL`). Ver `.env.example`.
+- **Nada personal en el código.** Ni credenciales, ni ciudad, ni institución, ni datos curados. Todo vive en tres archivos gitignored, cada uno con su `.example` versionado:
+  - `.env` — credenciales y rutas (`CVLAC_NOMBRE`, `CVLAC_CEDULA`, `CVLAC_PASSWORD`, `CVLAC_SESSION_PATH`, `PORTFOLIO_URL`) y opciones (`CVLAC_HEADLESS`, `CVLAC_LOG_LEVEL`, `CVLAC_LOG_FILE`).
+  - `cvlac.config.json` — `ownerNamePattern` y `defaults` (municipio + código DANE, institución de respaldo, horas semanales, idioma, país).
+  - `data/portfolio-extra.json` — proyectos, software y eventos curados a mano.
+  Si un valor falta, el campo se deja vacío y se reporta un warning. **Nunca inventes un default personal en el código**: escribiría el dato de otra persona en un registro oficial.
 - **Idioma:** comunicación y docs en español; código/identificadores en inglés.
-- `dist/`, `.env`, `*.cvlac-session.json` y `*.screenshot.png` están en `.gitignore` — no commitearlos.
+- `dist/`, `.env`, `cvlac.config.json`, `data/portfolio-extra.json`, `*.cvlac-session.json` y `*.screenshot.png` están en `.gitignore` — no commitearlos.
 
 ## Arquitectura
 
 ```
 src/
 ├── index.ts                  # Entry point: carga .env, crea server, conecta stdio transport
-├── server.ts                 # Registra las 8 tools con registerTool (schemas zod)
+├── server.ts                 # Registra las 8 tools con registerTool (valida data con schemas zod)
 ├── types.ts                  # Interfaces Portfolio*, CvLAC*, Diff*, Update*
-├── diff.ts                   # computeDiff() + normalize() (lowercase, sin tildes)
+├── schemas.ts                # Un schema zod por sección + portfolioExtraSchema
+├── config.ts                 # Carga cvlac.config.json (defaults personales)
+├── logger.ts                 # Log a stderr con niveles y redacción de secretos
+├── diff.ts                   # classifyMatch() + computeDiff() (4 buckets)
 ├── browser/
 │   ├── session.ts            # BrowserSession singleton (Playwright). Login + storageState
 │   └── navigation.ts         # URLS constantes (list/create) del CvLAC
@@ -44,10 +51,13 @@ src/
 │   ├── update-section.ts     # (grande) llena formularios CvLAC por sección
 │   ├── sync.ts  screenshot.ts
 └── extractors/
-    ├── portfolio.ts          # Parsea el bundle React de stivenson.github.io (regex)
-    └── cvlac/                # Un extractor por sección (lee tablas del CvLAC)
+    ├── portfolio.ts          # Parsea el bundle React del portafolio (regex) + portfolio-extra.json
+    └── cvlac/
+        rows.ts               # readRows/mapRows compartidos por todos los extractores
         formacion / experiencia / cursos / reconocimientos / proyectos / software / eventos
-tests/                        # vitest: diff.test.ts, portfolio.test.ts (sin red)
+tests/                        # vitest, sin red: extractores (fixtures HTML), diff, schemas,
+                              # config, logger, sync (mocks), update-section (helpers)
+data/                         # portfolio-extra.json (gitignored) + su .example
 ```
 
 Flujo de datos: `index.ts` → `server.ts` (router) → `tools/*` → `browser/session` (Playwright) + `extractors/*` → `diff.ts`.
@@ -65,12 +75,16 @@ Flujo de datos: `index.ts` → `server.ts` (router) → `tools/*` → `browser/s
 - **Login flow:** `tpo_nacionalidad='C'` (verificado: "Colombiana" = value `C`, NO `COL`), llena `#txt_nmes_rh` / `#nro_documento_ident` / `#txt_contrasena`, click `#botonEnviar`. Redirige a `EnRecursoHumano/inicio.do`; ese inicio.do a veces da 503 ("Server Unavailable") pero la sesión queda válida. `update_section` ya NO fuerza re-login en cada llamada: reusa sesión y `gotoForm()` re-loguea solo si cae en la página de login.
 - **Listas (`all.do`):** filas `tr.odd`/`tr.even`; el selector aísla bien los datos (el menú usa `<li>`). Índices de columna verificados por sección (ver findings). En `reconocimientos` `cells[2]` es el **año**, no descripción.
 - **Cursos = `EnProdCurso/all.do?__tipo=2B`** (no `EnFormacionComple`): ahí viven los cursos del portafolio (Platzi, Coursera, talleres). `formacionComple` define otra sección distinta y queda sin usar a propósito.
-- **`portfolio.ts` es frágil:** parsea el bundle JS con regex y el hash del bundle cambia en cada deploy (se descubre desde el HTML). Las secciones `projects`, `software` y `eventos` **NO** se parsean del bundle: están hardcodeadas como `STATIC_PROJECTS`/`STATIC_SOFTWARE`/`STATIC_EVENTOS` en `portfolio.ts` — actualízalas ahí (decisión documentada en el comentario del archivo).
+- **`portfolio.ts` es frágil:** parsea el bundle JS con regex y el hash del bundle cambia en cada deploy (se descubre desde el HTML). Las secciones `projects`, `software` y `eventos` **NO** se parsean del bundle (requieren metadatos que solo existen en CvLAC): vienen de `data/portfolio-extra.json`, validado con zod. Para agregar un proyecto nuevo se edita ese JSON, no el código.
 - **`update-section.ts`:** despacha por `action` → `add` (create.do), `update` (sigue el link *Editar* → edit.do, mismos campos que create) y `delete` (sigue *Eliminar* → `confirm.do` → link *Borrar* → `delete.do`). Cada sección tiene un `fill(page, data)` reutilizable (create y edit comparten campos) en el registro `SECTIONS`. Los formularios postean a `insert.do` con submit `value="Guardar"`. Campos `readonly` (institución, fechas `dta_*String`, municipio con id dinámico `_loc_NNNNN`) se setean por JS (`forceSetReadonly*` / `setInstitucion*`); la institución se busca vía API JSON `/cvlac/json/EnInstitucion/buscar.do` que responde en **latin1**. Códigos enum por sección viven en `types.ts` (tipoProyecto, tipoSoftware, tipoEvento — Congreso=`CG`, ámbito, rol, DANE municipio). En proyectos: participación = `tpo_participacion_proy` (IP/CI/AS/EP/EM/ED), financiación = `tpo_fuente_finan`/`tpo_amb_finan`/`tpo_rol`.
-- **`diff.ts`:** matching con `nameMatches()` — normaliza (lowercase + sin diacríticos) y además ignora sufijos `(...)` y ` - ...` para no marcar falsos faltantes. La **experiencia está excluida del diff** a propósito (nombres de empresa divergen del portafolio y el rol no está en la lista) — ver comentario en `computeDiff` y findings.
+- **`diff.ts`:** `classifyMatch()` devuelve `exact` / `same` / `similar` / `none`; normaliza (lowercase + sin diacríticos), ignora sufijos `(...)` y ` - ...`, y mide solapamiento de tokens para los parecidos. `computeDiff()` devuelve cuatro grupos: `missing`, `toUpdate` (mismo ítem, año distinto), `similar` (parecidos — **nunca se aplican solos**) y `upToDate`. Las secciones cuya lista solo muestra el nombre (proyectos, software, eventos) nunca generan `toUpdate`. La **experiencia está excluida del diff** a propósito (nombres de empresa divergen del portafolio y el rol no está en la lista).
+- **Duplicados:** CvLAC no valida duplicados y borrarlos a mano es tedioso. Por eso `update_section` con `action:"add"` primero revisa la lista y, si encuentra algo igual o parecido, **no escribe**: devuelve `status:"needs_confirmation"` con los candidatos. Solo `confirm_duplicate:true` fuerza la creación. `sync` nunca lo pasa en `true`.
+- **Errores de formulario:** los fillers no silencian fallos. Cada campo pasa por `tryField`, que acumula `warnings` (devueltos también cuando la escritura fue exitosa). Si el submit rebota al formulario, `readFormErrors()` extrae los mensajes del servidor y los incluye en `message`.
+- **Logging:** `logger.ts` escribe siempre a **stderr** (stdout lleva el protocolo MCP) y redacta claves tipo password/cookie/token/cédula. Niveles con `CVLAC_LOG_LEVEL`; `CVLAC_HEADLESS=false` abre el navegador para depurar.
 
 ## Verificación
 
-- Unit tests (`vitest`) cubren `diff.ts`/`nameMatches` y el parser de `portfolio.ts` sin red. Corre `npm test` antes de dar por hecho un cambio en esas áreas.
-- Para cambios de scraping/formularios usa `screenshot` e `inspect_form` (devuelve los inputs/selects de una URL) en modo real para depurar nombres de campos, o navega en vivo y compara contra `docs/cvlac-findings.md`.
-- Antes de aplicar cambios reales al CvLAC, prueba con `sync({ dry_run: true })`. Las rutas de escritura `add`/`update`/`delete` están implementadas según los formularios reales pero **no se han ejecutado contra el CvLAC en vivo** (envío de formularios diferido): valida con una prueba supervisada (add de un ítem dummy + delete) antes de confiar en sync masivo.
+- `npm test` corre toda la suite sin red ni credenciales: extractores contra fixtures HTML anonimizados (`tests/fixtures/cvlac/`), diff, schemas, config, logger, sync con mocks y los helpers de `update-section`. Córrelo antes de dar por hecho cualquier cambio.
+- Los fixtures se versionan y llevan **datos ficticios**. Si capturas HTML real para un fixture nuevo, anonimízalo antes de commitear.
+- Para cambios de scraping/formularios usa `inspect_form` (lista inputs, selects con sus opciones y marca los campos con `*`) y `screenshot`, o navega en vivo y compara contra `docs/cvlac-findings.md`.
+- Antes de aplicar cambios reales al CvLAC, `sync({ dry_run: true })`. Para validar una ruta de escritura, prueba reversible en reconocimientos: `add` de un ítem TEST → repetir el `add` (debe dar `needs_confirmation`) → `update` → `delete`.
