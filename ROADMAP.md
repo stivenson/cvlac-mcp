@@ -70,7 +70,7 @@ Pendiente de decisión: **hoy el repo es privado**. Lo marcado ya está listo; l
 - [x] README con instalación genérica y aviso de uso responsable.
 - [ ] Barrido final de secretos sobre el árbol a publicar:
       `git grep -inE '(tu-nombre|tu-cedula|cucuta|54001)'`
-- [ ] Decidir si el workspace cliente (skill + CLAUDE.md + `.mcp.json`) se publica como carpeta dentro de este repo o como repo aparte.
+- [ ] Decidir si el workspace cliente se publica junto con este repo. Vive aparte, en [`stivenson/cvlac-workspace`](https://github.com/stivenson/cvlac-workspace) (privado): skill `cvlac-sync`, `.mcp.json` y las notas de estado del CvLAC.
 - [ ] Cambiar el repo a público.
 
 ## Historial

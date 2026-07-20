@@ -338,7 +338,7 @@ npm start
 5. Aplicar el resto: `sync` sin `dry_run`, o `update_section` por ítem revisando los `warnings`
 6. Verificar con `read_cvlac` de las secciones tocadas, o `screenshot`
 
-Si trabajas con Claude Code, la skill `cvlac-sync` del workspace cliente encapsula este flujo.
+Si trabajas con Claude Code, la skill `cvlac-sync` del [workspace cliente](https://github.com/stivenson/cvlac-workspace) encapsula este flujo.
 
 ### Diagrama
 
