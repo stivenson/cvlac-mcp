@@ -1,6 +1,18 @@
 # CvLAC — Hallazgos de navegación en vivo
 
-Fuente de verdad obtenida navegando el CvLAC real (cuenta de Stivenson) el 2026-05-30 con el navegador integrado, solo lectura (sin enviar formularios). Las páginas `create.do` se inspeccionaron cargándolas, nunca se hizo submit.
+Fuente de verdad obtenida navegando el CvLAC real. Base: 2026-05-30 (solo lectura, inspeccionando `create.do` sin enviar). Ampliado el 2026-07-20 con la primera verificación de escritura real (`add` + `delete` de un ítem de prueba, revertido).
+
+## ⚠️ La sesión expirada NO redirige (2026-07-20)
+
+El hallazgo más importante y el que más caro sale si se ignora.
+
+Ante una petición **no autenticada** a cualquier `all.do`, CvLAC responde **200 con el formulario de login incrustado, bajo la misma URL**. No hay redirect, no hay 401, `page.url()` sigue diciendo `.../all.do` y el `<title>` sigue siendo "CvLAC".
+
+Consecuencia: cualquier chequeo de sesión basado en la URL da la sesión por válida, los extractores leen una página sin filas de datos y **el diff concluye que el CvLAC está vacío**. Un `sync` en ese estado duplica todo el portafolio en el registro oficial.
+
+Detección correcta (`isLoginPage` en `src/browser/session.ts`): buscar en el DOM `#txt_contrasena`, `input[name="txt_contrasena"]` o `form[action*="s_login.do"]`.
+
+Señal temprana: los extractores loguean `list page had no data rows` cuando una lista viene vacía. Si aparece en las 7 secciones a la vez, es la sesión, no el markup.
 
 ## Login
 
@@ -23,7 +35,9 @@ Todas las listas usan filas `tr.odd` / `tr.even`. La primera celda es el número
 | software | `/cvlac/EnProdSoftware/all.do` | 1=Nombre, 2=Año, 3=Categoría |
 | eventos | `/cvlac/EnEventoCientifico/all.do` | 1=Evento, 2=Fecha inicio |
 
-**Conclusión:** todos los extractores de `src/extractors/cvlac/` usan los índices correctos. Único ajuste menor: en reconocimientos el código guarda `cells[2]` (que es el AÑO) como `description`.
+**Conclusión:** todos los extractores de `src/extractors/cvlac/` usan los índices correctos. El ajuste pendiente en reconocimientos (guardaba el AÑO como `description`) ya está corregido: el campo se llama `year`.
+
+Los índices están fijados por los tests: `tests/extractors.test.ts` corre cada extractor contra un fixture HTML anonimizado en `tests/fixtures/cvlac/`. Si CvLAC cambia una columna, ahí se ve primero.
 
 ### Resolución de la ambigüedad de "cursos"
 
@@ -43,26 +57,43 @@ Todos tienen botón submit con `value="Guardar"` (por eso `clickGuardar` con `ge
 - `id_institucion` (hidden) + `txt_nme_institucion` (readonly), `txt_nme_programa_acad` (readonly), `txt_nme_titulo_obtenido` (text), `nro_ano_inicio` / `nro_ano_obten` (selects). Código OK.
 
 ### cursos — `EnProdCurso/insert.do`
-- Código llena: `txt_nme_prod`, `nro_ano_presenta`, `nro_mes_presenta`. OK.
-- Campos adicionales posiblemente requeridos que el código NO llena: `cod_tipo_producto` (radio), `txt_participacion` (select Docente/Organizador/Otro), `nro_duracion`, `txt_lugar`, `sgl_idioma`, `sgl_pais`, `cod_municipio_text`. Verificar en prueba de escritura.
+- Código llena: `txt_nme_prod`, `cod_tipo_producto` (radio), `nro_ano_presenta`, `nro_mes_presenta`, y si vienen en el ítem o en `cvlac.config.json`: `txt_participacion`, `nro_duracion`, `txt_lugar`, `sgl_idioma`, `sgl_pais`, municipio.
+- Lo que no se pueda llenar aparece en `warnings` del resultado, no se silencia.
 
 ### reconocimientos — `EnReconocimiento/insert.do`
-- Código llena solo `txt_nme_reconocimiento`. Campos `nro_ano_obtencion` / `nro_mes_obtencion` (y `tpo_ambito` N/I) podrían ser requeridos y no se llenan.
+- Código llena `txt_nme_reconocimiento`, `nro_ano_obtencion`, `nro_mes_obtencion` y `tpo_ambito` (N/I).
+- **El año no tiene default.** Antes se ponía el año actual; un año equivocado en un registro oficial es peor que un formulario rechazado. Si el ítem no trae `year`, se reporta warning.
+- **Escritura verificada el 2026-07-20:** `add` con solo `{title, year}` → guardó correctamente. `delete` sobre ese ítem → lo eliminó y `read_cvlac` lo confirmó. Es la sección más barata para probar cambios.
 
-### proyectos — `EnProyecto/insert.do` (BUGS en el código)
+### proyectos — `EnProyecto/insert.do`
 - OK: `tpo_proyecto` (radio), `txt_nme_proyecto`, `nro_ano_inicio`/`nro_mes_inicio`/`nro_ano_fin`/`nro_mes_fin`, `nro_valor`, `txt_resumen_proyecto`, institución `nme_inst` (readonly).
-- BUG nombres de financiación: real `tpo_fuente_finan` (no `tpo_fuente_financiacion`), `tpo_amb_finan` (radio) y `tpo_rol` (select F/E/C) — el código usa `tpo_tipo_partic_inst` que no existe.
-- FALTA `tpo_participacion_proy` (select: IP=Investigador principal, CI=Coinvestigador, AS=Asesor, EP=Estudiante pregrado, EM=Estudiante maestría, ED=Estudiante doctorado), probablemente requerido.
-- `dta_acto_admString` es **readonly** → `page.fill` no funcionará; hay que inyectar por JS (forceSetReadonly).
+- Nombres de financiación reales (los bugs de la primera versión ya están corregidos): `tpo_fuente_finan` con valores **`I`/`E`** (no `IN`/`EX`), `tpo_amb_finan` (radio) y `tpo_rol` (select F/E/C).
+- `tpo_participacion_proy` (select: IP=Investigador principal, CI=Coinvestigador, AS=Asesor, EP=Estudiante pregrado, EM=Estudiante maestría, ED=Estudiante doctorado) — ya se llena, inferido del texto libre `participacion`.
+- `dta_acto_admString` es **readonly** → `page.fill` no funciona; se inyecta por JS (`forceSetReadonly`).
+- Sin verificar por escritura todavía: es la sección con más campos obligatorios y la más cara de limpiar si sale mal.
 
 ### software — `EnProdSoftware/insert.do`
-- OK: `cod_tipo_producto` (radio 211/212/219), `txt_nme_prod`, `nro_ano_presenta`/`nro_mes_presenta`, `txt_web_producto`, `tpo_prod_tiene` (radio, value "N"=Ninguno), textareas `txt_analisis`/`txt_desarrollo`/`txt_implementacion`/`txt_validacion`.
-- Textareas adicionales posiblemente requeridas no llenadas: `txt_plataforma`, `txt_ambiente`.
+- OK: `cod_tipo_producto` (radio 211/212/219), `txt_nme_prod`, `nro_ano_presenta`/`nro_mes_presenta`, `txt_web_producto`, `tpo_prod_tiene` (radio, value "N"=Ninguno).
+- Las **seis** textareas son obligatorias: `txt_analisis`, `txt_desarrollo`, `txt_implementacion`, `txt_validacion`, `txt_plataforma`, `txt_ambiente`. Se llenan desde `descripcionTecnica` del ítem; si no viene, se repite el nombre y se emite un warning explícito (queda un registro pobre pero válido).
 
 ### eventos — `EnEventoCientifico/insert.do`
 - OK: `txt_nme_evento`, `tpo_clasificacion` (N/I), `dta_inicioString`/`dta_finString` (readonly→JS), `cod_municipio_text` (readonly, id dinámico `_loc_NNNNN`), `txt_lugar`, checkboxes de rol `tpo_part_ponente`/`tpo_part_ponenteMag`/`tpo_part_organizador`/`tpo_part_asistente`, `txt_nme_institucion` (readonly), `txt_resumen_evento`.
 - `tpo_evento` (select): OT=Otro, **CG=Congreso** (no "CO"), EN=Encuentro, SE=Seminario, SI=Simposio, TA=Taller. Corregir el comentario del tipo en `types.ts`.
 
-## Estado actual de datos en CvLAC (referencia)
+## Estado de datos en CvLAC
 
-- formacion: 7 ítems. experiencia: 9. cursos (EnProdCurso): 9. reconocimientos: 5. proyectos: 4. software: 5 (incluye los 3 STATIC del portafolio). eventos: 4 (incluye el Congreso Multimedia STATIC).
+Conteos leídos el **2026-07-20** con `read_cvlac('all')`:
+
+| Sección | Ítems |
+|---|---|
+| formacion | 7 |
+| experiencia | 9 |
+| cursos (EnProdCurso) | 9 |
+| reconocimientos | 6 |
+| proyectos | 4 |
+| software | 5 |
+| eventos | 5 |
+
+Diff contra el portafolio en esa fecha: **8 faltantes, 15 al día**, 0 a actualizar, 0 parecidos.
+
+Estos números sirven de canario: si `read_cvlac` devuelve 0 en todas las secciones, la sesión está caída (ver la primera sección de este documento), no es que el CvLAC se haya vaciado.

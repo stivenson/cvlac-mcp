@@ -23,6 +23,8 @@ Dos garantías al escribir: **nunca crea un duplicado sin preguntar** (si ya hay
 
 > **Uso responsable.** Esto automatiza un sitio gubernamental con tu propia cuenta. Úsalo con supervisión humana, revisa cada `dry_run` antes de aplicar y no lo dejes corriendo sin mirar.
 
+Qué está verificado, qué falta y las limitaciones conocidas: **[ROADMAP.md](ROADMAP.md)**.
+
 ---
 
 ## Tabla de contenido
@@ -36,6 +38,7 @@ Dos garantías al escribir: **nunca crea un duplicado sin preguntar** (si ya hay
 - [Pruebas y build](#pruebas-y-build)
 - [Troubleshooting](#troubleshooting)
 - [Seguridad y buenas prácticas](#seguridad-y-buenas-prácticas)
+- [Estado y roadmap](#estado-y-roadmap)
 
 ---
 
@@ -420,3 +423,13 @@ npm start
 - `dist/` debe regenerarse tras cambios en `src/`.
 
 Para detalles operativos de desarrollo interno, ver `CLAUDE.md`.
+
+---
+
+## Estado y roadmap
+
+Lectura de las 7 secciones, diff, bloqueo de duplicados y escritura `add`/`delete` están verificados contra el CvLAC real. `update` está implementado pero sin probar en vivo.
+
+Detalle completo, limitaciones conocidas y lo que sigue: **[ROADMAP.md](ROADMAP.md)**.
+
+Hallazgos de navegación en vivo (URLs, columnas de tabla, nombres de campos, comportamiento de la sesión): **[docs/cvlac-findings.md](docs/cvlac-findings.md)**.
