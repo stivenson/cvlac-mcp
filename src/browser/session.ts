@@ -42,6 +42,26 @@ async function withRetry<T>(
   throw lastErr;
 }
 
+/**
+ * True when the page is showing the CvLAC login form.
+ *
+ * CvLAC serves that form *in place* for an unauthenticated request: the URL still
+ * reads `.../all.do`, so checking the URL reports a dead session as valid and the
+ * caller then scrapes an empty list. The password field is the reliable signal.
+ */
+export async function isLoginPage(page: Page): Promise<boolean> {
+  const url = page.url();
+  if (url.includes('pre_s_login') || url.includes('logOut')) return true;
+  return page
+    .evaluate(
+      () =>
+        !!document.querySelector('#txt_contrasena') ||
+        !!document.querySelector('input[name="txt_contrasena"]') ||
+        !!document.querySelector('form[action*="s_login.do"]')
+    )
+    .catch(() => false);
+}
+
 export class BrowserSession {
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
@@ -94,12 +114,10 @@ export class BrowserSession {
       const page = await this.getPage();
       // Use formacion page — lighter than inicio and still requires auth
       await page.goto(URLS.formacion, { waitUntil: 'domcontentloaded', timeout: 20000 });
-      const currentUrl = page.url();
+      const onLogin = await isLoginPage(page);
       await page.close();
-      // If redirected to login page, session is expired
-      const valid = !currentUrl.includes('Login') && !currentUrl.includes('logOut');
-      log.debug('session check', { valid });
-      return valid;
+      log.debug('session check', { valid: !onLogin });
+      return !onLogin;
     } catch (err) {
       log.debug('session check failed', { error: err instanceof Error ? err.message : String(err) });
       return false;

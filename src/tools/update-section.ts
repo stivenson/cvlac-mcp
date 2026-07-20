@@ -1,5 +1,5 @@
 import type { Page } from 'playwright';
-import { session } from '../browser/session.js';
+import { session, isLoginPage } from '../browser/session.js';
 import type {
   UpdateRequest,
   UpdateResult,
@@ -232,12 +232,6 @@ async function setReadonlyField(
 async function humanDelay(min = 300, max = 800): Promise<void> {
   const ms = min + Math.random() * (max - min);
   await new Promise((r) => setTimeout(r, ms));
-}
-
-/** Returns true if the current page is a CvLAC login/redirect page */
-async function isLoginPage(page: Page): Promise<boolean> {
-  const url = page.url();
-  return url.includes('Login') || url.includes('logOut') || url.includes('pre_s_login');
 }
 
 /** Navigate to a URL; throws SessionExpiredError if redirected to login (caller must reopen page) */
