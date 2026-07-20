@@ -7,7 +7,11 @@ import { diffTool } from './tools/diff.js';
 import { updateSectionTool } from './tools/update-section.js';
 import { syncTool } from './tools/sync.js';
 import { screenshotTool } from './tools/screenshot.js';
+import { SECTION_SCHEMAS, formatIssues } from './schemas.js';
+import { createLogger } from './logger.js';
 import type { CvLACSectionName } from './types.js';
+
+const log = createLogger('server');
 
 const sectionSchema = z.enum(['formacion', 'experiencia', 'cursos', 'reconocimientos', 'proyectos', 'software', 'eventos']);
 const sectionAllSchema = z.enum([
@@ -60,7 +64,8 @@ export function createServer(): McpServer {
   server.registerTool(
     'read_portfolio',
     {
-      description: 'Read and parse stivenson.github.io portfolio data.',
+      description:
+        'Read and parse the configured portfolio site (PORTFOLIO_URL), merged with the curated proyectos/software/eventos from data/portfolio-extra.json.',
       inputSchema: {},
     },
     async () => {
@@ -73,7 +78,8 @@ export function createServer(): McpServer {
     'diff',
     {
       description:
-        'Compare CvLAC vs portfolio. Returns missing items and items already up to date.',
+        'Compare CvLAC vs portfolio. Returns four buckets: missing, toUpdate, similar ' +
+        '(close to an existing entry — a human decides) and upToDate.',
       inputSchema: {
         section: sectionAllSchema
           .optional()
@@ -90,18 +96,50 @@ export function createServer(): McpServer {
     'update_section',
     {
       description:
-        'Apply a single update to a CvLAC section. Takes a screenshot for confirmation.',
+        'Apply a single change to a CvLAC section. Takes a screenshot for confirmation. ' +
+        'An "add" whose item resembles an existing entry returns status "needs_confirmation" ' +
+        'and writes nothing; resolve it with action:"update" or repeat with confirm_duplicate:true.',
       inputSchema: {
         section: sectionSchema,
         action: z.enum(['add', 'update', 'delete']),
         data: z.record(z.string(), z.unknown()).describe('The item data to add/update'),
+        confirm_duplicate: z
+          .boolean()
+          .optional()
+          .describe('Create the item even though CvLAC already holds a similar one'),
       },
     },
-    async ({ section, action, data }) => {
+    async ({ section, action, data, confirm_duplicate }) => {
+      // `data` arrives as untyped JSON; validate it here so a bad field is reported
+      // as such instead of silently producing an empty CvLAC entry.
+      if (action !== 'delete') {
+        const parsed = SECTION_SCHEMAS[section as CvLACSectionName].safeParse(data);
+        if (!parsed.success) {
+          log.warn('update_section rejected invalid data', { section, action });
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    success: false,
+                    status: 'failed',
+                    message: `Invalid data for section "${section}" — ${formatIssues(parsed.error)}`,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
+      }
+
       const result = await updateSectionTool({
         section: section as CvLACSectionName,
         action,
         data,
+        confirmDuplicate: confirm_duplicate,
       });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }
@@ -111,14 +149,16 @@ export function createServer(): McpServer {
     'sync',
     {
       description:
-        'Run a full diff and apply all missing items. Use dry_run:true to preview without changes.',
+        'Run a full diff and apply the unambiguous items (missing + toUpdate). Items that ' +
+        'resemble existing CvLAC entries are never written; they are listed for a human to ' +
+        'resolve. Use dry_run:true to preview.',
       inputSchema: {
         dry_run: z
           .boolean()
           .optional()
           .describe('Preview changes without applying them'),
         sections: z
-          .array(z.string())
+          .array(sectionSchema)
           .optional()
           .describe('Limit sync to specific sections'),
       },
@@ -153,23 +193,49 @@ export function createServer(): McpServer {
     },
     async ({ url }) => {
       const { session } = await import('./browser/session.js');
+      await session.login();
       const page = await session.getPage();
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-      const fields = await page.evaluate(() => {
-        const els = Array.from(document.querySelectorAll('input, select, textarea, [type="radio"]'));
-        return els.map((el) => {
-          const e = el as HTMLInputElement;
-          return `${e.tagName} name="${e.name}" id="${e.id}" type="${e.type}" value="${e.value}"`;
+      try {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+        const fields = await page.evaluate(() => {
+          const els = Array.from(document.querySelectorAll('input, select, textarea, [type="radio"]'));
+          return els.map((el) => {
+            const e = el as HTMLInputElement;
+            const options =
+              e.tagName === 'SELECT'
+                ? ' options=[' +
+                  Array.from((e as unknown as HTMLSelectElement).options)
+                    .slice(0, 30)
+                    .map((o) => `${o.value}:${o.text.trim()}`)
+                    .join(', ') +
+                  ']'
+                : '';
+            const required = e.closest('td,tr')?.textContent?.includes('*') ? ' (*)' : '';
+            return `${e.tagName} name="${e.name}" id="${e.id}" type="${e.type}" value="${e.value}"${required}${options}`;
+          });
         });
-      });
-      const screenshot = await session.takeScreenshot(page);
-      await page.close();
-      return {
-        content: [
-          { type: 'text', text: fields.join('\n') },
-          { type: 'image', data: screenshot, mimeType: 'image/png' },
-        ],
-      };
+        const screenshot = await session.takeScreenshot(page);
+        return {
+          content: [
+            { type: 'text', text: fields.join('\n') },
+            { type: 'image', data: screenshot, mimeType: 'image/png' },
+          ],
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.error('inspect_form failed', { url, error: msg });
+        const screenshot = await session.takeScreenshot(page).catch(() => null);
+        return {
+          content: [
+            { type: 'text', text: `inspect_form failed for ${url}: ${msg}` },
+            ...(screenshot
+              ? [{ type: 'image' as const, data: screenshot, mimeType: 'image/png' as const }]
+              : []),
+          ],
+        };
+      } finally {
+        await page.close();
+      }
     }
   );
 
