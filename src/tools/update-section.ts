@@ -164,7 +164,7 @@ async function gotoFormWithRelogin(
 
 /** Click the form's save button and wait for the navigation it triggers */
 async function clickGuardar(page: Page): Promise<void> {
-  const btn = page.getByRole('button', { name: /guardar|aceptar|enviar|save|borrar/i });
+  const btn = page.getByRole('button', { name: /guardar|aceptar|enviar|save/i });
   await btn.waitFor({ timeout: 10000 });
   await btn.click();
   await page.waitForLoadState('domcontentloaded');

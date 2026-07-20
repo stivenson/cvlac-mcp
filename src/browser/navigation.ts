@@ -2,14 +2,13 @@ export const BASE_URL = 'https://scienti.minciencias.gov.co';
 
 export const URLS = {
   login:                `${BASE_URL}/cvlac/Login/pre_s_login.do`,
-  loginPost:            `${BASE_URL}/cvlac/Login/s_login.do`,
   inicio:               `${BASE_URL}/cvlac/EnRecursoHumano/inicio.do`,
-  datosGenerales:       `${BASE_URL}/cvlac/EnRecursoHumano/datosGenerales.do`,
   // List pages
   formacion:            `${BASE_URL}/cvlac/EnTrayectoriaEscolar/all.do?isTrayectoria=TE`,
   experiencia:          `${BASE_URL}/cvlac/EnTrayectoriaProfesional/all.do`,
+  // "cursos" is EnProdCurso (courses taught), not EnFormacionComple (courses taken).
+  // See docs/cvlac-findings.md — the two are distinct sections in CvLAC.
   cursos:               `${BASE_URL}/cvlac/EnProdCurso/all.do?__tipo=2B`,
-  formacionComple:      `${BASE_URL}/cvlac/EnFormacionComple/all.do?isTrayectoria=FC`,
   reconocimientos:      `${BASE_URL}/cvlac/EnReconocimiento/all.do`,
   // Create/form pages
   formacionCreate:      `${BASE_URL}/cvlac/EnTrayectoriaEscolar/create.do?isTrayectoria=TE`,
@@ -25,8 +24,3 @@ export const URLS = {
 } as const;
 
 export type CvLACUrl = (typeof URLS)[keyof typeof URLS];
-
-/** Returns true if the page title indicates a successful authenticated session */
-export function isLoggedIn(title: string): boolean {
-  return !title.includes('Ingresar') && !title.includes('Login') && title.length > 0;
-}

@@ -63,8 +63,8 @@ export interface EventoCientificoItem {
   endDate?: string;  // DD/MM/YYYY
   lugar?: string;
   ciudad?: string;
-  codMunicipio?: string; // Código DANE: 54001=Cúcuta, 11001=Bogotá, 05001=Medellín
-  tipoEvento?: string; // OT=Otro, CO=Congreso, SE=Seminario, TA=Taller
+  codMunicipio?: string; // Código DANE del municipio, p.ej. 11001=Bogotá
+  tipoEvento?: string; // OT=Otro, CG=Congreso, EN=Encuentro, SE=Seminario, SI=Simposio, TA=Taller
   ambito?: 'N' | 'I' | 'R'; // Nacional | Internacional | Regional
   rol?: 'PO' | 'PM' | 'OR' | 'AS'; // Ponente | Ponente magistral | Organizador | Asistente
   institution?: string;
