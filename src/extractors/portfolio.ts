@@ -17,7 +17,10 @@ const log = createLogger('portfolio');
 
 const EMPTY_EXTRA: PortfolioExtra = { projects: [], software: [], eventos: [] };
 
-const EXTRA_PATH = process.env.CVLAC_PORTFOLIO_EXTRA_PATH ?? join(SERVER_ROOT, 'data', 'portfolio-extra.json');
+/** Resolved per call so the environment can change between calls (and in tests). */
+function extraPath(): string {
+  return process.env.CVLAC_PORTFOLIO_EXTRA_PATH ?? join(SERVER_ROOT, 'data', 'portfolio-extra.json');
+}
 
 /**
  * Loads proyectos/software/eventos from data/portfolio-extra.json.
@@ -27,16 +30,15 @@ const EXTRA_PATH = process.env.CVLAC_PORTFOLIO_EXTRA_PATH ?? join(SERVER_ROOT, '
  * portfolio site has no reason to carry. They are curated by hand instead.
  */
 export function loadPortfolioExtra(): PortfolioExtra {
-  if (!existsSync(EXTRA_PATH)) {
-    log.warn('no portfolio-extra file; proyectos/software/eventos will be empty', {
-      path: EXTRA_PATH,
-    });
+  const path = extraPath();
+  if (!existsSync(path)) {
+    log.warn('no portfolio-extra file; proyectos/software/eventos will be empty', { path });
     return EMPTY_EXTRA;
   }
   try {
-    const parsed = portfolioExtraSchema.parse(JSON.parse(readFileSync(EXTRA_PATH, 'utf-8')));
+    const parsed = portfolioExtraSchema.parse(JSON.parse(readFileSync(path, 'utf-8')));
     log.info('portfolio-extra loaded', {
-      path: EXTRA_PATH,
+      path,
       projects: parsed.projects.length,
       software: parsed.software.length,
       eventos: parsed.eventos.length,
@@ -44,7 +46,7 @@ export function loadPortfolioExtra(): PortfolioExtra {
     return parsed;
   } catch (err) {
     const detail = err instanceof z.ZodError ? formatIssues(err) : String(err);
-    log.error('portfolio-extra is invalid; ignoring it', { path: EXTRA_PATH, detail });
+    log.error('portfolio-extra is invalid; ignoring it', { path, detail });
     return EMPTY_EXTRA;
   }
 }

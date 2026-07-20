@@ -6,7 +6,11 @@ import { createLogger } from './logger.js';
 const log = createLogger('config');
 
 const SERVER_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const CONFIG_PATH = process.env.CVLAC_CONFIG_PATH ?? join(SERVER_ROOT, 'cvlac.config.json');
+
+/** Resolved per call so the environment can change between calls (and in tests). */
+function configPath(): string {
+  return process.env.CVLAC_CONFIG_PATH ?? join(SERVER_ROOT, 'cvlac.config.json');
+}
 
 /**
  * Per-user settings that must not live in the source tree.
@@ -42,18 +46,20 @@ let cached: CvlacConfig | null = null;
 export function loadConfig(): CvlacConfig {
   if (cached) return cached;
 
-  if (!existsSync(CONFIG_PATH)) {
-    log.warn('no config file; personal defaults unavailable', { path: CONFIG_PATH });
+  const path = configPath();
+
+  if (!existsSync(path)) {
+    log.warn('no config file; personal defaults unavailable', { path });
     cached = {};
     return cached;
   }
 
   try {
-    cached = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')) as CvlacConfig;
-    log.info('config loaded', { path: CONFIG_PATH });
+    cached = JSON.parse(readFileSync(path, 'utf-8')) as CvlacConfig;
+    log.info('config loaded', { path });
   } catch (err) {
     log.error('config file is not valid JSON; continuing without it', {
-      path: CONFIG_PATH,
+      path,
       error: err instanceof Error ? err.message : String(err),
     });
     cached = {};

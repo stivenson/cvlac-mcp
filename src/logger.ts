@@ -9,11 +9,20 @@ import { appendFileSync } from 'fs';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-const LEVEL_ORDER: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 };
+/** 'silent' is a threshold only — nothing is ever emitted at that level. */
+type Threshold = LogLevel | 'silent';
 
-function configuredLevel(): LogLevel {
+const LEVEL_ORDER: Record<Threshold, number> = {
+  debug: 10,
+  info: 20,
+  warn: 30,
+  error: 40,
+  silent: 100,
+};
+
+function configuredLevel(): Threshold {
   const raw = (process.env.CVLAC_LOG_LEVEL ?? 'info').toLowerCase();
-  return raw in LEVEL_ORDER ? (raw as LogLevel) : 'info';
+  return raw in LEVEL_ORDER ? (raw as Threshold) : 'info';
 }
 
 const SECRET_KEY = /password|contrasena|contraseña|cedula|documento|cookie|token|storagestate|secret/i;

@@ -1,4 +1,4 @@
-// ── Portfolio types (from stivenson.github.io) ──────────────────────────────
+// ── Portfolio types (parsed from the configured portfolio site) ──────────────
 
 export interface EducationItem {
   institution: string;

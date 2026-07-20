@@ -282,7 +282,7 @@ async function clickGuardar(page: Page): Promise<void> {
  * on some forms, next to the offending control. Selectors are deliberately broad
  * because the markup is inconsistent across sections.
  */
-async function readFormErrors(page: Page): Promise<string[]> {
+export async function readFormErrors(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const selectors = [
       '.error',
@@ -309,7 +309,7 @@ async function readFormErrors(page: Page): Promise<string[]> {
 }
 
 /** Reads the matchable label of every row in a list page. */
-async function listRowLabels(page: Page, matchCellIndex: number): Promise<string[]> {
+export async function listRowLabels(page: Page, matchCellIndex: number): Promise<string[]> {
   return page.evaluate((idx) => {
     return Array.from(document.querySelectorAll('tr.odd, tr.even'))
       .map((r) => {
@@ -322,7 +322,7 @@ async function listRowLabels(page: Page, matchCellIndex: number): Promise<string
 
 // ── Helpers shared by the form fillers ───────────────────────────────────────
 
-function inferNivel(degree: string): string {
+export function inferNivel(degree: string): string {
   const d = degree.toLowerCase();
   if (d.includes('maestría') || d.includes('maestria') || d.includes('master') || d.includes('magister'))
     return '3';
@@ -333,13 +333,13 @@ function inferNivel(degree: string): string {
   return '1'; // Pregrado/Universitario
 }
 
-function parsePeriod(period: string): { start: string; end: string } {
+export function parsePeriod(period: string): { start: string; end: string } {
   const years = period.match(/\d{4}/g) ?? [];
   return { start: years[0] ?? '', end: years[1] ?? '' };
 }
 
 /** Map a free-text participation role to the CvLAC tpo_participacion_proy code */
-function inferParticipacionProy(p?: string): string {
+export function inferParticipacionProy(p?: string): string {
   const s = (p ?? '').toLowerCase();
   if (s.includes('coinvest')) return 'CI';
   if (s.includes('asesor')) return 'AS';
@@ -782,7 +782,7 @@ const SECTIONS: Record<CvLACSectionName, SectionConfig> = {
  * Find the href of an action link (Detalles/Editar/Eliminar) for the list row whose
  * cell `matchCellIndex` matches `label` (accent/case/punctuation-insensitive).
  */
-async function findRowActionHref(
+export async function findRowActionHref(
   page: Page,
   matchCellIndex: number,
   label: string,
