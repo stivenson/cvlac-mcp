@@ -14,6 +14,7 @@ import type {
   EventoCientificoItem,
 } from '../types.js';
 import { BASE_URL, URLS } from '../browser/navigation.js';
+import { assertAvailable } from '../browser/availability.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logger.js';
 import { classifyMatch } from '../diff.js';
@@ -238,7 +239,8 @@ async function humanDelay(min = 300, max = 800): Promise<void> {
 class SessionExpiredError extends Error {}
 
 async function gotoForm(page: Page, url: string): Promise<void> {
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+  const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+  assertAvailable(response?.status() ?? null, url);
   if (await isLoginPage(page)) {
     throw new SessionExpiredError('Session expired');
   }
@@ -254,7 +256,8 @@ async function gotoFormWithRelogin(pageRef: { page: Page }, url: string): Promis
     await pageRef.page.close();
     await session.login(true);
     pageRef.page = await session.getPage();
-    await pageRef.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const response = await pageRef.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    assertAvailable(response?.status() ?? null, url);
     if (await isLoginPage(pageRef.page)) {
       throw new Error('Session expired and re-login failed');
     }

@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { createServer } from '../src/server.js';
+import { assertAvailable } from '../src/browser/availability.js';
 
 /**
  * Exercises the MCP boundary itself: what a client sees and what the argument
@@ -115,5 +117,35 @@ describe('argument validation, before anything reaches CvLAC', () => {
     const res: any = await client.callTool({ name: 'borrar_todo', arguments: {} });
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toContain('not found');
+  });
+});
+
+describe('a tool that fails because CvLAC is down', () => {
+  // The point of the typed error is what the person on the other end reads.
+  // Verified against a throwaway server so no real tool has to touch the network.
+  it('reaches the client as an error carrying the explanation, not a stack trace', async () => {
+    const server = new McpServer({ name: 'probe', version: '0' });
+    server.registerTool(
+      'read_cvlac',
+      { description: 'stand-in for a tool whose navigation hits a 503', inputSchema: {} },
+      async () => {
+        assertAvailable(503, 'https://scienti.minciencias.gov.co/cvlac/EnProyecto/all.do');
+        return { content: [{ type: 'text', text: 'unreachable' }] };
+      }
+    );
+
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const probe = new Client({ name: 'test', version: '0' });
+    await Promise.all([probe.connect(ct), server.connect(st)]);
+
+    const res: any = await probe.callTool({ name: 'read_cvlac', arguments: {} });
+    expect(res.isError).toBe(true);
+    const text = res.content[0].text as string;
+    expect(text).toContain('503');
+    expect(text).toMatch(/unavailable/i);
+    expect(text).toMatch(/not a problem with your credentials/i);
+    expect(text).toMatch(/nothing was read or written/i);
+
+    await probe.close();
   });
 });

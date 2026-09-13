@@ -4,6 +4,7 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { URLS } from './navigation.js';
 import { createLogger } from '../logger.js';
+import { assertAvailable } from './availability.js';
 
 const log = createLogger('session');
 
@@ -113,7 +114,8 @@ export class BrowserSession {
     try {
       const page = await this.getPage();
       // Use formacion page — lighter than inicio and still requires auth
-      await page.goto(URLS.formacion, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      const response = await page.goto(URLS.formacion, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      assertAvailable(response?.status() ?? null, URLS.formacion);
       const onLogin = await isLoginPage(page);
       await page.close();
       log.debug('session check', { valid: !onLogin });
@@ -158,7 +160,9 @@ export class BrowserSession {
     await withRetry(async () => {
       const page = await this.getPage();
 
-      await page.goto(URLS.login, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      const response = await page.goto(URLS.login, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      // Without this the next fill() fails as an opaque selector timeout.
+      assertAvailable(response?.status() ?? null, URLS.login);
       await humanDelay(500, 1200);
 
       // Select nationality — "C" for Colombiana
