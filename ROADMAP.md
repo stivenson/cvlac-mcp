@@ -16,7 +16,7 @@ Funciona de punta a punta contra el CvLAC real: lee las 7 secciones, calcula el 
 | Warnings por campo + errores del servidor | ✅ |
 | Configuración personal fuera del código | ✅ |
 | Logging con redacción de secretos | ✅ |
-| Tests | ✅ 142, sin red ni credenciales |
+| Tests | ✅ 158, sin red ni credenciales |
 
 ## Limitaciones conocidas
 
@@ -82,7 +82,7 @@ El repo **ya está público**. Queda lo que sigue pendiente de todos modos.
 
 ## Historial
 
-- **2026-09-12** — Empaquetado para npm listo pero **sin publicar** (ver punto 5). `CVLAC_ENV_FILE` para instalaciones fuera del repo; corregido que dotenv escribía su banner en el stdout del MCP, o sea tráfico malformado en el canal JSON-RPC de cada arranque. README cubre los siete editores MCP en vez de solo Cursor. Tests de 138 a 142.
+- **2026-09-12** — Tests del borde MCP (registro de tools, validación previa a cualquier navegación) y de las URLs por sección. Empaquetado para npm listo pero **sin publicar** (ver punto 5). `CVLAC_ENV_FILE` para instalaciones fuera del repo; corregido que dotenv escribía su banner en el stdout del MCP, o sea tráfico malformado en el canal JSON-RPC de cada arranque. README cubre los siete editores MCP en vez de solo Cursor. Tests de 138 a 142.
 - **2026-07-20** — Configuración personal externalizada; logging con redacción; warnings por campo y lectura de los errores del formulario; diff con cuatro grupos y bloqueo de duplicados; tests de 12 a 138. Se descubrió y corrigió que una sesión expirada no redirige (habría duplicado los 23 ítems del portafolio en un `sync`).
 - **2026-05-31** — Primera sincronización real: reconocimiento ACOFI 2026 y diplomado USB agregados.
 - **2026-05-30** — Navegación en vivo del CvLAC; URLs, columnas y campos de formulario documentados en `docs/cvlac-findings.md`.
