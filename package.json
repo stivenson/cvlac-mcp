@@ -7,14 +7,41 @@
   "bin": {
     "cvlac-mcp": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "data/portfolio-extra.example.json",
+    "cvlac.config.example.json",
+    ".env.example"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stivenson/cvlac-mcp.git"
+  },
+  "homepage": "https://github.com/stivenson/cvlac-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/stivenson/cvlac-mcp/issues"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build && npm test"
   },
-  "keywords": [],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "cvlac",
+    "minciencias",
+    "colciencias",
+    "playwright",
+    "curriculum",
+    "colombia"
+  ],
   "author": "Stivenson Rincón Mora",
   "license": "ISC",
   "dependencies": {
