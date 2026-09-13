@@ -7,6 +7,8 @@
 ![Vitest](https://img.shields.io/badge/tests-vitest-6E9F18?style=flat&logo=vitest&logoColor=white)
 ![Build](https://img.shields.io/badge/build-tsc%20passing-brightgreen?style=flat)
 ![License](https://img.shields.io/badge/license-ISC-blue?style=flat)
+![CvLAC](https://img.shields.io/badge/CvLAC-MinCiencias-00573F?style=flat)
+![No oficial](https://img.shields.io/badge/proyecto-no%20oficial-9E9E9E?style=flat)
 
 Servidor MCP (stdio) para sincronizar tu perfil de **CvLAC** (MinCiencias) con tu portafolio web, usando **TypeScript + Playwright**.
 
@@ -22,6 +24,10 @@ Permite:
 Dos garantías al escribir: **nunca crea un duplicado sin preguntar** (si ya hay algo igual o parecido devuelve `needs_confirmation` en vez de escribir) y **siempre dice qué campo falló** cuando CvLAC rechaza un formulario.
 
 > **Uso responsable.** Esto automatiza un sitio gubernamental con tu propia cuenta. Úsalo con supervisión humana, revisa cada `dry_run` antes de aplicar y no lo dejes corriendo sin mirar.
+
+> **Proyecto independiente.** No está afiliado a MinCiencias ni respaldado por esa entidad, y no usa su
+> identidad visual. «CvLAC», «ScienTI» y «MinCiencias» se nombran solo para identificar el sistema con
+> el que habla; las marcas son de sus titulares.
 
 Qué está verificado, qué falta y las limitaciones conocidas: **[ROADMAP.md](ROADMAP.md)**.
 
