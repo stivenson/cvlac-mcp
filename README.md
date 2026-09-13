@@ -30,6 +30,8 @@ Qué está verificado, qué falta y las limitaciones conocidas: **[ROADMAP.md](R
 ## Tabla de contenido
 
 - [Inicio rápido: instalar y configurar el MCP (Linux, Windows, macOS)](#inicio-rápido-instalar-y-configurar-el-mcp-linux-windows-macos)
+  - [Registrar el MCP en tu editor](#paso-5---registrar-el-mcp-en-tu-editor) — Cursor · Claude Code · Claude Desktop · VS Code · Windsurf · Zed · JetBrains
+  - [Alternativa: instalar desde npm](#paso-5b---alternativa-instalar-desde-npm-sin-clonar)
 - [Arquitectura](#arquitectura)
 - [Tools MCP disponibles](#tools-mcp-disponibles)
 - [Variables de entorno](#variables-de-entorno)
@@ -189,15 +191,34 @@ cp data/portfolio-extra.example.json data/portfolio-extra.json
 
 El archivo se valida al cargarse; si un ítem está mal formado, el servidor lo reporta y sigue con las demás secciones.
 
-### Paso 5 - Registrar el MCP en Cursor
+### Paso 5 - Registrar el MCP en tu editor
 
-El servidor corre por **stdio** y su entrypoint real es `dist/index.js`. Añádelo al archivo de configuración MCP de Cursor.
+El servidor habla **MCP por stdio** y su entrypoint real es `dist/index.js`. Cualquier cliente
+que soporte MCP sirve; sólo cambia dónde vive el archivo de configuración.
 
-Ubicación del archivo `mcp.json`:
-- **Global** — Linux/macOS: `~/.cursor/mcp.json` · Windows: `%USERPROFILE%\.cursor\mcp.json`
-- **Por proyecto** — `<proyecto>/.cursor/mcp.json`
+**El bloque base es el mismo en todos** (ajusta la ruta a tu sistema):
 
-Contenido (ajusta la ruta de `args` a tu sistema):
+```json
+{
+  "command": "node",
+  "args": ["/home/TU_USUARIO/dev/cvlac-mcp/dist/index.js"]
+}
+```
+
+Ruta de `args` según el SO:
+- **Linux:** `"/home/TU_USUARIO/dev/cvlac-mcp/dist/index.js"`
+- **macOS:** `"/Users/TU_USUARIO/dev/cvlac-mcp/dist/index.js"`
+- **Windows:** `"C:\\Users\\TU_USUARIO\\dev\\cvlac-mcp\\dist\\index.js"` (dobles barras invertidas en JSON)
+
+> **Deja las credenciales solo en `.env`.** El servidor lo carga desde su propio directorio, así
+> que no hace falta repetirlas en la configuración del editor — y esos archivos suelen estar en tu
+> home sin permisos restringidos, o sincronizados entre máquinas. Si aun así las pones en un bloque
+> `env`, ganan sobre `.env`.
+
+#### Cursor
+
+Archivo: `~/.cursor/mcp.json` (global) · `<proyecto>/.cursor/mcp.json` (por proyecto) ·
+Windows: `%USERPROFILE%\.cursor\mcp.json`
 
 ```json
 {
@@ -210,12 +231,121 @@ Contenido (ajusta la ruta de `args` a tu sistema):
 }
 ```
 
-Ruta de `args` según el SO:
-- **Linux:** `"/home/TU_USUARIO/dev/cvlac-mcp/dist/index.js"`
-- **macOS:** `"/Users/TU_USUARIO/dev/cvlac-mcp/dist/index.js"`
-- **Windows:** `"C:\\Users\\TU_USUARIO\\dev\\cvlac-mcp\\dist\\index.js"` (usa dobles barras invertidas en JSON)
+Reinicia Cursor y confirma en *Settings → MCP* que `cvlac-mcp` aparece activo y lista sus tools.
 
-> **Deja las credenciales solo en `.env`.** El servidor lo carga desde su propio directorio, así que no hace falta repetirlas en `mcp.json` — y ese archivo suele estar en tu home sin permisos restringidos, o sincronizado entre máquinas. Si aun así las pones en el bloque `env`, ganan sobre `.env`.
+#### Claude Code (CLI)
+
+Una línea, sin editar JSON a mano:
+
+```bash
+claude mcp add cvlac-mcp --scope user -- node /home/TU_USUARIO/dev/cvlac-mcp/dist/index.js
+```
+
+`--scope user` lo deja disponible en todos tus proyectos; `--scope project` lo escribe en
+`.mcp.json` del repo actual (se versiona y lo comparte el equipo) y `--scope local` sólo para ti
+en ese proyecto. Verifica con `claude mcp list` y, dentro de una sesión, con `/mcp`.
+
+En **Windows** sin WSL, el comando es el mismo cambiando la ruta:
+
+```powershell
+claude mcp add cvlac-mcp --scope user -- node C:\Users\TU_USUARIO\dev\cvlac-mcp\dist\index.js
+```
+
+#### Claude Desktop
+
+Archivo `claude_desktop_config.json`:
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+- **Linux:** `~/.config/Claude/claude_desktop_config.json`
+
+Mismo formato que Cursor (`mcpServers`). Requiere **cerrar y reabrir** la app — no basta con
+recargar la ventana.
+
+#### VS Code (GitHub Copilot / modo agente)
+
+Archivo: `<proyecto>/.vscode/mcp.json` (por workspace) o el `mcp.json` de usuario
+(*Command Palette → MCP: Open User Configuration*). Ojo: la clave es **`servers`**, no `mcpServers`.
+
+```json
+{
+  "servers": {
+    "cvlac-mcp": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/home/TU_USUARIO/dev/cvlac-mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+Las tools aparecen en el selector de herramientas del chat en modo agente.
+
+#### Windsurf
+
+Archivo: `~/.codeium/windsurf/mcp_config.json`. Formato `mcpServers`, igual que Cursor.
+
+#### Zed
+
+Archivo `settings.json` de Zed. Los servidores MCP van bajo **`context_servers`** y el binario
+bajo `command`:
+
+```json
+{
+  "context_servers": {
+    "cvlac-mcp": {
+      "source": "custom",
+      "command": "node",
+      "args": ["/home/TU_USUARIO/dev/cvlac-mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+#### JetBrains (IntelliJ, PyCharm, WebStorm…)
+
+Con el plugin de AI Assistant / Junie: *Settings → Tools → AI Assistant → Model Context Protocol
+(MCP) → Add*. Acepta pegar el mismo JSON de `mcpServers`, o llenar `command` = `node` y
+`arguments` = la ruta a `dist/index.js`.
+
+#### Otro cliente MCP
+
+Cualquiera que acepte un servidor stdio funciona. Lo único que necesita saber:
+ejecutable `node`, argumento la ruta absoluta a `dist/index.js`, sin argumentos extra ni puertos.
+
+---
+
+### Paso 5b - Alternativa: instalar desde npm (sin clonar)
+
+> Disponible una vez el paquete esté publicado en npm. Mientras tanto, usa la vía de los pasos 1-5.
+
+`npx` descarga y ejecuta el servidor sin clonar ni compilar:
+
+```json
+{
+  "mcpServers": {
+    "cvlac-mcp": {
+      "command": "npx",
+      "args": ["-y", "cvlac-mcp"],
+      "env": {
+        "CVLAC_ENV_FILE": "/home/TU_USUARIO/.config/cvlac-mcp/.env"
+      }
+    }
+  }
+}
+```
+
+**Diferencia importante frente a clonar:** instalado desde npm, el servidor vive en la caché de
+`npx`, un directorio que tú no editas — ahí no hay `.env`, `cvlac.config.json` ni
+`data/portfolio-extra.json` que valgan. Por eso se apunta a los tuyos con variables:
+
+| Variable | Qué apunta |
+|---|---|
+| `CVLAC_ENV_FILE` | Tu `.env` (credenciales). Sin esto habría que ponerlas en el JSON del editor |
+| `CVLAC_CONFIG_PATH` | Tu `cvlac.config.json` |
+| `CVLAC_PORTFOLIO_EXTRA_PATH` | Tu `data/portfolio-extra.json` |
+
+Sugerido: `mkdir -p ~/.config/cvlac-mcp` y guarda los tres ahí con `chmod 600` en el `.env`.
+El navegador de Playwright sigue haciendo falta: `npx playwright install chromium` (Paso 3).
 
 ### Paso 6 - Verificar la instalación
 
@@ -232,9 +362,11 @@ Ruta de `args` según el SO:
    node dist/index.js
    ```
 
-3. **En Cursor:** reinicia/recarga, abre los ajustes de MCP y confirma que `cvlac-mcp` aparece activo (indicador verde) y lista sus tools.
+3. **En tu editor:** reinícialo (Claude Desktop necesita cerrarse del todo) y confirma que
+   `cvlac-mcp` aparece activo y lista sus tools — *Settings → MCP* en Cursor, `claude mcp list`
+   o `/mcp` en Claude Code, el selector de herramientas del chat agente en VS Code.
 
-4. **Prueba funcional mínima** desde el chat de Cursor, en este orden:
+4. **Prueba funcional mínima** desde el chat de tu editor, en este orden:
    - `login` (debe autenticar y persistir sesión)
    - `read_portfolio` (debe devolver datos del portafolio)
    - `diff` (debe reportar `missing` / `upToDate`)
@@ -289,7 +421,8 @@ Secciones soportadas:
 
 ## Variables de entorno
 
-Definidas en `.env` (ver [Paso 4](#paso-4---configurar-variables-de-entorno-env)):
+Definidas en `.env` (ver [Paso 4](#paso-4---configurar-variables-de-entorno-env)), o en el bloque
+`env` de la configuración de tu editor, que tiene prioridad sobre el archivo:
 
 | Variable | Descripción |
 |---|---|
@@ -307,6 +440,7 @@ Opcionales:
 | `CVLAC_LOG_LEVEL` | `debug` \| `info` (default) \| `warn` \| `error` \| `silent`. Los logs van a stderr |
 | `CVLAC_LOG_FILE` | Además de stderr, agrega cada línea a este archivo |
 | `CVLAC_USER_AGENT` | Reemplaza el user-agent del navegador |
+| `CVLAC_ENV_FILE` | Ubicación alterna del propio `.env`. Imprescindible al instalar desde npm, donde el servidor corre desde la caché de `npx` |
 | `CVLAC_CONFIG_PATH` | Ubicación alterna de `cvlac.config.json` |
 | `CVLAC_PORTFOLIO_EXTRA_PATH` | Ubicación alterna de `portfolio-extra.json` |
 
