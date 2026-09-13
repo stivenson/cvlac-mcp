@@ -1,6 +1,6 @@
 # Roadmap
 
-Dónde está `cvlac-mcp` y qué falta. Actualizado: **2026-07-20**.
+Dónde está `cvlac-mcp` y qué falta. Actualizado: **2026-09-12**.
 
 ## Estado actual
 
@@ -16,7 +16,7 @@ Funciona de punta a punta contra el CvLAC real: lee las 7 secciones, calcula el 
 | Warnings por campo + errores del servidor | ✅ |
 | Configuración personal fuera del código | ✅ |
 | Logging con redacción de secretos | ✅ |
-| Tests | ✅ 138, sin red ni credenciales |
+| Tests | ✅ 142, sin red ni credenciales |
 
 ## Limitaciones conocidas
 
@@ -48,9 +48,15 @@ La causa de fondo de la fragilidad de `portfolio.ts` y de que proyectos/software
 
 Entrar a la página de detalle de cada ítem permitiría comparar fechas y tipo, y con eso detectar `update` en esas tres secciones. Cuesta una navegación por ítem; vale la pena solo si esas secciones empiezan a cambiar seguido.
 
-### 5. Publicar (sin fecha)
+### 5. Publicar en npm (sin fecha, y a propósito)
 
-**El repo se mantiene privado por ahora.** El trabajo de preparación ya está hecho —el código no contiene datos de nadie y funcionaría para cualquier persona con CvLAC—, así que abrirlo es una decisión, no un proyecto. Checklist más abajo para cuando se tome.
+**El repo ya es público; el paquete no, y esa es la decisión.** El empaquetado está listo —`files` acotado a `dist` y los tres `.example`, `engines`, `prepublishOnly` con build y tests— así que publicar es `npm login && npm publish`, no un proyecto.
+
+Se publica **cuando alguien reporte que le costó instalarlo clonando**, no antes. Hoy la vía de los pasos 1-5 del README funciona y el nombre en npm es irreversible: `npm unpublish` solo aplica dentro de las primeras 72 horas y no libera el nombre. Sin un caso real de fricción, publicar compra mantenimiento (versionado, issues de instalación) sin comprar usuarios.
+
+El README ya marca el Paso 5b como *"disponible una vez el paquete esté publicado"*, así que nadie se topa con una promesa rota. El día que se publique: quitar esa línea y verificar `npx -y cvlac-mcp` contra el registro real.
+
+Lo que se ganó preparándolo vale igual sin publicar nunca: `CVLAC_ENV_FILE` permite sacar las credenciales del directorio del repo clonando también, y el `quiet: true` de dotenv arregló un bug real —su banner iba a **stdout**, que en un MCP stdio es el canal JSON-RPC.
 
 ## Ideas sin compromiso
 
@@ -59,22 +65,24 @@ Entrar a la página de detalle de cada ítem permitiría comparar fechas y tipo,
 - Tools para áreas de actuación e idiomas (formularios simples, selectores en cascada).
 - Un `--dry-run` de verdad a nivel de formulario: llenar y capturar screenshot sin enviar.
 
-## Checklist para publicar
+## Checklist de apertura del repo
 
-Pendiente de decisión: **hoy el repo es privado**. Lo marcado ya está listo; lo demás solo aplica el día que se abra.
+El repo **ya está público**. Queda lo que sigue pendiente de todos modos.
 
-- [ ] **Rotar la contraseña del CvLAC.** Estuvo en `~/.claude/mcp.json` y en documentos locales. Nada indica exposición, pero es barato — y esto conviene hacerlo aunque el repo siga privado.
+- [ ] **Rotar la contraseña del CvLAC.** Estuvo en `~/.claude/mcp.json` y en documentos locales. Nada indica exposición, pero es barato — y ahora el repo es público, así que no hay razón para seguir postergándolo.
 - [x] Datos personales fuera del código (`.env`, `cvlac.config.json`, `data/portfolio-extra.json`, todos gitignored con su `.example`).
 - [x] Fixtures de test con datos ficticios.
 - [x] LICENSE.
-- [x] README con instalación genérica y aviso de uso responsable.
+- [x] README con instalación genérica y aviso de uso responsable, cubriendo Cursor, Claude Code,
+      Claude Desktop, VS Code, Windsurf, Zed y JetBrains.
 - [ ] Barrido final de secretos sobre el árbol a publicar:
       `git grep -inE '(tu-nombre|tu-cedula|cucuta|54001)'`
 - [ ] Decidir si el workspace cliente se publica junto con este repo. Vive aparte, en [`stivenson/cvlac-workspace`](https://github.com/stivenson/cvlac-workspace) (privado): skill `cvlac-sync`, `.mcp.json` y las notas de estado del CvLAC.
-- [ ] Cambiar el repo a público.
+- [x] Cambiar el repo a público.
 
 ## Historial
 
+- **2026-09-12** — Empaquetado para npm listo pero **sin publicar** (ver punto 5). `CVLAC_ENV_FILE` para instalaciones fuera del repo; corregido que dotenv escribía su banner en el stdout del MCP, o sea tráfico malformado en el canal JSON-RPC de cada arranque. README cubre los siete editores MCP en vez de solo Cursor. Tests de 138 a 142.
 - **2026-07-20** — Configuración personal externalizada; logging con redacción; warnings por campo y lectura de los errores del formulario; diff con cuatro grupos y bloqueo de duplicados; tests de 12 a 138. Se descubrió y corrigió que una sesión expirada no redirige (habría duplicado los 23 ítems del portafolio en un `sync`).
 - **2026-05-31** — Primera sincronización real: reconocimiento ACOFI 2026 y diplomado USB agregados.
 - **2026-05-30** — Navegación en vivo del CvLAC; URLs, columnas y campos de formulario documentados en `docs/cvlac-findings.md`.
