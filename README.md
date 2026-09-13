@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img src="assets/logo.svg" alt="" width="96" height="96">
+  </picture>
+</p>
+
 # cvlac-mcp
 
 ![Node](https://img.shields.io/badge/node-%3E%3D20-339933?style=flat&logo=node.js&logoColor=white)
@@ -25,9 +32,10 @@ Dos garantías al escribir: **nunca crea un duplicado sin preguntar** (si ya hay
 
 > **Uso responsable.** Esto automatiza un sitio gubernamental con tu propia cuenta. Úsalo con supervisión humana, revisa cada `dry_run` antes de aplicar y no lo dejes corriendo sin mirar.
 
-> **Proyecto independiente.** No está afiliado a MinCiencias ni respaldado por esa entidad, y no usa su
-> identidad visual. «CvLAC», «ScienTI» y «MinCiencias» se nombran solo para identificar el sistema con
-> el que habla; las marcas son de sus titulares.
+> **Proyecto independiente.** No está afiliado a MinCiencias ni respaldado por esa entidad. No
+> reproduce su logotipo ni su identidad visual: el símbolo de arriba es original —unas llaves
+> `{ }` de JSON-RPC dentro de un anillo de trazos que convergen— y las marcas «CvLAC», «ScienTI»
+> y «MinCiencias» se nombran solo para identificar el sistema con el que habla el servidor.
 
 Qué está verificado, qué falta y las limitaciones conocidas: **[ROADMAP.md](ROADMAP.md)**.
 
