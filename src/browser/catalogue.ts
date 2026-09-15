@@ -61,7 +61,7 @@ export function parseProgramaOptions(html: string): CatalogueOption[] {
 }
 
 /** Generic "find the row a human would have clicked", or null rather than a guess. */
-function bestMatch<T>(items: T[], wanted: string, labelOf: (item: T) => string): T | null {
+export function bestMatch<T>(items: T[], wanted: string, labelOf: (item: T) => string): T | null {
   const target = norm(wanted);
   if (!target) return null;
 
@@ -99,14 +99,89 @@ export function needsProgramaAcademico(codNivelFormacion: string): boolean {
 }
 
 /**
- * Whether a project form will show — and demand — its financing block.
+ * Whether the project's amount field applies.
  *
- * CvLAC reveals "Institución principal del proyecto", with its administrative
- * act, date and amount, only for a project declared financed. On a solidarity
- * project those inputs are hidden: waiting for one to become fillable costs a
- * full Playwright timeout, and forcing a value into one through JavaScript gets
- * the submit rejected over a field the form never asked about.
+ * Choosing "Solidario" hides only `nro_valor` — and the financing-source radios
+ * beside it. The administrative act and its date stay on screen and stay
+ * required, so they are filled either way. Note CvLAC also refuses an amount
+ * below 10.000.000.
  */
-export function financingBlockApplies(tipoFinanciacion: string | undefined): boolean {
+export function projectValueApplies(tipoFinanciacion: string | undefined): boolean {
   return tipoFinanciacion === 'FI';
+}
+
+/**
+ * A date in the only shape CvLAC's forms accept: `yyyy-mm-dd`.
+ *
+ * Its datepicker is configured with dateFormat "yy-mm-dd", which is jQuery UI
+ * for a four-digit year. A day-first date reaches the server as an invalid
+ * format and takes the whole submit down with it.
+ */
+export function cvlacDateString(input: string | undefined | null): string | null {
+  const text = (input ?? '').trim();
+  if (!text) return null;
+
+  const iso = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(text);
+  if (iso) return `${iso[1]}-${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}`;
+
+  const dayFirst = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/.exec(text);
+  if (dayFirst) return `${dayFirst[3]}-${dayFirst[2].padStart(2, '0')}-${dayFirst[1].padStart(2, '0')}`;
+
+  return null;
+}
+
+export interface NamedRow {
+  id: string;
+  name: string;
+}
+
+export interface MunicipioOption extends NamedRow {
+  /** The 10-character prefix the form stores next to the code. */
+  codRh: string;
+}
+
+/** Picks a row of the location cascade by name, ignoring case and accents. */
+export function pickByName<T extends { name: string }>(rows: T[], wanted: string): T | null {
+  return bestMatch(rows, wanted, (r) => r.name);
+}
+
+const tag = (xml: string, name: string): string[] =>
+  Array.from(xml.matchAll(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`, 'gi'))).map((m) => m[1]);
+
+const inner = (chunk: string, name: string): string => {
+  const m = new RegExp(`<${name}>([\\s\\S]*?)</${name}>`, 'i').exec(chunk);
+  return m ? m[1].trim() : '';
+};
+
+/** `getDepartamentosAsXML`: the sigla each department answers to (NO, NA, AN…). */
+export function parseDepartamentosXml(xml: string): NamedRow[] {
+  return tag(xml, 'departamento')
+    .map((chunk) => ({ id: inner(chunk, 'id'), name: inner(chunk, 'name') }))
+    .filter((d) => d.id && d.name);
+}
+
+/**
+ * `getMunicipiosAsXML`: the only place the code `cod_municipio` stores comes from.
+ *
+ * CvLAC numbers municipalities three different ways — DANE, the id its JSON
+ * search returns, and this one — and the form understands only this. Cúcuta is
+ * 54001, 827 and 991 respectively; the first two got written as Sketty and Neiva.
+ */
+export function parseMunicipiosXml(xml: string): MunicipioOption[] {
+  return tag(xml, 'municipio')
+    .map((chunk) => ({
+      id: inner(chunk, 'id'),
+      name: inner(chunk, 'name'),
+      codRh: inner(chunk, 'cod_rh'),
+    }))
+    .filter((m) => m.id && m.name && !/^no informado$/i.test(m.name));
+}
+
+/** The text the picker leaves in the readonly field: country, department, town. */
+export function municipioDisplayName(
+  pais: string,
+  departamento: string | null,
+  municipio: string
+): string {
+  return [pais, departamento, municipio].filter(Boolean).join(' - ');
 }

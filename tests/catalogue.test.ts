@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   catalogueQuery,
-  financingBlockApplies,
+  municipioDisplayName,
+  parseDepartamentosXml,
+  parseMunicipiosXml,
+  pickByName,
+  cvlacDateString,
+  projectValueApplies,
   parseProgramaOptions,
   pickPrograma,
   pickMunicipio,
@@ -109,16 +114,92 @@ describe('catalogueQuery', () => {
 // CvLAC hides the whole "Institución principal del proyecto" block unless the
 // project is declared financed. Filling it anyway cost a 30s timeout on a
 // hidden field and got the form rejected over a date nobody had asked for.
-describe('financingBlockApplies', () => {
+describe('projectValueApplies', () => {
   it('applies to a financed project', () => {
-    expect(financingBlockApplies('FI')).toBe(true);
+    expect(projectValueApplies('FI')).toBe(true);
   });
 
+  // Only the amount hides on a solidarity project: the administrative act and
+  // its date stay on screen, and stay required.
   it('does not apply to a solidarity project', () => {
-    expect(financingBlockApplies('SO')).toBe(false);
+    expect(projectValueApplies('SO')).toBe(false);
   });
 
   it('does not apply when the project does not say', () => {
-    expect(financingBlockApplies(undefined)).toBe(false);
+    expect(projectValueApplies(undefined)).toBe(false);
+  });
+});
+
+// CvLAC's datepicker is set up with dateFormat "yy-mm-dd", which in jQuery UI
+// means a four-digit year: 2024-01-01. Sending 01/01/2024 got the project
+// rejected for "la fecha del acto administrativo no tiene un formato válido".
+describe('cvlacDateString', () => {
+  it('keeps a date already written the way CvLAC wants it', () => {
+    expect(cvlacDateString('2024-03-09')).toBe('2024-03-09');
+  });
+
+  it('turns a day-first date into CvLAC order', () => {
+    expect(cvlacDateString('09/03/2024')).toBe('2024-03-09');
+  });
+
+  it('pads a single-digit day and month', () => {
+    expect(cvlacDateString('9/3/2024')).toBe('2024-03-09');
+  });
+
+  it('refuses text it cannot read as a date', () => {
+    expect(cvlacDateString('marzo de 2024')).toBeNull();
+    expect(cvlacDateString('')).toBeNull();
+  });
+});
+
+// The popup's cascade, which is the only source of the code the form stores.
+const DEPTOS_XML =
+  '<departamentos>' +
+  '<departamento><id>NA</id><name>NARIÑO</name><pais>COL</pais></departamento>' +
+  '<departamento><id>NO</id><name>NORTE DE SANTANDER</name><pais>COL</pais></departamento>' +
+  '</departamentos>';
+
+const MUNICIPIOS_XML =
+  '<municipios>' +
+  '<municipio><id>90811</id><name>No Informado</name><cod_rh>0000000000</cod_rh> </municipio>' +
+  '<municipio><id>1030</id><name>VILLA DEL ROSARIO</name><cod_rh>0000000000</cod_rh> </municipio>' +
+  '<municipio><id>991</id><name>CÚCUTA</name><cod_rh>0000000000</cod_rh> </municipio>' +
+  '</municipios>';
+
+describe('parseDepartamentosXml', () => {
+  it('reads the sigla CvLAC asks for by name', () => {
+    expect(pickByName(parseDepartamentosXml(DEPTOS_XML), 'NORTE DE SANTANDER')?.id).toBe('NO');
+  });
+
+  it('matches a department written without accents', () => {
+    expect(pickByName(parseDepartamentosXml(DEPTOS_XML), 'Narino')?.id).toBe('NA');
+  });
+});
+
+describe('parseMunicipiosXml', () => {
+  it('reads the id the form stores, which is none of the other numberings', () => {
+    const cucuta = pickByName(parseMunicipiosXml(MUNICIPIOS_XML), 'Cúcuta');
+    expect(cucuta?.id).toBe('991');
+    expect(cucuta?.codRh).toBe('0000000000');
+  });
+
+  it('keeps the accented name, which is what the form displays', () => {
+    expect(pickByName(parseMunicipiosXml(MUNICIPIOS_XML), 'Cucuta')?.name).toBe('CÚCUTA');
+  });
+
+  it('does not settle for "No Informado" when the name is unknown', () => {
+    expect(pickByName(parseMunicipiosXml(MUNICIPIOS_XML), 'Pamplona')).toBeNull();
+  });
+});
+
+describe('municipioDisplayName', () => {
+  it('spells the location the way the picker writes it', () => {
+    expect(municipioDisplayName('Colombia', 'NORTE DE SANTANDER', 'CÚCUTA')).toBe(
+      'Colombia - NORTE DE SANTANDER - CÚCUTA'
+    );
+  });
+
+  it('leaves the department out when there is none', () => {
+    expect(municipioDisplayName('Colombia', null, 'CÚCUTA')).toBe('Colombia - CÚCUTA');
   });
 });

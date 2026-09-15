@@ -103,6 +103,17 @@ describe('extractDetailFields on a record laid out in caption rows', () => {
     expect(fields.map((f) => f.value)).not.toContain('Mes');
   });
 
+  it('reads a caption row padded with spacer cells', async () => {
+    await load('detalle-curso');
+    const byLabel = Object.fromEntries(
+      (await extractDetailFields(page)).map((f) => [f.label, f.value])
+    );
+
+    expect(byLabel['Tipo de producto']).toBe('Extensión extracurricular');
+    expect(byLabel['Año']).toBe('2020');
+    expect(byLabel['Mes']).toBe('Noviembre');
+  });
+
   it('leaves out a caption whose value is empty', async () => {
     await load('detalle-software');
     const fields = await extractDetailFields(page);

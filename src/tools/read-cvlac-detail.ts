@@ -50,15 +50,22 @@ export async function extractDetailFields(page: Page): Promise<CvLACDetailField[
         const cells = ownCells(rows[r]);
         if (cells.length === 0) continue;
 
-        const captions = cells.filter(isCaption);
+        const captionAt = cells.map(isCaption);
+        const captionCount = captionAt.filter(Boolean).length;
+        // CvLAC pads these rows with empty cells between the captions, so a
+        // caption row is one where everything that is not a caption is blank.
+        const onlyCaptionsAndSpacers =
+          captionCount > 0 &&
+          cells.every((cell, i) => captionAt[i] || clean(cell.textContent) === '');
 
         // Layout A — a row of captions, their values on the row below. Used by
         // cursos, software and eventos, including for a caption that takes up
         // the whole row on its own.
-        if (captions.length === cells.length) {
+        if (onlyCaptionsAndSpacers) {
           const below = rows[r + 1] ? ownCells(rows[r + 1]) : [];
           if (below.length === cells.length && below.every((c) => !isCaption(c))) {
             for (let i = 0; i < cells.length; i++) {
+              if (!captionAt[i]) continue;
               add(clean(cells[i].textContent), clean(below[i].textContent));
             }
             r++; // that row was the values; do not read it again

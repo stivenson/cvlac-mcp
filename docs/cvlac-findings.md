@@ -63,13 +63,28 @@ Todos tienen botón submit con `value="Guardar"` (por eso `clickGuardar` con `ge
 
 El picker es un popup (`/cvlac/binary/ubicacion.do?methodToCall=display&t=m&ni=<sufijo>`) con cascada país → departamento → municipio. El hidden `cod_municipio` guarda **el id interno de CvLAC**: Cúcuta es `827`, no `54001`. Pasar el DANE no falla — guarda otro municipio (54001 resultó ser *Sketty*, Swansea, Gales).
 
-Se resuelve por nombre con `GET /cvlac/json/EnMunicipio/buscar.do?txt_nombre=<nombre>` (responde JSON en **latin1**, igual que instituciones):
+**Hay tres numeraciones distintas** y solo una sirve para `cod_municipio`. Para Cúcuta: DANE `54001` (guardó *Sketty*, Gales), id del JSON `EnMunicipio/buscar.do` `827` (guardó *NEIVA*), e id de la cascada del popup `991` (correcto).
+
+La buena sale de la cascada, en XML:
+
+- `GET /cvlac/binary/ubicacion.xml?methodToCall=getDepartamentosAsXML&sglPais=COL` → `<departamento><id>NO</id><name>NORTE DE SANTANDER</name></departamento>` (el país va en sigla de **3** letras; el JSON devuelve la de 2).
+- `GET /cvlac/binary/ubicacion.xml?methodToCall=getMunicipiosAsXML&sglDepartamento=NO&sglPais=COL` → `<municipio><id>991</id><name>CÚCUTA</name><cod_rh>0000000000</cod_rh></municipio>`
+
+El popup escribe **cuatro** campos (`returnData()`): `cod_municipio_text` = `"Colombia - NORTE DE SANTANDER - CÚCUTA"`, `cod_municipio` = id, `cod_rh_municipio` = `cod_rh`, y el hidden de país (`name="null"`) = `COL`.
+
+El JSON sigue siendo útil para saber **a qué departamento** pertenece un municipio:
 
 ```json
 [{"id":827,"idDepartamento":52,"txtNmeMunicipio":"CÚCUTA","departamento":{"id":52,"txtNmeDepartamento":"NORTE DE SANTANDER","pais":{"id":1,"sglPais":"CO"}}}]
 ```
 
 El JSON de instituciones también trae su `municipio` ya resuelto (`idMunicipio` + objeto anidado), útil si algún día se quiere heredar la ciudad de la institución.
+
+### proyectos — `EnProyecto/insert.do`
+
+- **Fechas en `yyyy-mm-dd`.** El datepicker se configura con `dateFormat: "yy-mm-dd"` (jQuery UI: año de 4 cifras). Mandar `01/01/2024` da *La fecha del acto administrativo no tiene un formato válido*.
+- `txt_acto_adm` y `dta_acto_admString` son **obligatorios siempre**, también en proyectos solidarios. Elegir *Solidario* (`tpo_financiacion=SO`) solo oculta `nro_valor` y los radios `tpo_fuente_finan` / `tpo_amb_finan`; omitir el acto administrativo da un genérico *Campo requerido*.
+- `nro_valor` debe ser numérico y **≥ 10.000.000** (validadores `validarNumero` y `valorMinimo` inline en la página).
 
 ### cursos — `EnProdCurso/insert.do`
 - Código llena: `txt_nme_prod`, `cod_tipo_producto` (radio), `nro_ano_presenta`, `nro_mes_presenta`, y si vienen en el ítem o en `cvlac.config.json`: `txt_participacion`, `nro_duracion`, `txt_lugar`, `sgl_idioma`, `sgl_pais`, municipio.

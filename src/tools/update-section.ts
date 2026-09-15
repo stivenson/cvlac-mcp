@@ -17,7 +17,12 @@ import { BASE_URL, URLS, SECTION_LIST } from '../browser/navigation.js';
 import { navigate } from '../browser/navigate.js';
 import {
   catalogueQuery,
-  financingBlockApplies,
+  cvlacDateString,
+  projectValueApplies,
+  municipioDisplayName,
+  parseDepartamentosXml,
+  parseMunicipiosXml,
+  pickByName,
   needsProgramaAcademico,
   parseProgramaOptions,
   pickMunicipio,
@@ -164,26 +169,65 @@ async function setInstitucionFields(
 }
 
 /**
- * Looks a municipality up in CvLAC's own table.
+ * Resolves a municipality the way the picker popup does.
  *
- * Its ids are not DANE codes: Cúcuta is 827 here and 54001 there. Sending the
- * DANE code stored a formación in Sketty, Wales — the row that happened to
- * carry that number.
+ * Three numberings exist and only one is the code the form stores: the DANE
+ * code wrote Sketty (Wales), the id from the JSON search wrote Neiva, and this
+ * cascade — country, department, municipality — writes Cúcuta. The JSON search
+ * is still the cheapest way to learn which department a town belongs to, so it
+ * is used for that and nothing else.
  */
-async function findMunicipio(page: Page, name: string): Promise<MunicipioRow | null> {
-  const url = `${BASE_URL}/cvlac/json/EnMunicipio/buscar.do?txt_nombre=${encodeURIComponent(catalogueQuery(name))}`;
-  const rows = await page.evaluate(async (fetchUrl: string) => {
-    const res = await fetch(fetchUrl, { credentials: 'include' });
-    if (!res.ok) return [] as unknown[];
-    const text = new TextDecoder('latin1').decode(await res.arrayBuffer());
-    try {
-      return JSON.parse(text);
-    } catch {
-      return [] as unknown[];
-    }
-  }, url);
+async function resolveMunicipio(
+  page: Page,
+  name: string
+): Promise<{ codMunicipio: string; codRh: string; text: string; sglPais: string } | null> {
+  const get = (url: string): Promise<string> =>
+    page.evaluate(async (fetchUrl: string) => {
+      const res = await fetch(fetchUrl, { credentials: 'include' });
+      if (!res.ok) return '';
+      return new TextDecoder('latin1').decode(await res.arrayBuffer());
+    }, url);
 
-  return Array.isArray(rows) ? pickMunicipio(rows as MunicipioRow[], name) : null;
+  const raw = await get(
+    `${BASE_URL}/cvlac/json/EnMunicipio/buscar.do?txt_nombre=${encodeURIComponent(catalogueQuery(name))}`
+  );
+  let hit: { txtNmeMunicipio: string; departamento?: { txtNmeDepartamento?: string; pais?: { txtNmePais?: string } } } | null =
+    null;
+  try {
+    const rows = JSON.parse(raw);
+    hit = Array.isArray(rows) ? pickMunicipio(rows as MunicipioRow[], name) : null;
+  } catch {
+    hit = null;
+  }
+  if (!hit) return null;
+
+  const paisNombre = hit.departamento?.pais?.txtNmePais ?? 'Colombia';
+  const deptoNombre = hit.departamento?.txtNmeDepartamento ?? null;
+  // The cascade speaks three-letter country codes; the JSON returns two.
+  const sglPais = paisNombre.toLowerCase() === 'colombia' ? 'COL' : '';
+  if (!sglPais) return null;
+
+  const deptos = parseDepartamentosXml(
+    await get(`${BASE_URL}/cvlac/binary/ubicacion.xml?methodToCall=getDepartamentosAsXML&sglPais=${sglPais}`)
+  );
+  const depto = deptoNombre ? pickByName(deptos, deptoNombre) : null;
+  if (!depto) return null;
+
+  const municipios = parseMunicipiosXml(
+    await get(
+      `${BASE_URL}/cvlac/binary/ubicacion.xml?methodToCall=getMunicipiosAsXML` +
+        `&sglDepartamento=${encodeURIComponent(depto.id)}&sglPais=${sglPais}`
+    )
+  );
+  const municipio = pickByName(municipios, name);
+  if (!municipio) return null;
+
+  return {
+    codMunicipio: municipio.id,
+    codRh: municipio.codRh,
+    text: municipioDisplayName(paisNombre, depto.name, municipio.name),
+    sglPais,
+  };
 }
 
 /**
@@ -287,35 +331,52 @@ async function setMunicipio(
     return;
   }
 
-  const found = await findMunicipio(page, nombre);
+  const found = await resolveMunicipio(page, nombre);
   if (!found) {
     report.warnings.push(
-      `municipio "${nombre}": no existe en el catálogo de CvLAC; el campo queda vacío`
+      `municipio "${nombre}": no se pudo resolver en el catálogo de CvLAC; el campo queda vacío`
     );
-    log.warn('municipality not found in CvLAC catalogue', { nombre });
+    log.warn('municipality not resolved', { nombre });
     return;
   }
-  if (codigoDane && codigoDane !== String(found.id)) {
+  if (codigoDane && codigoDane !== found.codMunicipio) {
     report.warnings.push(
       `municipio: se ignoró el código ${codigoDane} porque CvLAC numera sus municipios aparte del DANE ` +
-        `(${found.txtNmeMunicipio} es ${found.id} para CvLAC)`
+        `(${found.text} es ${found.codMunicipio} para el formulario)`
     );
   }
 
+  // The picker writes four fields, not one: the readable path, the code, the
+  // 10-character prefix beside it and the country.
   const applied = await page.evaluate(
-    ({ text, code }) => {
+    ({ text, code, codRh, sglPais }) => {
       const textEl = document.querySelector('input[name="cod_municipio_text"]') as HTMLInputElement | null;
       if (!textEl) return false;
       textEl.removeAttribute('readonly');
       textEl.value = text;
+
       const suffix = textEl.id.replace('_loc_', '');
-      const hiddenEl = document.getElementById('_locValue_' + suffix) as HTMLInputElement | null;
-      if (hiddenEl) hiddenEl.value = code;
-      const all = Array.from(document.querySelectorAll('input[name="cod_municipio"]')) as HTMLInputElement[];
-      for (const el of all) el.value = code;
+      const setById = (id: string, value: string): void => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        if (el) el.value = value;
+      };
+      setById('_locValue_' + suffix, code);
+      setById('_locRHValue_' + suffix, codRh);
+      setById('_locPaisValue_' + suffix, sglPais);
+
+      for (const el of Array.from(
+        document.querySelectorAll('input[name="cod_municipio"]')
+      ) as HTMLInputElement[]) {
+        el.value = code;
+      }
+      for (const el of Array.from(
+        document.querySelectorAll('input[name="cod_rh_municipio"]')
+      ) as HTMLInputElement[]) {
+        el.value = codRh;
+      }
       return true;
     },
-    { text: found.txtNmeMunicipio, code: String(found.id) }
+    { text: found.text, code: found.codMunicipio, codRh: found.codRh, sglPais: found.sglPais }
   );
   if (!applied) report.warnings.push('municipio: el formulario no tiene cod_municipio_text');
 }
@@ -784,32 +845,51 @@ async function fillProyecto(page: Page, proj: ProjectItem, report: FillReport): 
     await humanDelay(200, 300);
   }
 
-  // Only a financed project shows these; on any other kind they are hidden, and
-  // writing into them invents an administrative act that does not exist.
-  if (financingBlockApplies(tipoFin)) {
-    if (proj.nroActoAdministrativo) {
-      await tryField(report, 'txt_acto_adm', () =>
-        page.fill('input[name="txt_acto_adm"]', proj.nroActoAdministrativo!, { timeout: FIELD_TIMEOUT_MS })
+  // The administrative act and its date stay on screen — and required — whatever
+  // the financing is; only the amount hides on a non-financed project.
+  await tryField(report, 'txt_acto_adm', () =>
+    page.fill('input[name="txt_acto_adm"]', proj.nroActoAdministrativo ?? 'N/A', {
+      timeout: FIELD_TIMEOUT_MS,
+    })
+  );
+  if (!proj.nroActoAdministrativo) {
+    report.warnings.push(
+      'txt_acto_adm: CvLAC lo exige y el proyecto no lo trae; se envió "N/A". Añade "nroActoAdministrativo" para que quede el real'
+    );
+  }
+
+  // Derived from the project's own start date when it is not given: CvLAC will
+  // not accept the form without one, and a date taken from the project beats a
+  // date made up out of nothing.
+  const fechaActo =
+    cvlacDateString(proj.fechaActoAdministrativo) ??
+    cvlacDateString(`01/${proj.startMonth ?? '01'}/${proj.startYear}`);
+  if (fechaActo) {
+    await setReadonlyField(page, report, 'dta_acto_admString', fechaActo);
+    if (!proj.fechaActoAdministrativo) {
+      report.warnings.push(
+        `dta_acto_admString: se derivó ${fechaActo} de la fecha de inicio del proyecto; añade "fechaActoAdministrativo" si es otra`
       );
-    } else {
-      missingValue(report, 'txt_acto_adm', 'añade "nroActoAdministrativo" al proyecto financiado');
     }
+  } else {
+    missingValue(report, 'dta_acto_admString', 'añade "fechaActoAdministrativo" con formato yyyy-mm-dd');
+  }
 
-    if (proj.fechaActoAdministrativo) {
-      await setReadonlyField(page, report, 'dta_acto_admString', proj.fechaActoAdministrativo);
-    } else {
-      missingValue(report, 'dta_acto_admString', 'añade "fechaActoAdministrativo" al proyecto financiado');
-    }
-
+  if (projectValueApplies(tipoFin)) {
     if (proj.valorSinContrapartida) {
       await tryField(report, 'nro_valor', () =>
         page.fill('input[name="nro_valor"]', proj.valorSinContrapartida!, { timeout: FIELD_TIMEOUT_MS })
       );
+      if (Number(proj.valorSinContrapartida) < 10000000) {
+        report.warnings.push(
+          `nro_valor: CvLAC exige un valor mínimo de 10.000.000 y el proyecto trae ${proj.valorSinContrapartida}`
+        );
+      }
     } else {
       missingValue(report, 'nro_valor', 'añade "valorSinContrapartida" al proyecto financiado');
     }
-    await humanDelay(200, 400);
   }
+  await humanDelay(200, 400);
 
   await tryField(report, 'txt_resumen_proyecto', () =>
     page.fill('textarea[name="txt_resumen_proyecto"]', proj.description)

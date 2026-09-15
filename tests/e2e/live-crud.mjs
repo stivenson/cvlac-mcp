@@ -130,8 +130,10 @@ const PLAN = {
       institution: 'Universidad de los Andes',
       resumen: 'Ítem de prueba creado por la suite e2e de cvlac-mcp. Se borra al terminar.',
     },
-    update: { startDate: '02/03/2024' },
-    evidence: '02/03/2024',
+    // The evento record page shows no dates at all, so the edit has to land on
+    // something it does display.
+    update: { lugar: 'Prueba automatizada (editado)' },
+    evidence: 'Prueba automatizada (editado)',
   },
 };
 
@@ -159,7 +161,9 @@ const norm = (s) =>
 
 function listLabels(sectionData, section) {
   const key = LIST_LABEL[section];
-  return (sectionData?.[section] ?? []).map((item) => item[key] ?? '');
+  // Rows whose label column is empty — CvLAC has a few — would otherwise match
+  // every candidate, since every string contains the empty string.
+  return (sectionData?.[section] ?? []).map((item) => item[key] ?? '').filter((l) => l.trim() !== '');
 }
 
 function present(labels, label) {

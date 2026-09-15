@@ -27,10 +27,12 @@ export async function connect({ logFile } = {}) {
 }
 
 /**
- * Calls a tool and returns its parsed payload.
+ * Calls a tool and returns its parsed payload, screenshot included.
  *
- * Every tool answers with a JSON string in a text block; screenshots are dropped
- * here because a base64 PNG per write would bury the report.
+ * Every tool answers with a JSON string in a text block. The base64 screenshot
+ * used to be deleted here to keep the report readable, which also meant a
+ * rejected form left nothing to look at; the runner now writes it to a file and
+ * keeps only the path.
  */
 export async function call(client, name, args = {}, timeoutMs = 300000) {
   // A write walks a dozen CvLAC pages with human-like pauses; the SDK's 60s
@@ -45,6 +47,5 @@ export async function call(client, name, args = {}, timeoutMs = 300000) {
   } catch {
     data = { raw: text };
   }
-  if (data && typeof data === 'object') delete data.screenshotBase64;
   return data;
 }
