@@ -47,7 +47,7 @@ src/
 │   ├── session.ts            # BrowserSession singleton (Playwright). Login + storageState
 │   └── navigation.ts         # URLS constantes (list/create) del CvLAC
 ├── tools/                    # Una función por tool MCP
-│   ├── login.ts  read-cvlac.ts  read-portfolio.ts  diff.ts
+│   ├── login.ts  read-cvlac.ts  read-cvlac-detail.ts  read-portfolio.ts  diff.ts
 │   ├── update-section.ts     # (grande) llena formularios CvLAC por sección
 │   ├── sync.ts  screenshot.ts
 └── extractors/
@@ -56,7 +56,8 @@ src/
         rows.ts               # readRows/mapRows compartidos por todos los extractores
         formacion / experiencia / cursos / reconocimientos / proyectos / software / eventos
 tests/                        # vitest, sin red: extractores (fixtures HTML), diff, schemas,
-                              # config, logger, sync (mocks), update-section (helpers)
+                              # config, logger, sync (mocks), update-section (helpers), detalle
+tests/e2e/                    # suite en vivo (opt-in, escribe en el CvLAC real)
 data/                         # portfolio-extra.json (gitignored) + su .example
 ```
 
@@ -64,7 +65,7 @@ Flujo de datos: `index.ts` → `server.ts` (router) → `tools/*` → `browser/s
 
 ## Tools MCP (registradas en `server.ts`)
 
-`login`, `read_cvlac`, `read_portfolio`, `diff`, `update_section`, `sync`, `screenshot`, `inspect_form`.
+`login`, `read_cvlac`, `read_cvlac_detail`, `read_portfolio`, `diff`, `update_section`, `sync`, `screenshot`, `inspect_form`.
 
 **Secciones:** `formacion`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`, `software`, `eventos`.
 
@@ -76,6 +77,7 @@ Flujo de datos: `index.ts` → `server.ts` (router) → `tools/*` → `browser/s
 - **Listas (`all.do`):** filas `tr.odd`/`tr.even`; el selector aísla bien los datos (el menú usa `<li>`). Índices de columna verificados por sección (ver findings). En `reconocimientos` `cells[2]` es el **año**, no descripción.
 - **Cursos = `EnProdCurso/all.do?__tipo=2B`** (no `EnFormacionComple`): ahí viven los cursos del portafolio (Platzi, Coursera, talleres). `formacionComple` define otra sección distinta y queda sin usar a propósito.
 - **`portfolio.ts` es frágil:** parsea el bundle JS con regex y el hash del bundle cambia en cada deploy (se descubre desde el HTML). Las secciones `projects`, `software` y `eventos` **NO** se parsean del bundle (requieren metadatos que solo existen en CvLAC): vienen de `data/portfolio-extra.json`, validado con zod. Para agregar un proyecto nuevo se edita ese JSON, no el código.
+- **`read-cvlac-detail.ts`:** las listas `all.do` solo muestran dos o tres columnas, así que es lo único que permite verificar lo que una escritura guardó de verdad. Encuentra la fila por etiqueta con el mismo `findRowActionHref` que usan `update`/`delete` (link *Detalles*) y empareja las celdas de cada `<tr>` en pares etiqueta/valor. Es **deliberadamente genérico**: no hay nombres de campo por sección, porque cada ficha del CvLAC arma su tabla distinto. Si no logra emparejar nada devuelve el texto de la página en vez de un objeto vacío. `SECTION_LIST` (en `navigation.ts`) es la fuente única de `listUrl` + `matchCellIndex`; `update-section.ts` la consume con spread, así que las dos no pueden discrepar sobre qué columna lleva el nombre.
 - **`update-section.ts`:** despacha por `action` → `add` (create.do), `update` (sigue el link *Editar* → edit.do, mismos campos que create) y `delete` (sigue *Eliminar* → `confirm.do` → link *Borrar* → `delete.do`). Cada sección tiene un `fill(page, data)` reutilizable (create y edit comparten campos) en el registro `SECTIONS`. Los formularios postean a `insert.do` con submit `value="Guardar"`. Campos `readonly` (institución, fechas `dta_*String`, municipio con id dinámico `_loc_NNNNN`) se setean por JS (`forceSetReadonly*` / `setInstitucion*`); la institución se busca vía API JSON `/cvlac/json/EnInstitucion/buscar.do` que responde en **latin1**. Códigos enum por sección viven en `types.ts` (tipoProyecto, tipoSoftware, tipoEvento — Congreso=`CG`, ámbito, rol, DANE municipio). En proyectos: participación = `tpo_participacion_proy` (IP/CI/AS/EP/EM/ED), financiación = `tpo_fuente_finan`/`tpo_amb_finan`/`tpo_rol`.
 - **`diff.ts`:** `classifyMatch()` devuelve `exact` / `same` / `similar` / `none`; normaliza (lowercase + sin diacríticos), ignora sufijos `(...)` y ` - ...`, y mide solapamiento de tokens para los parecidos. `computeDiff()` devuelve cuatro grupos: `missing`, `toUpdate` (mismo ítem, año distinto), `similar` (parecidos — **nunca se aplican solos**) y `upToDate`. Las secciones cuya lista solo muestra el nombre (proyectos, software, eventos) nunca generan `toUpdate`. La **experiencia está excluida del diff** a propósito (nombres de empresa divergen del portafolio y el rol no está en la lista).
 - **Duplicados:** CvLAC no valida duplicados y borrarlos a mano es tedioso. Por eso `update_section` con `action:"add"` primero revisa la lista y, si encuentra algo igual o parecido, **no escribe**: devuelve `status:"needs_confirmation"` con los candidatos. Solo `confirm_duplicate:true` fuerza la creación. `sync` nunca lo pasa en `true`.
@@ -88,3 +90,4 @@ Flujo de datos: `index.ts` → `server.ts` (router) → `tools/*` → `browser/s
 - Los fixtures se versionan y llevan **datos ficticios**. Si capturas HTML real para un fixture nuevo, anonimízalo antes de commitear.
 - Para cambios de scraping/formularios usa `inspect_form` (lista inputs, selects con sus opciones y marca los campos con `*`) y `screenshot`, o navega en vivo y compara contra `docs/cvlac-findings.md`.
 - Antes de aplicar cambios reales al CvLAC, `sync({ dry_run: true })`. Para validar una ruta de escritura, prueba reversible en reconocimientos: `add` de un ítem TEST → repetir el `add` (debe dar `needs_confirmation`) → `update` → `delete`.
+- Esa prueba ya está automatizada para las 7 secciones en `tests/e2e/live-crud.mjs` (`CVLAC_E2E=1 npm run test:e2e:live`). **Escribe en el CvLAC real**: por eso exige `CVLAC_E2E=1`, marca todo lo que crea con el prefijo `ZZ PRUEBA MCP`, borra en un `finally` y reporta lo que no pudo borrar. Habla con el servidor por stdio contra `dist/index.js`, así que hay que `npm run build` antes. Un CvLAC caído (5xx) aborta la corrida con el mensaje de `CvlacUnavailableError`, no con una sección vacía.

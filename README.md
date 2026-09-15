@@ -22,7 +22,7 @@ Servidor MCP (stdio) para sincronizar tu perfil de **CvLAC** (MinCiencias) con t
 No trae datos de nadie: tus credenciales, tus valores por defecto y tus proyectos curados viven en archivos locales que el repo ignora. Sirve para cualquier persona con una hoja de vida en CvLAC.
 
 Permite:
-- leer datos en vivo del CvLAC (`read_cvlac`)
+- leer datos en vivo del CvLAC (`read_cvlac`, `read_cvlac_detail`)
 - leer el portafolio (`read_portfolio`)
 - calcular diferencias (`diff`): faltantes, a actualizar, parecidos y al día
 - aplicar cambios por sección (`update_section`: `add` / `update` / `delete`)
@@ -421,6 +421,7 @@ src/
 
 - `login`: autentica en CvLAC y persiste sesión.
 - `read_cvlac`: lee una sección o todas (`all`) desde CvLAC.
+- `read_cvlac_detail`: abre la ficha completa de un ítem (por sección y etiqueta) y devuelve sus pares campo/valor. Las listas solo muestran dos o tres columnas; esta es la única forma de ver lo que realmente quedó guardado.
 - `read_portfolio`: obtiene y parsea el portafolio.
 - `diff`: compara CvLAC vs portafolio y reporta cuatro grupos: `missing`, `toUpdate`, `similar` (parecidos a algo existente) y `upToDate`.
 - `update_section`: aplica cambio puntual (`add`, `update`, `delete`). Devuelve `status`, `warnings` por campo y, si detecta un posible duplicado, `needs_confirmation` con los candidatos. `confirm_duplicate:true` fuerza la creación.
@@ -507,7 +508,18 @@ npm test        # suite completa: sin red, sin credenciales, sin CvLAC
 npm run build
 ```
 
-Los tests cubren extractores (contra fixtures HTML anonimizados), el motor de diff, los schemas, la carga de configuración, la redacción de secretos en logs y el reporte de `sync`. Los fixtures llevan datos ficticios a propósito: si capturas HTML real para uno nuevo, anonimízalo antes de commitear.
+Los tests cubren extractores (contra fixtures HTML anonimizados), el motor de diff, los schemas, la carga de configuración, la redacción de secretos en logs, el reporte de `sync`, el borde MCP y la lectura de fichas de detalle. Los fixtures llevan datos ficticios a propósito: si capturas HTML real para uno nuevo, anonimízalo antes de commitear.
+
+### Suite en vivo (opcional, escribe en tu CvLAC real)
+
+```bash
+CVLAC_E2E=1 npm run test:e2e:live                      # las 7 secciones
+CVLAC_E2E=1 npm run test:e2e:live -- --sections=cursos  # solo una
+```
+
+Recorre el CRUD completo por sección contra tu cuenta real: lista → `add` → lista → `read_cvlac_detail` → `add` repetido (debe devolver `needs_confirmation`) → `update` → detalle para comprobar el cambio → `delete` → lista final. Cada ítem que crea lleva el prefijo `ZZ PRUEBA MCP`, siempre intenta borrarlo y, si algo sobrevive, lo reporta al final para que lo borres a mano.
+
+Es la única suite que toca datos reales, por eso exige `CVLAC_E2E=1` y no corre con `npm test`. Deja el reporte en `tests/e2e/report-<fecha>.json` (gitignored).
 
 Comandos disponibles:
 

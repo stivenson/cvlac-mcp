@@ -1,6 +1,6 @@
 # Roadmap
 
-Dónde está `cvlac-mcp` y qué falta. Actualizado: **2026-09-12**.
+Dónde está `cvlac-mcp` y qué falta. Actualizado: **2026-09-13**.
 
 ## Estado actual
 
@@ -17,7 +17,8 @@ Funciona de punta a punta contra el CvLAC real: lee las 7 secciones, calcula el 
 | CvLAC caído (5xx) reportado como tal | ✅ Antes la sección se leía vacía |
 | Configuración personal fuera del código | ✅ |
 | Logging con redacción de secretos | ✅ |
-| Tests | ✅ 166, sin red ni credenciales |
+| Lectura de la ficha de detalle de un ítem | ✅ `read_cvlac_detail`, genérica para las 7 secciones |
+| Tests | ✅ 175 unitarios sin red, + suite e2e en vivo opt-in |
 
 ## Limitaciones conocidas
 
@@ -33,9 +34,11 @@ Cosas que el diseño actual no puede hacer, no bugs pendientes.
 
 Ordenado por relación valor/riesgo.
 
-### 1. Verificar `update` en vivo
+### 1. Correr la suite e2e en vivo
 
-Es la única ruta de escritura sin probar. Hacerlo en reconocimientos, que es reversible y barato: `add` de un ítem TEST → `update` cambiándole el año → `read_cvlac` para confirmar → `delete`.
+`tests/e2e/live-crud.mjs` automatiza lo que antes era una prueba manual en reconocimientos, y lo hace para las 7 secciones: lista → `add` → lista → `read_cvlac_detail` → `add` repetido (debe dar `needs_confirmation`) → `update` → detalle → `delete` → lista final. Corre con `CVLAC_E2E=1 npm run test:e2e:live`.
+
+Queda pendiente **la corrida**, no el código: CvLAC estuvo devolviendo 503 el 2026-09-13. Hasta que corra, `update` sigue sin verificación en vivo en ninguna sección.
 
 ### 2. Cerrar las secciones manuales del CvLAC
 
@@ -45,9 +48,9 @@ Es la única ruta de escritura sin probar. Hacerlo en reconocimientos, que es re
 
 La causa de fondo de la fragilidad de `portfolio.ts` y de que proyectos/software/eventos vivan en un JSON aparte es que el portafolio no publica sus datos, solo su bundle. Publicar un `data.json` en el sitio elimina las dos cosas de un golpe: se acaban las regex y `portfolio-extra.json` deja de ser necesario. Requiere tocar el repo del portafolio.
 
-### 4. Leer el detalle de proyectos, software y eventos
+### 4. Usar el detalle para detectar `update` en proyectos, software y eventos
 
-Entrar a la página de detalle de cada ítem permitiría comparar fechas y tipo, y con eso detectar `update` en esas tres secciones. Cuesta una navegación por ítem; vale la pena solo si esas secciones empiezan a cambiar seguido.
+`read_cvlac_detail` ya lee la ficha de un ítem; falta que `diff.ts` la use. Entrar al detalle de cada ítem permitiría comparar fechas y tipo, y con eso detectar `update` en esas tres secciones. Cuesta una navegación por ítem; vale la pena solo si esas secciones empiezan a cambiar seguido.
 
 ### 5. Publicar en npm (sin fecha, y a propósito)
 
@@ -61,7 +64,6 @@ Lo que se ganó preparándolo vale igual sin publicar nunca: `CVLAC_ENV_FILE` pe
 
 ## Ideas sin compromiso
 
-- Tool `read_cvlac_detail(section, label)` para leer la ficha completa de un ítem.
 - Cachear el resultado de `findInstitucionId` — hoy hace una petición por institución en cada escritura.
 - Tools para áreas de actuación e idiomas (formularios simples, selectores en cascada).
 - Un `--dry-run` de verdad a nivel de formulario: llenar y capturar screenshot sin enviar.
