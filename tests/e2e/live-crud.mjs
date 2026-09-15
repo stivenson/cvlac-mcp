@@ -43,9 +43,17 @@ const only = argSections ? argSections.split('=')[1].split(',').map((s) => s.tri
 const PLAN = {
   formacion: {
     labelField: 'degree',
+    // CvLAC only accepts a programme its catalogue lists for that institution
+    // and level, so — like experiencia — the label cannot be an invented string.
+    // The runner takes the first candidate that collides with no real row.
+    candidates: [
+      'INGENIERIA DE ALIMENTOS',
+      'INGENIERIA BIOMEDICA',
+      'INGENIERIA AMBIENTAL',
+    ],
     add: {
       institution: 'Universidad de los Andes',
-      degree: `${TAG} Formacion`,
+      degree: '',
       period: '2019 - 2021',
     },
     update: { period: '2019 - 2022' },

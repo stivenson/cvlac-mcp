@@ -18,6 +18,24 @@ const norm = (s: string): string =>
     .replace(/\s+/g, ' ')
     .trim();
 
+/**
+ * What to send to a CvLAC search endpoint.
+ *
+ * Those endpoints answer in latin1 and compare against the bytes they receive,
+ * so an accent encoded as UTF-8 arrives mangled — "Cúcuta" reaches them as
+ * "CÃºcuta" and matches nothing, which silently left a formación and an evento
+ * with no municipality. The accents still count when picking among the results;
+ * they just cannot be asked for. Ñ survives because latin1 has it.
+ */
+export function catalogueQuery(name: string): string {
+  return (name ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, (_m, offset: number, whole: string) =>
+      whole[offset - 1] === 'n' || whole[offset - 1] === 'N' ? _m : ''
+    )
+    .normalize('NFC');
+}
+
 export interface CatalogueOption {
   /** What goes in the hidden field, exactly as the picker would set it. */
   value: string;
@@ -78,4 +96,17 @@ export function pickMunicipio<T extends MunicipioRow>(rows: T[], name: string): 
  */
 export function needsProgramaAcademico(codNivelFormacion: string): boolean {
   return !['', 'A', 'B', 'C', 'Z'].includes(codNivelFormacion);
+}
+
+/**
+ * Whether a project form will show — and demand — its financing block.
+ *
+ * CvLAC reveals "Institución principal del proyecto", with its administrative
+ * act, date and amount, only for a project declared financed. On a solidarity
+ * project those inputs are hidden: waiting for one to become fillable costs a
+ * full Playwright timeout, and forcing a value into one through JavaScript gets
+ * the submit rejected over a field the form never asked about.
+ */
+export function financingBlockApplies(tipoFinanciacion: string | undefined): boolean {
+  return tipoFinanciacion === 'FI';
 }

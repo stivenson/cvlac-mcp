@@ -16,6 +16,8 @@ import type {
 import { BASE_URL, URLS, SECTION_LIST } from '../browser/navigation.js';
 import { navigate } from '../browser/navigate.js';
 import {
+  catalogueQuery,
+  financingBlockApplies,
   needsProgramaAcademico,
   parseProgramaOptions,
   pickMunicipio,
@@ -29,6 +31,12 @@ import { createLogger } from '../logger.js';
 import { classifyMatch } from '../diff.js';
 
 const log = createLogger('update-section');
+
+/**
+ * How long to wait for one field. Playwright's default is 30s, which a form
+ * that hides a section turns into half a minute of waiting per hidden input.
+ */
+const FIELD_TIMEOUT_MS = 5000;
 
 /**
  * Fields that could not be filled during one form submission.
@@ -88,7 +96,7 @@ async function findInstitucionId(page: Page, name: string): Promise<{ id: number
   const searchTerms = [name, ...name.split(/\s+/).filter((w) => w.length > 4).sort((a, b) => b.length - a.length)];
 
   for (const term of searchTerms) {
-    const url = `${BASE_URL}/cvlac/json/EnInstitucion/buscar.do?txt_nombre=${encodeURIComponent(term)}`;
+    const url = `${BASE_URL}/cvlac/json/EnInstitucion/buscar.do?txt_nombre=${encodeURIComponent(catalogueQuery(term))}`;
 
     const response = await page.evaluate(async (fetchUrl: string) => {
       const res = await fetch(fetchUrl, { credentials: 'include' });
@@ -163,7 +171,7 @@ async function setInstitucionFields(
  * carry that number.
  */
 async function findMunicipio(page: Page, name: string): Promise<MunicipioRow | null> {
-  const url = `${BASE_URL}/cvlac/json/EnMunicipio/buscar.do?txt_nombre=${encodeURIComponent(name)}`;
+  const url = `${BASE_URL}/cvlac/json/EnMunicipio/buscar.do?txt_nombre=${encodeURIComponent(catalogueQuery(name))}`;
   const rows = await page.evaluate(async (fetchUrl: string) => {
     const res = await fetch(fetchUrl, { credentials: 'include' });
     if (!res.ok) return [] as unknown[];
@@ -194,7 +202,7 @@ async function findPrograma(
   const query =
     `__form=enTrayectoriaEscolarInsertForm&__text=txt_nme_programa_acad&__value=cod_rh_prog_acad` +
     `&id_institucion=${encodeURIComponent(params.institucionId)}` +
-    `&txt_nme_inst=${encodeURIComponent(params.institucionNombre)}` +
+    `&txt_nme_inst=${encodeURIComponent(catalogueQuery(params.institucionNombre))}` +
     `&cod_nivel_formacion=${encodeURIComponent(params.nivel)}&isTrayectoria=TE`;
   const url = `${BASE_URL}/cvlac/EnProgramaAcademico/queryPrograma.do?${query}`;
 
@@ -209,7 +217,7 @@ async function findPrograma(
       if (!res.ok) return '';
       return new TextDecoder('latin1').decode(await res.arrayBuffer());
     },
-    { fetchUrl: url, degree: params.degree }
+    { fetchUrl: url, degree: catalogueQuery(params.degree) }
   );
 
   return pickPrograma(parseProgramaOptions(html), params.degree);
@@ -776,19 +784,32 @@ async function fillProyecto(page: Page, proj: ProjectItem, report: FillReport): 
     await humanDelay(200, 300);
   }
 
-  await tryField(report, 'txt_acto_adm', () =>
-    page.fill('input[name="txt_acto_adm"]', proj.nroActoAdministrativo ?? '0')
-  );
-  await setReadonlyField(
-    page,
-    report,
-    'dta_acto_admString',
-    proj.fechaActoAdministrativo ?? `01/01/${proj.startYear}`
-  );
-  await tryField(report, 'nro_valor', () =>
-    page.fill('input[name="nro_valor"]', proj.valorSinContrapartida ?? '0')
-  );
-  await humanDelay(200, 400);
+  // Only a financed project shows these; on any other kind they are hidden, and
+  // writing into them invents an administrative act that does not exist.
+  if (financingBlockApplies(tipoFin)) {
+    if (proj.nroActoAdministrativo) {
+      await tryField(report, 'txt_acto_adm', () =>
+        page.fill('input[name="txt_acto_adm"]', proj.nroActoAdministrativo!, { timeout: FIELD_TIMEOUT_MS })
+      );
+    } else {
+      missingValue(report, 'txt_acto_adm', 'añade "nroActoAdministrativo" al proyecto financiado');
+    }
+
+    if (proj.fechaActoAdministrativo) {
+      await setReadonlyField(page, report, 'dta_acto_admString', proj.fechaActoAdministrativo);
+    } else {
+      missingValue(report, 'dta_acto_admString', 'añade "fechaActoAdministrativo" al proyecto financiado');
+    }
+
+    if (proj.valorSinContrapartida) {
+      await tryField(report, 'nro_valor', () =>
+        page.fill('input[name="nro_valor"]', proj.valorSinContrapartida!, { timeout: FIELD_TIMEOUT_MS })
+      );
+    } else {
+      missingValue(report, 'nro_valor', 'añade "valorSinContrapartida" al proyecto financiado');
+    }
+    await humanDelay(200, 400);
+  }
 
   await tryField(report, 'txt_resumen_proyecto', () =>
     page.fill('textarea[name="txt_resumen_proyecto"]', proj.description)

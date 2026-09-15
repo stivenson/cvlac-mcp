@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  catalogueQuery,
+  financingBlockApplies,
   parseProgramaOptions,
   pickPrograma,
   pickMunicipio,
@@ -83,5 +85,40 @@ describe('needsProgramaAcademico', () => {
 
   it.each(['', 'A', 'B', 'C', 'Z'])('does not require it at level %s', (nivel) => {
     expect(needsProgramaAcademico(nivel)).toBe(false);
+  });
+});
+
+// CvLAC's JSON endpoints answer in latin1 and match on what they receive, so a
+// UTF-8 "Cúcuta" reaches them as "CÃºcuta" and finds nothing. Asking without
+// accents finds the row; the accents still matter when picking among results.
+describe('catalogueQuery', () => {
+  it('drops the accents CvLAC cannot receive', () => {
+    expect(catalogueQuery('Cúcuta')).toBe('Cucuta');
+    expect(catalogueQuery('Bogotá, D.C.')).toBe('Bogota, D.C.');
+  });
+
+  it('leaves a plain name alone', () => {
+    expect(catalogueQuery('Pamplona')).toBe('Pamplona');
+  });
+
+  it('keeps the ñ, which latin1 does carry', () => {
+    expect(catalogueQuery('Muñoz')).toBe('Muñoz');
+  });
+});
+
+// CvLAC hides the whole "Institución principal del proyecto" block unless the
+// project is declared financed. Filling it anyway cost a 30s timeout on a
+// hidden field and got the form rejected over a date nobody had asked for.
+describe('financingBlockApplies', () => {
+  it('applies to a financed project', () => {
+    expect(financingBlockApplies('FI')).toBe(true);
+  });
+
+  it('does not apply to a solidarity project', () => {
+    expect(financingBlockApplies('SO')).toBe(false);
+  });
+
+  it('does not apply when the project does not say', () => {
+    expect(financingBlockApplies(undefined)).toBe(false);
   });
 });
