@@ -236,3 +236,23 @@ export interface UpdateResult {
   similar?: SimilarCandidate[];
   screenshotBase64?: string;
 }
+
+// ── Detail types ─────────────────────────────────────────────────────────────
+
+/** One label/value pair read off a CvLAC record page. */
+export interface CvLACDetailField {
+  label: string;
+  value: string;
+}
+
+export interface CvLACDetail {
+  section: CvLACSectionName;
+  /** The label searched for in the section's list. */
+  label: string;
+  found: boolean;
+  url?: string;
+  fields: CvLACDetailField[];
+  /** The page's raw text, returned only when no field pair could be read. */
+  text?: string;
+  message?: string;
+}

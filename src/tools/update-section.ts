@@ -13,7 +13,7 @@ import type {
   SoftwareItem,
   EventoCientificoItem,
 } from '../types.js';
-import { BASE_URL, URLS } from '../browser/navigation.js';
+import { BASE_URL, URLS, SECTION_LIST } from '../browser/navigation.js';
 import { assertAvailable } from '../browser/availability.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logger.js';
@@ -725,51 +725,44 @@ interface SectionConfig {
 
 const SECTIONS: Record<CvLACSectionName, SectionConfig> = {
   formacion: {
-    listUrl: URLS.formacion,
+    ...SECTION_LIST.formacion,
     createUrl: URLS.formacionCreate,
-    matchCellIndex: 5,
     labelOf: (d: EducationItem) => d.degree,
     fill: fillFormacion,
   },
   experiencia: {
-    listUrl: URLS.experiencia,
+    ...SECTION_LIST.experiencia,
     createUrl: URLS.experienciaCreate,
-    matchCellIndex: 1,
     labelOf: (d: ExperienceItem) => d.company,
     fill: fillExperiencia,
   },
   cursos: {
-    listUrl: URLS.cursos,
+    ...SECTION_LIST.cursos,
     createUrl: URLS.cursosCreate,
-    matchCellIndex: 1,
     labelOf: (d: CourseItem) => d.name,
     fill: fillCurso,
   },
   reconocimientos: {
-    listUrl: URLS.reconocimientos,
+    ...SECTION_LIST.reconocimientos,
     createUrl: URLS.reconocimientosCreate,
-    matchCellIndex: 1,
     labelOf: (d: AchievementItem) => d.title,
     fill: fillReconocimiento,
   },
   proyectos: {
-    listUrl: URLS.proyectos,
+    ...SECTION_LIST.proyectos,
     createUrl: URLS.proyectosCreate,
-    matchCellIndex: 1,
     labelOf: (d: ProjectItem) => d.title,
     fill: fillProyecto,
   },
   software: {
-    listUrl: URLS.software,
+    ...SECTION_LIST.software,
     createUrl: URLS.softwareCreate,
-    matchCellIndex: 1,
     labelOf: (d: SoftwareItem) => d.name,
     fill: fillSoftware,
   },
   eventos: {
-    listUrl: URLS.eventos,
+    ...SECTION_LIST.eventos,
     createUrl: URLS.eventosCreate,
-    matchCellIndex: 1,
     labelOf: (d: EventoCientificoItem) => d.name,
     fill: fillEvento,
   },

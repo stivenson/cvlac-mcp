@@ -1,3 +1,5 @@
+import type { CvLACSectionName } from '../types.js';
+
 export const BASE_URL = 'https://scienti.minciencias.gov.co';
 
 export const URLS = {
@@ -24,3 +26,26 @@ export const URLS = {
 } as const;
 
 export type CvLACUrl = (typeof URLS)[keyof typeof URLS];
+
+/**
+ * Where each section's records are listed, and which cell of a row carries the
+ * label a human would search by.
+ *
+ * Shared by `update-section` (to find the Editar/Eliminar link of a row) and by
+ * `read-cvlac-detail` (to find its Detalles link), so the two can never disagree
+ * about which column holds the name.
+ */
+export const SECTION_LIST: Record<
+  CvLACSectionName,
+  { listUrl: string; matchCellIndex: number }
+> = {
+  // Formación lists institution and dates first; the degree — what anyone would
+  // search by — sits in cell 5.
+  formacion:       { listUrl: URLS.formacion,        matchCellIndex: 5 },
+  experiencia:     { listUrl: URLS.experiencia,      matchCellIndex: 1 },
+  cursos:          { listUrl: URLS.cursos,           matchCellIndex: 1 },
+  reconocimientos: { listUrl: URLS.reconocimientos,  matchCellIndex: 1 },
+  proyectos:       { listUrl: URLS.proyectos,        matchCellIndex: 1 },
+  software:        { listUrl: URLS.software,         matchCellIndex: 1 },
+  eventos:         { listUrl: URLS.eventos,          matchCellIndex: 1 },
+};

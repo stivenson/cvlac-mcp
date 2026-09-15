@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { loginTool } from './tools/login.js';
 import { readCvlacTool } from './tools/read-cvlac.js';
+import { readCvlacDetailTool } from './tools/read-cvlac-detail.js';
 import { readPortfolioTool } from './tools/read-portfolio.js';
 import { diffTool } from './tools/diff.js';
 import { updateSectionTool } from './tools/update-section.js';
@@ -57,6 +58,26 @@ export function createServer(): McpServer {
     },
     async ({ section }) => {
       const result = await readCvlacTool(section as CvLACSectionName | 'all');
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'read_cvlac_detail',
+    {
+      description:
+        "Read the full record page of one CvLAC item. The list views only show a couple of " +
+        "columns, so this is the only way to see the fields a write actually stored " +
+        "(role, dates, institution, financing). Finds the row by label, case- and accent-insensitive.",
+      inputSchema: {
+        section: sectionSchema,
+        label: z
+          .string()
+          .describe('Name/title as it appears in the section list, e.g. the degree for formacion'),
+      },
+    },
+    async ({ section, label }) => {
+      const result = await readCvlacDetailTool(section as CvLACSectionName, label);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }
   );

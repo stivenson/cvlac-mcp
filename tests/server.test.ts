@@ -31,6 +31,7 @@ afterAll(async () => {
 const EXPECTED = [
   'login',
   'read_cvlac',
+  'read_cvlac_detail',
   'read_portfolio',
   'diff',
   'update_section',
