@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import {
   readFormErrors,
+  readFormValues,
   listRowLabels,
   findRowActionHref,
   inferNivel,
@@ -109,6 +110,28 @@ describe('readFormErrors', () => {
     expect(await readFormErrors(page)).toEqual([]);
   });
 
+  // Every CvLAC page carries this link in a white-on-dark footer. Reading it as
+  // a validation error made a successful update look like a rejection.
+  it('ignores the footer links every CvLAC page carries', async () => {
+    await page.setContent(
+      '<div style="color:#fff"><a href="/politica.html">Política de seguridad de la información</a></div>'
+    );
+    expect(await readFormErrors(page)).toEqual([]);
+  });
+
+  it('reports the real error when the page also has that footer', async () => {
+    await page.setContent(
+      '<font color="red">Seleccione un programa académico</font>' +
+        '<div style="color:#fff"><a href="/politica.html">Política de seguridad de la información</a></div>'
+    );
+    expect(await readFormErrors(page)).toEqual(['Seleccione un programa académico']);
+  });
+
+  it('does not mistake light background styling for a message', async () => {
+    await page.setContent('<div style="color:#f5f5f5">Mapa del sitio</div>');
+    expect(await readFormErrors(page)).toEqual([]);
+  });
+
   it('returns nothing on a clean page', async () => {
     await page.setContent('<form><input name="x"></form>');
     expect(await readFormErrors(page)).toEqual([]);
@@ -118,6 +141,47 @@ describe('readFormErrors', () => {
     const many = Array.from({ length: 20 }, (_, i) => `<div class="error">Error ${i}</div>`).join('');
     await page.setContent(many);
     expect((await readFormErrors(page)).length).toBeLessThanOrEqual(10);
+  });
+});
+
+describe('readFormValues', () => {
+  it('reads inputs, selects and textareas by name', async () => {
+    await page.setContent(`
+      <form>
+        <input name="txt_nme_prod" value="ZZ PRUEBA MCP Curso">
+        <select name="nro_ano"><option value="2024">2024</option><option value="2025" selected>2025</option></select>
+        <textarea name="txt_desc">Descripción</textarea>
+      </form>
+    `);
+
+    expect(await readFormValues(page)).toMatchObject({
+      txt_nme_prod: 'ZZ PRUEBA MCP Curso',
+      nro_ano: '2025',
+      txt_desc: 'Descripción',
+    });
+  });
+
+  it('reads the checked radio, not every option', async () => {
+    await page.setContent(`
+      <form>
+        <input type="radio" name="cod_tipo" value="A">
+        <input type="radio" name="cod_tipo" value="B" checked>
+      </form>
+    `);
+
+    expect((await readFormValues(page)).cod_tipo).toBe('B');
+  });
+
+  it('keeps hidden fields, which is where CvLAC stores the ids that matter', async () => {
+    await page.setContent('<form><input type="hidden" name="id_institucion" value="123"></form>');
+
+    expect((await readFormValues(page)).id_institucion).toBe('123');
+  });
+
+  it('skips buttons, which carry labels rather than data', async () => {
+    await page.setContent('<form><input type="submit" name="guardar" value="Guardar"></form>');
+
+    expect(await readFormValues(page)).toEqual({});
   });
 });
 

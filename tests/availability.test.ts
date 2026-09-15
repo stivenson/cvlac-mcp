@@ -50,11 +50,19 @@ describe('extractList against a CvLAC that is down', () => {
   let page: Page;
 
   beforeAll(async () => {
+    // One attempt, no pacing: this test is about the verdict on an outage, not
+    // about how patiently navigate() retries before reaching it.
+    process.env.CVLAC_NAV_MAX_ATTEMPTS = '1';
+    process.env.CVLAC_MIN_REQUEST_GAP_MS = '0';
+    process.env.CVLAC_REQUEST_JITTER_MS = '0';
     browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
     page = await browser.newPage();
   });
 
   afterAll(async () => {
+    delete process.env.CVLAC_NAV_MAX_ATTEMPTS;
+    delete process.env.CVLAC_MIN_REQUEST_GAP_MS;
+    delete process.env.CVLAC_REQUEST_JITTER_MS;
     await browser.close();
   });
 

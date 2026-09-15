@@ -1,6 +1,6 @@
 import type { Page } from 'playwright';
 import { createLogger } from '../../logger.js';
-import { assertAvailable } from '../../browser/availability.js';
+import { navigate } from '../../browser/navigate.js';
 
 const log = createLogger('extract');
 
@@ -58,8 +58,8 @@ export async function extractList<T>(
   minCells: number,
   map: (cells: string[]) => T | null
 ): Promise<T[]> {
-  const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-  // Before reading rows: a 503 body has none, which would pass for an empty section.
-  assertAvailable(response?.status() ?? null, url);
+  // Paced and retried: a 503 body has no rows, which would pass for an empty
+  // section, and CvLAC answers 5xx when requests arrive too close together.
+  await navigate(page, url);
   return mapRows(page, section, minCells, map);
 }

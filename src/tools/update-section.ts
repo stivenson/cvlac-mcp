@@ -14,7 +14,8 @@ import type {
   EventoCientificoItem,
 } from '../types.js';
 import { BASE_URL, URLS, SECTION_LIST } from '../browser/navigation.js';
-import { assertAvailable } from '../browser/availability.js';
+import { navigate } from '../browser/navigate.js';
+import { changedFields, classifySubmit, storedMatchesSubmitted } from './write-verdict.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logger.js';
 import { classifyMatch } from '../diff.js';
@@ -238,29 +239,40 @@ async function humanDelay(min = 300, max = 800): Promise<void> {
 /** Navigate to a URL; throws SessionExpiredError if redirected to login (caller must reopen page) */
 class SessionExpiredError extends Error {}
 
-async function gotoForm(page: Page, url: string): Promise<void> {
-  const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-  assertAvailable(response?.status() ?? null, url);
+interface GotoOptions {
+  /** Let a 5xx through, for actions whose outcome is confirmed elsewhere. */
+  tolerateUnavailable?: boolean;
+}
+
+async function gotoForm(page: Page, url: string, opts: GotoOptions = {}): Promise<number | null> {
+  const { status } = await navigate(page, url, { tolerateUnavailable: opts.tolerateUnavailable });
   if (await isLoginPage(page)) {
     throw new SessionExpiredError('Session expired');
   }
+  return status;
 }
 
 /** Navigate with automatic re-login: closes old page, re-logins, opens new page, retries once */
-async function gotoFormWithRelogin(pageRef: { page: Page }, url: string): Promise<void> {
+async function gotoFormWithRelogin(
+  pageRef: { page: Page },
+  url: string,
+  opts: GotoOptions = {}
+): Promise<number | null> {
   try {
-    await gotoForm(pageRef.page, url);
+    return await gotoForm(pageRef.page, url, opts);
   } catch (err) {
     if (!(err instanceof SessionExpiredError)) throw err;
     log.info('session expired mid-run; re-logging in', { url });
     await pageRef.page.close();
     await session.login(true);
     pageRef.page = await session.getPage();
-    const response = await pageRef.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-    assertAvailable(response?.status() ?? null, url);
+    const { status } = await navigate(pageRef.page, url, {
+      tolerateUnavailable: opts.tolerateUnavailable,
+    });
     if (await isLoginPage(pageRef.page)) {
       throw new Error('Session expired and re-login failed');
     }
+    return status;
   }
 }
 
@@ -291,17 +303,57 @@ export async function readFormErrors(page: Page): Promise<string[]> {
       'font[color="red"]',
       'font[color="#FF0000"]',
       '[style*="color: red" i]',
-      '[style*="color:#f" i]',
+      // Only actual reds. "color:#f" also matched the white (#fff) footer, which
+      // put "Política de seguridad de la información" on every rejection.
+      '[style*="color:#f00" i]',
+      '[style*="color:#ff0000" i]',
+      '[style*="color: #f00" i]',
+      '[style*="color: #ff0000" i]',
     ];
     const seen = new Set<string>();
     for (const sel of selectors) {
       for (const el of Array.from(document.querySelectorAll(sel))) {
+        // Validation messages are text. Anything built out of links is site
+        // furniture — the footer, the site map — however it happens to be styled.
+        if (el.tagName === 'A' || el.querySelector('a')) continue;
         const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
         // Long blocks are usually the whole page, not a message.
         if (text.length > 3 && text.length < 300) seen.add(text);
       }
     }
     return Array.from(seen).slice(0, 10);
+  });
+}
+
+/**
+ * Every named value the form currently holds.
+ *
+ * Read from a freshly loaded edit page, this is what CvLAC has stored — which
+ * is how a submit that came back to the form without complaining can still be
+ * confirmed as saved.
+ */
+export async function readFormValues(page: Page): Promise<Record<string, string>> {
+  return page.evaluate(() => {
+    const out: Record<string, string> = {};
+    const controls = document.querySelectorAll<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >('input[name], select[name], textarea[name]');
+
+    for (const el of Array.from(controls)) {
+      const name = el.getAttribute('name');
+      if (!name) continue;
+
+      if (el instanceof HTMLInputElement) {
+        const type = (el.getAttribute('type') ?? 'text').toLowerCase();
+        // Buttons carry their caption in `value`, which is not data.
+        if (type === 'submit' || type === 'button' || type === 'reset' || type === 'image') continue;
+        // Only the chosen option of a group counts.
+        if ((type === 'radio' || type === 'checkbox') && !el.checked) continue;
+      }
+
+      out[name] = el.value ?? '';
+    }
+    return out;
   });
 }
 
@@ -913,13 +965,45 @@ async function updateItem(
   }
   await gotoFormWithRelogin(pageRef, BASE_URL + editHref);
   await humanDelay();
+  const beforeFill = await readFormValues(pageRef.page);
   await cfg.fill(pageRef.page, data, report);
+  const edits = changedFields(beforeFill, await readFormValues(pageRef.page));
   await humanDelay(400, 800);
   await clickGuardar(pageRef.page);
   const screenshotBase64 = await shot(pageRef.page);
-  if (landedOnForm(pageRef.page)) {
+
+  const outcome = classifySubmit({
+    landedOnForm: landedOnForm(pageRef.page),
+    errors: await readFormErrors(pageRef.page),
+  });
+
+  if (outcome === 'rejected') {
     return failed(await describeRejection(pageRef.page, 'updating', label), report, screenshotBase64);
   }
+
+  // CvLAC sometimes re-renders the edit form after saving, with nothing to say.
+  // Reloading it shows what was stored, which is the only honest answer here.
+  if (outcome === 'unverified') {
+    if (Object.keys(edits).length === 0) {
+      report.warnings.push('the form was submitted unchanged, so there was nothing to verify');
+      return ok(`Updated: ${label}`, report, screenshotBase64);
+    }
+    log.info('submit returned to the form without an error; verifying', { label });
+    await gotoFormWithRelogin(pageRef, BASE_URL + editHref);
+    const stored = await readFormValues(pageRef.page);
+    if (!storedMatchesSubmitted(stored, edits)) {
+      return failed(
+        `CvLAC returned the form again for "${label}" and the stored values do not match what was sent. ` +
+          'Nothing in the record page confirms the change; check it before retrying.',
+        report,
+        screenshotBase64
+      );
+    }
+    report.warnings.push(
+      'CvLAC answered with the form instead of the list, but the stored values match what was sent'
+    );
+  }
+
   log.info('item updated', { label, warnings: report.warnings.length });
   return ok(`Updated: ${label}`, report, screenshotBase64);
 }
@@ -942,12 +1026,25 @@ async function deleteItem(pageRef: { page: Page }, cfg: SectionConfig, label: st
     const screenshotBase64 = await shot(pageRef.page);
     return failed(`Confirm page had no Borrar/delete link for "${label}"`, report, screenshotBase64);
   }
-  await gotoFormWithRelogin(pageRef, BASE_URL + deleteHref);
+  // Three of CvLAC's delete endpoints answer 5xx and delete the row anyway, so
+  // the status here decides nothing: the list does.
+  const deleteStatus = await gotoFormWithRelogin(pageRef, BASE_URL + deleteHref, {
+    tolerateUnavailable: true,
+  });
   await gotoFormWithRelogin(pageRef, cfg.listUrl);
   const still = await findRowActionHref(pageRef.page, cfg.matchCellIndex, label, 'Eliminar');
   const screenshotBase64 = await shot(pageRef.page);
   if (still) {
-    return failed(`Delete may have failed; "${label}" still present`, report, screenshotBase64);
+    const why =
+      deleteStatus !== null && deleteStatus >= 500
+        ? `Delete failed: CvLAC answered HTTP ${deleteStatus} and "${label}" is still listed`
+        : `Delete may have failed; "${label}" still present`;
+    return failed(why, report, screenshotBase64);
+  }
+  if (deleteStatus !== null && deleteStatus >= 500) {
+    report.warnings.push(
+      `CvLAC answered HTTP ${deleteStatus} to the delete link, but the row is gone from the list`
+    );
   }
   log.info('item deleted', { label });
   return ok(`Deleted: ${label}`, report, screenshotBase64);

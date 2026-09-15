@@ -217,7 +217,8 @@ export function createServer(): McpServer {
       await session.login();
       const page = await session.getPage();
       try {
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+        const { navigate } = await import('./browser/navigate.js');
+        await navigate(page, url);
         const fields = await page.evaluate(() => {
           const els = Array.from(document.querySelectorAll('input, select, textarea, [type="radio"]'));
           return els.map((el) => {

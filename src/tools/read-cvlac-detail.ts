@@ -1,7 +1,7 @@
 import type { Page } from 'playwright';
 import { session } from '../browser/session.js';
 import { BASE_URL, SECTION_LIST } from '../browser/navigation.js';
-import { assertAvailable } from '../browser/availability.js';
+import { navigate } from '../browser/navigate.js';
 import { findRowActionHref } from './update-section.js';
 import { createLogger } from '../logger.js';
 import type { CvLACSectionName, CvLACDetail, CvLACDetailField } from '../types.js';
@@ -59,8 +59,7 @@ export async function readCvlacDetailTool(
   await session.login();
   const page = await session.getPage();
   try {
-    const listResponse = await page.goto(cfg.listUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
-    assertAvailable(listResponse?.status() ?? null, cfg.listUrl);
+    await navigate(page, cfg.listUrl);
 
     const href = await findRowActionHref(page, cfg.matchCellIndex, label, 'Detalles');
     if (!href) {
@@ -75,8 +74,7 @@ export async function readCvlacDetailTool(
     }
 
     const url = href.startsWith('http') ? href : BASE_URL + href;
-    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-    assertAvailable(response?.status() ?? null, url);
+    await navigate(page, url);
 
     const fields = await extractDetailFields(page);
     log.info('detail read', { section, label, fields: fields.length });

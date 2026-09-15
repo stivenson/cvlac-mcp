@@ -459,6 +459,24 @@ Opcionales:
 | `CVLAC_CONFIG_PATH` | Ubicación alterna de `cvlac.config.json` |
 | `CVLAC_PORTFOLIO_EXTRA_PATH` | Ubicación alterna de `portfolio-extra.json` |
 
+### Ritmo de las peticiones
+
+CvLAC empieza a responder 5xx cuando las peticiones llegan pegadas. El servidor espacía
+cada navegación, reintenta con backoff y, si el sitio rechaza varias seguidas, deja de
+insistir hasta que pase un enfriamiento. Los valores por defecto sirven para un sync
+normal; súbelos si notas 503 seguidos:
+
+| Variable | Default | Descripción |
+|---|---|---|
+| `CVLAC_MIN_REQUEST_GAP_MS` | `900` | Espera mínima entre dos peticiones |
+| `CVLAC_REQUEST_JITTER_MS` | `700` | Aleatorio que se suma a esa espera, para no tener un ritmo de máquina |
+| `CVLAC_NAV_TIMEOUT_MS` | `30000` | Cuánto esperar a que cargue una página |
+| `CVLAC_NAV_MAX_ATTEMPTS` | `3` | Intentos por navegación (5xx o timeout). `1` desactiva reintentos |
+| `CVLAC_BACKOFF_BASE_MS` | `2000` | Espera tras el primer fallo; se duplica en cada intento |
+| `CVLAC_BACKOFF_CAP_MS` | `30000` | Techo de esa espera |
+| `CVLAC_OUTAGE_THRESHOLD` | `3` | Navegaciones fallidas seguidas antes de cortar el tráfico |
+| `CVLAC_OUTAGE_COOLDOWN_MS` | `120000` | Cuánto se queda quieto tras cortar |
+
 ---
 
 ## Uso local
