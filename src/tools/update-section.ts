@@ -15,6 +15,14 @@ import type {
 } from '../types.js';
 import { BASE_URL, URLS, SECTION_LIST } from '../browser/navigation.js';
 import { navigate } from '../browser/navigate.js';
+import {
+  needsProgramaAcademico,
+  parseProgramaOptions,
+  pickMunicipio,
+  pickPrograma,
+  type CatalogueOption,
+  type MunicipioRow,
+} from '../browser/catalogue.js';
 import { changedFields, classifySubmit, storedMatchesSubmitted } from './write-verdict.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logger.js';
@@ -147,6 +155,110 @@ async function setInstitucionFields(
   );
 }
 
+/**
+ * Looks a municipality up in CvLAC's own table.
+ *
+ * Its ids are not DANE codes: Cúcuta is 827 here and 54001 there. Sending the
+ * DANE code stored a formación in Sketty, Wales — the row that happened to
+ * carry that number.
+ */
+async function findMunicipio(page: Page, name: string): Promise<MunicipioRow | null> {
+  const url = `${BASE_URL}/cvlac/json/EnMunicipio/buscar.do?txt_nombre=${encodeURIComponent(name)}`;
+  const rows = await page.evaluate(async (fetchUrl: string) => {
+    const res = await fetch(fetchUrl, { credentials: 'include' });
+    if (!res.ok) return [] as unknown[];
+    const text = new TextDecoder('latin1').decode(await res.arrayBuffer());
+    try {
+      return JSON.parse(text);
+    } catch {
+      return [] as unknown[];
+    }
+  }, url);
+
+  return Array.isArray(rows) ? pickMunicipio(rows as MunicipioRow[], name) : null;
+}
+
+/**
+ * Finds the programme among those the institution registered at that level.
+ *
+ * Mirrors the popup `selectPrograma()` opens, including the quirk that CvLAC
+ * stores the whole `rhCode-programmeCode` string in `cod_rh_prog_acad`: its own
+ * script means to split it but looks the second field up with an empty selector,
+ * so the split never runs. Submitting what a browser would submit keeps this
+ * server on the path the server accepts.
+ */
+async function findPrograma(
+  page: Page,
+  params: { institucionId: string; institucionNombre: string; nivel: string; degree: string }
+): Promise<CatalogueOption | null> {
+  const query =
+    `__form=enTrayectoriaEscolarInsertForm&__text=txt_nme_programa_acad&__value=cod_rh_prog_acad` +
+    `&id_institucion=${encodeURIComponent(params.institucionId)}` +
+    `&txt_nme_inst=${encodeURIComponent(params.institucionNombre)}` +
+    `&cod_nivel_formacion=${encodeURIComponent(params.nivel)}&isTrayectoria=TE`;
+  const url = `${BASE_URL}/cvlac/EnProgramaAcademico/queryPrograma.do?${query}`;
+
+  const html = await page.evaluate(
+    async ({ fetchUrl, degree }: { fetchUrl: string; degree: string }) => {
+      const res = await fetch(fetchUrl, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'txt_nme_programa_acad=' + encodeURIComponent(degree),
+      });
+      if (!res.ok) return '';
+      return new TextDecoder('latin1').decode(await res.arrayBuffer());
+    },
+    { fetchUrl: url, degree: params.degree }
+  );
+
+  return pickPrograma(parseProgramaOptions(html), params.degree);
+}
+
+/** Fills the programme picker, or says why it could not. */
+async function setProgramaAcademico(
+  page: Page,
+  report: FillReport,
+  nivel: string,
+  degree: string
+): Promise<void> {
+  const institucionId = await page
+    .evaluate(() => (document.getElementById('id_institucion') as HTMLInputElement | null)?.value ?? '')
+    .catch(() => '');
+  const institucionNombre = await page
+    .evaluate(
+      () => (document.getElementById('txt_nme_institucion') as HTMLInputElement | null)?.value ?? ''
+    )
+    .catch(() => '');
+
+  if (!institucionId) {
+    report.warnings.push(
+      'programa académico: CvLAC lo busca dentro de una institución y la institución quedó sin resolver'
+    );
+    return;
+  }
+
+  const programa = await findPrograma(page, { institucionId, institucionNombre, nivel, degree });
+  if (!programa) {
+    report.warnings.push(
+      `programa académico: "${degree}" no está entre los programas que ${institucionNombre || 'esa institución'} ` +
+        'tiene registrados en ese nivel; CvLAC exige elegir uno de su catálogo'
+    );
+    await setReadonlyField(page, report, 'txt_nme_programa_acad', degree, true);
+    return;
+  }
+
+  await setReadonlyField(page, report, 'txt_nme_programa_acad', programa.label, true);
+  await tryField(report, 'cod_rh_prog_acad', () =>
+    page.evaluate((value: string) => {
+      const el = document.getElementById('cod_rh_prog_acad') as HTMLInputElement | null;
+      if (!el) throw new Error('el formulario no tiene cod_rh_prog_acad');
+      el.value = value;
+    }, programa.value)
+  );
+  log.info('programa académico resolved', { degree, matched: programa.label });
+}
+
 /** Default institution picker used by formación / eventos (id_institucion + txt_nme_institucion) */
 async function setInstitucion(page: Page, report: FillReport, name: string): Promise<void> {
   await setInstitucionFields(page, report, name, 'id_institucion', 'txt_nme_institucion');
@@ -162,10 +274,26 @@ async function setMunicipio(
   nombre: string | undefined,
   codigoDane: string | undefined
 ): Promise<void> {
-  if (!nombre || !codigoDane) {
-    missingValue(report, 'municipio', 'define defaults.municipio en cvlac.config.json');
+  if (!nombre) {
+    missingValue(report, 'municipio', 'define defaults.municipio.nombre en cvlac.config.json');
     return;
   }
+
+  const found = await findMunicipio(page, nombre);
+  if (!found) {
+    report.warnings.push(
+      `municipio "${nombre}": no existe en el catálogo de CvLAC; el campo queda vacío`
+    );
+    log.warn('municipality not found in CvLAC catalogue', { nombre });
+    return;
+  }
+  if (codigoDane && codigoDane !== String(found.id)) {
+    report.warnings.push(
+      `municipio: se ignoró el código ${codigoDane} porque CvLAC numera sus municipios aparte del DANE ` +
+        `(${found.txtNmeMunicipio} es ${found.id} para CvLAC)`
+    );
+  }
+
   const applied = await page.evaluate(
     ({ text, code }) => {
       const textEl = document.querySelector('input[name="cod_municipio_text"]') as HTMLInputElement | null;
@@ -179,7 +307,7 @@ async function setMunicipio(
       for (const el of all) el.value = code;
       return true;
     },
-    { text: nombre, code: codigoDane }
+    { text: found.txtNmeMunicipio, code: String(found.id) }
   );
   if (!applied) report.warnings.push('municipio: el formulario no tiene cod_municipio_text');
 }
@@ -414,7 +542,13 @@ async function fillFormacion(page: Page, edu: EducationItem, report: FillReport)
   await setMunicipio(page, report, defaults.municipio?.nombre, defaults.municipio?.codigoDane);
   await humanDelay(200, 400);
 
-  await setReadonlyField(page, report, 'txt_nme_programa_acad', edu.degree, true);
+  // CvLAC shows — and requires — the programme picker for every level above
+  // secondary school, and validates the hidden code rather than the text.
+  const nivel = inferNivel(edu.degree);
+  if (needsProgramaAcademico(nivel)) {
+    await setProgramaAcademico(page, report, nivel, edu.degree);
+    await humanDelay(200, 400);
+  }
   await setReadonlyField(page, report, 'txt_nme_titulo_obtenido', edu.degree);
 
   if (defaults.horasSemanales !== undefined) {
@@ -440,8 +574,28 @@ async function fillFormacion(page: Page, edu: EducationItem, report: FillReport)
 }
 
 async function fillExperiencia(page: Page, exp: ExperienceItem, report: FillReport): Promise<void> {
+  const defaults = loadConfig().defaults ?? {};
+
   await setInstitucion(page, report, exp.company);
   await humanDelay(200, 500);
+
+  // "Dedicación (*)" is required and defaulted to 0 by the form; leaving it
+  // alone stored every experience as zero hours a week.
+  if (defaults.horasSemanales !== undefined) {
+    await tryField(report, 'nro_hora_dedicacion', () =>
+      page.fill('input[name="nro_hora_dedicacion"]', String(defaults.horasSemanales))
+    );
+  } else {
+    missingValue(report, 'nro_hora_dedicacion', 'define defaults.horasSemanales en cvlac.config.json');
+  }
+
+  // CvLAC's experience form has no field for the role: institution, dates,
+  // dedication, current-affiliation and free text, and nothing else.
+  if (exp.role) {
+    report.warnings.push(
+      `rol "${exp.role}": el formulario de experiencia de CvLAC no tiene campo de cargo, así que no se escribió`
+    );
+  }
 
   const { start, end } = parsePeriod(exp.period);
   // Year fields may render as <select> or <input> depending on the form — try both.

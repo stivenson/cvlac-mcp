@@ -54,7 +54,22 @@ Todos tienen botón submit con `value="Guardar"` (por eso `clickGuardar` con `ge
 
 ### formacion — `EnTrayectoriaEscolar/insert.do`
 - `cod_nivel_formacion` (select): 1=Pregrado/Universitario, 2=Especialización, 7=Técnico nivel medio, 9=Técnico nivel superior, C=Secundario, B=Primaria (Maestría/Doctorado fuera del corte, presumiblemente 3/4). `inferNivel` del código es consistente.
-- `id_institucion` (hidden) + `txt_nme_institucion` (readonly), `txt_nme_programa_acad` (readonly), `txt_nme_titulo_obtenido` (text), `nro_ano_inicio` / `nro_ano_obten` (selects). Código OK.
+- `id_institucion` (hidden) + `txt_nme_institucion` (readonly), `txt_nme_programa_acad` (readonly), `txt_nme_titulo_obtenido` (text), `nro_ano_inicio` / `nro_ano_obten` (selects).
+- **Programa académico es obligatorio en casi todo nivel.** El `<td id="programaAcademico">` arranca en `display:none` y el inline `cambiarNivelFormacion()` lo muestra para todo salvo `''`, `A`, `B`, `C`, `Z`. Si está visible y va vacío, el submit rebota con `Seleccione un programa académico`.
+- El picker (`selectPrograma()`) abre `EnProgramaAcademico/searchPrograma.do` y busca con **POST** a `EnProgramaAcademico/queryPrograma.do?__form=enTrayectoriaEscolarInsertForm&__text=txt_nme_programa_acad&__value=cod_rh_prog_acad&id_institucion=<id>&txt_nme_inst=<nombre>&cod_nivel_formacion=<nivel>&isTrayectoria=TE`, body `txt_nme_programa_acad=<texto>`. Responde `<option value='<codRh>-<codPrograma>'>NOMBRE</option>`.
+- Al elegir, el popup escribe `cod_rh_prog_acad` con **el valor completo** (`0000000000-14888`) y deja `cod_programa_academico` vacío: su propia rama que parte el valor consulta `window.opener.$("#")` — selector vacío — y nunca corre. Replicar eso es lo que el servidor acepta.
+
+### Municipios — `cod_municipio` NO es el código DANE
+
+El picker es un popup (`/cvlac/binary/ubicacion.do?methodToCall=display&t=m&ni=<sufijo>`) con cascada país → departamento → municipio. El hidden `cod_municipio` guarda **el id interno de CvLAC**: Cúcuta es `827`, no `54001`. Pasar el DANE no falla — guarda otro municipio (54001 resultó ser *Sketty*, Swansea, Gales).
+
+Se resuelve por nombre con `GET /cvlac/json/EnMunicipio/buscar.do?txt_nombre=<nombre>` (responde JSON en **latin1**, igual que instituciones):
+
+```json
+[{"id":827,"idDepartamento":52,"txtNmeMunicipio":"CÚCUTA","departamento":{"id":52,"txtNmeDepartamento":"NORTE DE SANTANDER","pais":{"id":1,"sglPais":"CO"}}}]
+```
+
+El JSON de instituciones también trae su `municipio` ya resuelto (`idMunicipio` + objeto anidado), útil si algún día se quiere heredar la ciudad de la institución.
 
 ### cursos — `EnProdCurso/insert.do`
 - Código llena: `txt_nme_prod`, `cod_tipo_producto` (radio), `nro_ano_presenta`, `nro_mes_presenta`, y si vienen en el ítem o en `cvlac.config.json`: `txt_participacion`, `nro_duracion`, `txt_lugar`, `sgl_idioma`, `sgl_pais`, municipio.
