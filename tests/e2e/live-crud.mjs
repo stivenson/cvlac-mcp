@@ -12,7 +12,7 @@
  *
  *   CVLAC_E2E=1 node tests/e2e/live-crud.mjs [--sections=cursos,software]
  */
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { connect, call } from './mcp-client.mjs';
@@ -166,8 +166,32 @@ function fieldsToText(detail) {
 
 const results = [];
 
+/** Where a failing step's screenshot lands, so a rejection can be looked at. */
+const SHOTS = join(HERE, 'shots');
+
+/**
+ * Writes the screenshot `update_section` returns and swaps the base64 for its
+ * path: a report with three base64 PNGs inline is unreadable, and dropping them
+ * altogether is what left the first live run with no way to see why a form
+ * bounced.
+ */
+function keepScreenshot(section, step, payload) {
+  const base64 = payload?.screenshotBase64;
+  if (!base64) return payload;
+
+  const { screenshotBase64, ...rest } = payload;
+  try {
+    mkdirSync(SHOTS, { recursive: true });
+    const file = join(SHOTS, `${section}-${step.replace(/[^a-z0-9]+/gi, '-')}.png`);
+    writeFileSync(file, Buffer.from(base64, 'base64'));
+    return { ...rest, screenshot: file };
+  } catch (err) {
+    return { ...rest, screenshot: `no se pudo guardar: ${err.message}` };
+  }
+}
+
 function record(section, step, ok, detail, payload) {
-  results.push({ section, step, ok, detail, payload });
+  results.push({ section, step, ok, detail, payload: keepScreenshot(section, step, payload) });
   const mark = ok === true ? '✅' : ok === false ? '❌' : '⚠️ ';
   console.log(`${mark} ${section} › ${step}${detail ? ` — ${detail}` : ''}`);
 }
@@ -226,7 +250,7 @@ async function runSection(client, section) {
     );
     if (added?.status === 'ok') {
       created = true;
-      record(section, 'add', true, added.message, { warnings: added.warnings });
+      record(section, 'add', true, added.message, added);
     } else {
       record(section, 'add', false, added?.message ?? added?.raw ?? 'sin respuesta', added);
       return;
@@ -280,7 +304,7 @@ async function runSection(client, section) {
       'update',
       updated?.status === 'ok',
       updated?.message ?? updated?.raw ?? 'sin respuesta',
-      { warnings: updated?.warnings }
+      updated
     );
 
     // 7. detail (after update) — the only place most sections show the change
@@ -307,7 +331,13 @@ async function runSection(client, section) {
       const deleted = await step(section, 'delete', () =>
         call(client, 'update_section', { section, action: 'delete', data: { [labelField]: label } })
       );
-      record(section, 'delete', deleted?.status === 'ok', deleted?.message ?? deleted?.raw ?? 'sin respuesta');
+      record(
+        section,
+        'delete',
+        deleted?.status === 'ok',
+        deleted?.message ?? deleted?.raw ?? 'sin respuesta',
+        deleted
+      );
 
       // 9. list (final) — the cleanup check that matters
       const finalList = await step(section, 'list (final)', () => call(client, 'read_cvlac', { section }));

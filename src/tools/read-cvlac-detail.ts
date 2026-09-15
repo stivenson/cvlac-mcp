@@ -17,24 +17,62 @@ const log = createLogger('read-detail');
  * text, which is more useful than an empty object.
  */
 export async function extractDetailFields(page: Page): Promise<CvLACDetailField[]> {
-  return page.$$eval('table tr', (rows) => {
+  return page.$$eval('table', (tables) => {
     const clean = (s: string | null | undefined): string =>
       (s ?? '').replace(/\s+/g, ' ').trim();
 
+    /** A caption is a cell whose whole text is bold — how CvLAC marks them. */
+    const isCaption = (cell: Element): boolean => {
+      const bold = cell.querySelector('b, strong');
+      if (!bold) return false;
+      const text = clean(cell.textContent);
+      return text.length > 0 && clean(bold.textContent) === text;
+    };
+
+    const ownCells = (row: Element): Element[] =>
+      Array.from(row.children).filter((c) => c.tagName === 'TD' || c.tagName === 'TH');
+
     const out: Array<{ label: string; value: string }> = [];
-    for (const row of rows) {
-      // Nested tables would report the outer row's cells too; only take the
-      // cells this row owns.
-      const cells = Array.from(row.children).filter((c) => c.tagName === 'TD' || c.tagName === 'TH');
-      if (cells.length < 2 || cells.length % 2 !== 0) continue;
-      for (let i = 0; i < cells.length; i += 2) {
-        const label = clean(cells[i].textContent);
-        const value = clean(cells[i + 1].textContent);
-        // A label is a short caption, not a paragraph; this drops layout rows
-        // that happen to hold two cells of prose.
-        if (!label || label.length > 120) continue;
-        if (!value) continue;
-        out.push({ label: label.replace(/\s*:\s*$/, ''), value });
+
+    const add = (label: string, value: string): void => {
+      // A caption is a short one, not a paragraph; this drops layout rows that
+      // happen to hold two cells of prose.
+      if (!label || label.length > 120 || !value) return;
+      out.push({ label: label.replace(/\s*:\s*$/, ''), value });
+    };
+
+    for (const table of tables) {
+      // Only the rows this table owns: a nested table's rows belong to it, and
+      // are visited when the loop reaches that table.
+      const rows = Array.from(table.querySelectorAll(':scope > tr, :scope > tbody > tr'));
+
+      for (let r = 0; r < rows.length; r++) {
+        const cells = ownCells(rows[r]);
+        if (cells.length === 0) continue;
+
+        const captions = cells.filter(isCaption);
+
+        // Layout A — a row of captions, their values on the row below. Used by
+        // cursos, software and eventos, including for a caption that takes up
+        // the whole row on its own.
+        if (captions.length === cells.length) {
+          const below = rows[r + 1] ? ownCells(rows[r + 1]) : [];
+          if (below.length === cells.length && below.every((c) => !isCaption(c))) {
+            for (let i = 0; i < cells.length; i++) {
+              add(clean(cells[i].textContent), clean(below[i].textContent));
+            }
+            r++; // that row was the values; do not read it again
+          }
+          continue;
+        }
+
+        // Layout B — caption and value side by side on the same row. Used by
+        // reconocimientos, experiencia and formación.
+        if (cells.length >= 2 && cells.length % 2 === 0) {
+          for (let i = 0; i < cells.length; i += 2) {
+            add(clean(cells[i].textContent), clean(cells[i + 1].textContent));
+          }
+        }
       }
     }
     return out;

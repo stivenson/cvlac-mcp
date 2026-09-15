@@ -40,3 +40,4 @@ npm-debug.log*
 # Live-run reports and logs from tests/e2e
 tests/e2e/report-*.json
 tests/e2e/*.log
+tests/e2e/shots/

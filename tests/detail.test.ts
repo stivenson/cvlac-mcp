@@ -59,6 +59,58 @@ describe('extractDetailFields', () => {
   });
 });
 
+// The EnProd* sections (cursos, software, eventos) lay a record out as a row of
+// bold captions followed by a row of values. Pairing cells inside a row there
+// produced nonsense like "Ciudad = Disponibilidad", and made every check of what
+// an update had stored fail.
+describe('extractDetailFields on a record laid out in caption rows', () => {
+  it('pairs a caption row with the values on the row below it', async () => {
+    await load('detalle-software');
+    const byLabel = Object.fromEntries(
+      (await extractDetailFields(page)).map((f) => [f.label, f.value])
+    );
+
+    expect(byLabel['Ciudad']).toBe('Pamplona');
+    expect(byLabel['Disponibilidad']).toBe('Restringido');
+  });
+
+  it('reads the nested table CvLAC uses for multi-column blocks', async () => {
+    await load('detalle-software');
+    const byLabel = Object.fromEntries(
+      (await extractDetailFields(page)).map((f) => [f.label, f.value])
+    );
+
+    expect(byLabel['Año(*)']).toBe('2021');
+    expect(byLabel['Mes']).toBe('Marzo');
+  });
+
+  it('pairs a caption that occupies its whole row with the value below', async () => {
+    await load('detalle-software');
+    const byLabel = Object.fromEntries(
+      (await extractDetailFields(page)).map((f) => [f.label, f.value])
+    );
+
+    expect(byLabel['Nombre del software']).toBe('Catálogo de Rutas Urbanas');
+    expect(byLabel['Tipo de software']).toBe('Computacional');
+    expect(byLabel['Sitio web (URL)']).toBe('https://example.org/rutas');
+  });
+
+  it('never pairs one caption with another', async () => {
+    await load('detalle-software');
+    const fields = await extractDetailFields(page);
+
+    expect(fields.map((f) => f.value)).not.toContain('Disponibilidad');
+    expect(fields.map((f) => f.value)).not.toContain('Mes');
+  });
+
+  it('leaves out a caption whose value is empty', async () => {
+    await load('detalle-software');
+    const fields = await extractDetailFields(page);
+
+    expect(fields.map((f) => f.label)).not.toContain('País(*)');
+  });
+});
+
 describe('finding the Detalles link', () => {
   it('resolves a row by its label, ignoring case and accents', async () => {
     await load('reconocimientos');
