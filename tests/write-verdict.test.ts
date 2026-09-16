@@ -4,6 +4,7 @@ import {
   classifySubmit,
   isOutageMarkup,
   storedMatchesSubmitted,
+  verificationVerdict,
 } from '../src/tools/write-verdict.js';
 
 describe('classifySubmit', () => {
@@ -98,5 +99,31 @@ describe('changedFields', () => {
 
   it('returns nothing when the filler changed nothing', () => {
     expect(changedFields({ a: '1' }, { a: '1' })).toEqual({});
+  });
+});
+
+
+// "I could not read it back" is not "it did not save". A live run reported two
+// updates as failed while CvLAC had stored them: the site was down, the reread
+// came back empty, and empty was treated as a contradiction.
+describe('verificationVerdict', () => {
+  it('confirms a write the form now holds', () => {
+    expect(verificationVerdict({ nro_ano_obten: '2022' }, { nro_ano_obten: '2022' })).toBe('confirmed');
+  });
+
+  it('contradicts a write the form does not hold', () => {
+    expect(verificationVerdict({ nro_ano_obten: '2020' }, { nro_ano_obten: '2022' })).toBe('contradicted');
+  });
+
+  it('reports an unreadable form as unverifiable, not as a failure', () => {
+    expect(verificationVerdict({}, { nro_ano_obten: '2022' })).toBe('unreadable');
+  });
+
+  it('treats a form without any of the submitted fields as unreadable', () => {
+    expect(verificationVerdict({ cod_rh: '1' }, { nro_ano_obten: '2022' })).toBe('unreadable');
+  });
+
+  it('has nothing to check when the filler changed nothing', () => {
+    expect(verificationVerdict({ a: '1' }, {})).toBe('unreadable');
   });
 });

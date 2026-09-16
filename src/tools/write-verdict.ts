@@ -63,3 +63,22 @@ export function storedMatchesSubmitted(
   if (comparable.length === 0) return false;
   return comparable.every((key) => norm(stored[key]) === norm(submitted[key]));
 }
+
+export type VerificationVerdict = 'confirmed' | 'contradicted' | 'unreadable';
+
+/**
+ * What a reread of the form says about a write.
+ *
+ * The third answer is the one that matters. When CvLAC is down the reread comes
+ * back empty, and an empty form contradicts nothing: two updates that CvLAC had
+ * stored were reported as failures because "could not read it back" and "did
+ * not save" were the same branch.
+ */
+export function verificationVerdict(
+  stored: Record<string, string>,
+  submitted: Record<string, string>
+): VerificationVerdict {
+  const comparable = Object.keys(submitted).filter((key) => key in stored);
+  if (comparable.length === 0) return 'unreadable';
+  return storedMatchesSubmitted(stored, submitted) ? 'confirmed' : 'contradicted';
+}

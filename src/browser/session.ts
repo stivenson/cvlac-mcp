@@ -73,7 +73,12 @@ export class BrowserSession {
     if (!this.context) {
       await this.init();
     }
-    return this.context!.newPage();
+    const page = await this.context!.newPage();
+    // Playwright waits 30s for a control by default. When CvLAC serves its
+    // outage page instead of a form, every field a filler touches burns that
+    // full half minute before reporting the same thing.
+    page.setDefaultTimeout(10000);
+    return page;
   }
 
   private async init(): Promise<void> {

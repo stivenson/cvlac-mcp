@@ -223,7 +223,13 @@ export interface UpdateRequest {
   confirmDuplicate?: boolean;
 }
 
-export type UpdateStatus = 'ok' | 'failed' | 'needs_confirmation';
+/**
+ * `unverified` is not a softer `failed`: it means the write was sent and this
+ * server could not read back whether CvLAC kept it — which is what happens when
+ * the site goes down mid-submit. Reporting those as failures was wrong twice
+ * over, because CvLAC had stored them.
+ */
+export type UpdateStatus = 'ok' | 'failed' | 'needs_confirmation' | 'unverified';
 
 export interface UpdateResult {
   /** True only when status is 'ok'. Kept for callers that just check success. */

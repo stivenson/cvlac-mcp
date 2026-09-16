@@ -316,7 +316,9 @@ async function runSection(client, section) {
     record(
       section,
       'update',
-      updated?.status === 'ok',
+      // `unverified` means the write went out and CvLAC never confirmed it —
+      // the next step decides, so it is not counted as a failure here.
+      updated?.status === 'unverified' ? null : updated?.status === 'ok',
       updated?.message ?? updated?.raw ?? 'sin respuesta',
       updated
     );

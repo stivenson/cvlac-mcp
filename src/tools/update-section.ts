@@ -34,7 +34,7 @@ import {
   changedFields,
   classifySubmit,
   isOutageMarkup,
-  storedMatchesSubmitted,
+  verificationVerdict,
 } from './write-verdict.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logger.js';
@@ -1285,19 +1285,35 @@ async function updateItem(
       report.warnings.push('the form was submitted unchanged, so there was nothing to verify');
       return ok(`Updated: ${label}`, report, screenshotBase64);
     }
-    log.info('submit returned to the form without an error; verifying', { label });
-    await gotoFormWithRelogin(pageRef, BASE_URL + editHref);
-    const stored = await readFormValues(pageRef.page);
-    if (!storedMatchesSubmitted(stored, edits)) {
+    log.info('submit returned without confirming; verifying', { label });
+    const stored = await gotoFormWithRelogin(pageRef, BASE_URL + editHref)
+      .then(() => readFormValues(pageRef.page))
+      .catch(() => ({}) as Record<string, string>);
+
+    const verdict = verificationVerdict(stored, edits);
+    if (verdict === 'contradicted') {
       return failed(
         `CvLAC returned the form again for "${label}" and the stored values do not match what was sent. ` +
-          'Nothing in the record page confirms the change; check it before retrying.',
+          'Nothing confirms the change; check it before retrying.',
         report,
         screenshotBase64
       );
     }
+    if (verdict === 'unreadable') {
+      // Sent, and unread. Saying "failed" here reported two writes CvLAC had
+      // kept; saying "ok" would invent a confirmation nobody has.
+      return {
+        success: false,
+        status: 'unverified',
+        message:
+          `Se envió la edición de "${label}" pero no se pudo releer el formulario para confirmarla ` +
+          '(CvLAC no respondió con sus campos). Puede haberse guardado o no: verifícalo con read_cvlac_detail antes de reintentar.',
+        warnings: report.warnings.length ? report.warnings : undefined,
+        screenshotBase64,
+      };
+    }
     report.warnings.push(
-      'CvLAC answered with the form instead of the list, but the stored values match what was sent'
+      'CvLAC no respondió con la lista, pero los valores almacenados coinciden con lo enviado'
     );
   }
 
