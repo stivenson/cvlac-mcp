@@ -9,9 +9,22 @@
 
 export type SubmitOutcome = 'saved' | 'rejected' | 'unverified';
 
-export function classifySubmit(input: { landedOnForm: boolean; errors: string[] }): SubmitOutcome {
+export function classifySubmit(input: {
+  landedOnForm: boolean;
+  errors: string[];
+  /** The submit landed on MinCiencias' outage page rather than on a CvLAC page. */
+  outage?: boolean;
+}): SubmitOutcome {
+  // Leaving the form is normally the redirect that follows a save — unless what
+  // came back was the outage page, which is not CvLAC answering at all.
+  if (input.outage) return 'unverified';
   if (!input.landedOnForm) return 'saved';
   return input.errors.length > 0 ? 'rejected' : 'unverified';
+}
+
+/** MinCiencias' "Server Unavailable!" page, which arrives with any status. */
+export function isOutageMarkup(html: string): boolean {
+  return /server\s+unavailable/i.test(html ?? '');
 }
 
 const norm = (s: string): string => s.replace(/\s+/g, ' ').trim().toLowerCase();

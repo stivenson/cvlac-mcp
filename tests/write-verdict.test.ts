@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { changedFields, classifySubmit, storedMatchesSubmitted } from '../src/tools/write-verdict.js';
+import {
+  changedFields,
+  classifySubmit,
+  isOutageMarkup,
+  storedMatchesSubmitted,
+} from '../src/tools/write-verdict.js';
 
 describe('classifySubmit', () => {
   it('trusts a submit that left the form', () => {
@@ -16,6 +21,33 @@ describe('classifySubmit', () => {
   // Without a complaint from the server there is nothing to call a failure.
   it('calls a silent re-render unverified rather than failed', () => {
     expect(classifySubmit({ landedOnForm: true, errors: [] })).toBe('unverified');
+  });
+
+  // Landing away from the form is normally the redirect that follows a save.
+  // Landing on MinCiencias' outage page is not, and three updates were reported
+  // as saved because of it.
+  it('does not read an outage page as a successful redirect', () => {
+    expect(classifySubmit({ landedOnForm: false, errors: [], outage: true })).toBe('unverified');
+  });
+
+  it('still trusts a redirect when the site is up', () => {
+    expect(classifySubmit({ landedOnForm: false, errors: [], outage: false })).toBe('saved');
+  });
+});
+
+describe('isOutageMarkup', () => {
+  it('recognises the page MinCiencias serves when it is down', () => {
+    expect(
+      isOutageMarkup('<h1>Server Unavailable!</h1><p>Server unavailable.Please visit again later</p>')
+    ).toBe(true);
+  });
+
+  it('is not fooled by a record that mentions a server', () => {
+    expect(isOutageMarkup('<td>Servidor de cálculo para el laboratorio</td>')).toBe(false);
+  });
+
+  it('handles an empty page', () => {
+    expect(isOutageMarkup('')).toBe(false);
   });
 });
 

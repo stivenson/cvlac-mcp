@@ -30,7 +30,12 @@ import {
   type CatalogueOption,
   type MunicipioRow,
 } from '../browser/catalogue.js';
-import { changedFields, classifySubmit, storedMatchesSubmitted } from './write-verdict.js';
+import {
+  changedFields,
+  classifySubmit,
+  isOutageMarkup,
+  storedMatchesSubmitted,
+} from './write-verdict.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logger.js';
 import { classifyMatch } from '../diff.js';
@@ -1112,6 +1117,17 @@ export async function findRowActionHref(
   );
 }
 
+/**
+ * Whether what came back is MinCiencias' outage page rather than CvLAC.
+ *
+ * It is served for any URL and carries no CvLAC markup, so a submit that lands
+ * on it has left the form without having been saved — which read as success.
+ */
+async function landedOnOutage(page: Page): Promise<boolean> {
+  const html = await page.content().catch(() => '');
+  return isOutageMarkup(html);
+}
+
 /** A submit landed back on a form page (instead of the list) ⇒ validation rejected it. */
 function landedOnForm(page: Page): boolean {
   return /create\.do|insert\.do|edit\.do|update\.do/.test(page.url());
@@ -1202,6 +1218,25 @@ async function addItem(
   if (landedOnForm(pageRef.page)) {
     return failed(await describeRejection(pageRef.page, 'adding', label), report, screenshotBase64);
   }
+
+  // An outage page is not the redirect that follows a save. The list is the only
+  // thing that can say whether the row exists, so ask it.
+  if (await landedOnOutage(pageRef.page)) {
+    log.warn('add landed on the outage page; checking the list', { label });
+    await gotoFormWithRelogin(pageRef, cfg.listUrl);
+    const created = await findRowActionHref(pageRef.page, cfg.matchCellIndex, label, 'Eliminar');
+    if (!created) {
+      return failed(
+        `CvLAC respondió con su página de "Server Unavailable" al guardar "${label}", y la fila no aparece en la lista: no se creó.`,
+        report,
+        screenshotBase64
+      );
+    }
+    report.warnings.push(
+      'CvLAC respondió con su página de "Server Unavailable" al guardar, pero la fila sí aparece en la lista'
+    );
+  }
+
   log.info('item added', { label, warnings: report.warnings.length });
   return ok(`Added: ${label}`, report, screenshotBase64);
 }
@@ -1227,10 +1262,17 @@ async function updateItem(
   await clickGuardar(pageRef.page);
   const screenshotBase64 = await shot(pageRef.page);
 
+  const outage = await landedOnOutage(pageRef.page);
   const outcome = classifySubmit({
     landedOnForm: landedOnForm(pageRef.page),
     errors: await readFormErrors(pageRef.page),
+    outage,
   });
+  if (outage) {
+    report.warnings.push(
+      'CvLAC respondió con su página de "Server Unavailable" al guardar; el veredicto sale de releer el formulario'
+    );
+  }
 
   if (outcome === 'rejected') {
     return failed(await describeRejection(pageRef.page, 'updating', label), report, screenshotBase64);

@@ -127,3 +127,21 @@ Conteos leídos el **2026-07-20** con `read_cvlac('all')`:
 Diff contra el portafolio en esa fecha: **8 faltantes, 15 al día**, 0 a actualizar, 0 parecidos.
 
 Estos números sirven de canario: si `read_cvlac` devuelve 0 en todas las secciones, la sesión está caída (ver la primera sección de este documento), no es que el CvLAC se haya vaciado.
+
+## La página de caída de MinCiencias
+
+Ante una caída, el sitio sirve un HTML propio con `Server Unavailable!` y la URL pedida, **para cualquier ruta y sin markup de CvLAC**. Como no es la página del formulario, un submit que aterriza ahí parecía el redirect que sigue a un guardado: en una corrida en vivo tres `update` se reportaron como `Updated` sin haber guardado nada. Se detecta por contenido (`isOutageMarkup`), no por status.
+
+## Fichas de detalle: qué muestra cada sección
+
+No todas las fichas muestran lo que se editó, y eso limita qué se puede verificar leyendo:
+
+| Sección | La ficha muestra |
+|---|---|
+| `experiencia`, `reconocimientos`, `software` | fechas incluidas |
+| `cursos` | año y mes, en tabla anidada con celdas espaciadoras |
+| `eventos` | **sin fechas**; sí municipio, lugar y resumen |
+| `proyectos` | **sin fechas**; sí tipo, título y resumen |
+| `formacion` | **sin fechas**; el período solo está en la lista (`all.do`) |
+
+La ficha de `formacion` además mete etiqueta y valor **en la misma celda** (`Municipio CÚCUTA`), un tercer layout que `extractDetailFields` todavía no separa.

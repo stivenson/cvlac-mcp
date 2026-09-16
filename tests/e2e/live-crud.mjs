@@ -99,8 +99,10 @@ const PLAN = {
       startYear: '2024',
       startMonth: '3',
     },
-    update: { startYear: '2025' },
-    evidence: '2025',
+    // The project record page shows the summary and never the dates, so the
+    // edit has to land somewhere it can be read back.
+    update: { description: 'Ítem de prueba creado por la suite e2e de cvlac-mcp. Editado para verificar.' },
+    evidence: 'Editado para verificar',
   },
   software: {
     labelField: 'name',
@@ -323,8 +325,17 @@ async function runSection(client, section) {
     const detailAfterUpdate = await step(section, 'detail (tras update)', () =>
       call(client, 'read_cvlac_detail', { section, label })
     );
+    // Some record pages leave fields out that the list does show — formación
+    // keeps its period only in the list — so both are searched for the evidence.
+    const listAfterUpdate = await step(section, 'list (tras update)', () =>
+      call(client, 'read_cvlac', { section })
+    );
+    const rowAfterUpdate = (listAfterUpdate?.[section] ?? []).find(
+      (item) => norm(item[LIST_LABEL[section]] ?? '') === norm(label)
+    );
+    const rowText = rowAfterUpdate ? JSON.stringify(rowAfterUpdate) : '';
     const textBefore = fieldsToText(detailAfterAdd);
-    const textAfter = fieldsToText(detailAfterUpdate);
+    const textAfter = `${fieldsToText(detailAfterUpdate)}${rowText ? ` | lista: ${rowText}` : ''}`;
     const hasEvidence = textAfter.includes(plan.evidence);
     record(
       section,
