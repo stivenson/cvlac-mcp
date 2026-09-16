@@ -422,6 +422,8 @@ src/
 - `login`: autentica en CvLAC y persiste sesión.
 - `read_cvlac`: lee una sección o todas (`all`) desde CvLAC.
 - `read_cvlac_detail`: abre la ficha completa de un ítem (por sección y etiqueta) y devuelve sus pares campo/valor. Las listas solo muestran dos o tres columnas; esta es la única forma de ver lo que realmente quedó guardado.
+- `read_profile`: lee las dos páginas que guardan **un solo registro** en vez de una lista: el texto de perfil del investigador (`txt_desc_perfil`) y la tabla de redes sociales académicas. Ninguna sale en `read_cvlac`.
+- `update_profile`: escribe el texto de perfil y/o las redes académicas. Las redes se **fusionan** sobre lo guardado: `ReRedSocialIdent/insert.do` reescribe la tabla completa con lo que reciba, así que la tool la lee primero y reenvía todo. `url:null` elimina una red. Una red que CvLAC no lista va en `otro`, con su nombre en `label`.
 - `read_portfolio`: obtiene y parsea el portafolio.
 - `diff`: compara CvLAC vs portafolio y reporta cuatro grupos: `missing`, `toUpdate`, `similar` (parecidos a algo existente) y `upToDate`.
 - `update_section`: aplica cambio puntual (`add`, `update`, `delete`). Devuelve `status` (`ok`, `failed`, `needs_confirmation` o `unverified` — se envió pero CvLAC no dejó confirmarlo, típicamente porque se cayó a mitad), `warnings` por campo y, si detecta un posible duplicado, `needs_confirmation` con los candidatos. `confirm_duplicate:true` fuerza la creación.
@@ -431,6 +433,11 @@ src/
 
 Secciones soportadas:
 `formacion`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`, `software`, `eventos`.
+
+Redes académicas aceptadas por `update_profile` (`network`):
+`google_scholar`, `researchgate`, `ssr`, `ssrn`, `academia_edu`, `mendeley`, `linkedin`,
+`repositorios_disciplinares`, `repositorios_institucionales`, `researcher_id`,
+`scopus_author_id`, `orcid`, `otro`.
 
 ---
 

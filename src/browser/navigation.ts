@@ -23,6 +23,10 @@ export const URLS = {
   softwareCreate:       `${BASE_URL}/cvlac/EnProdSoftware/create.do`,
   eventos:              `${BASE_URL}/cvlac/EnEventoCientifico/all.do`,
   eventosCreate:        `${BASE_URL}/cvlac/EnEventoCientifico/create.do`,
+  // Two singleton records: no list, no create/edit split. `create.do` is both
+  // the read view and the form, and its `insert.do` rewrites the whole set.
+  redes:                `${BASE_URL}/cvlac/ReRedSocialIdent/create.do`,
+  perfil:               `${BASE_URL}/cvlac/EnRecursoHumano/enPerfilInvestigador.do`,
 } as const;
 
 export type CvLACUrl = (typeof URLS)[keyof typeof URLS];

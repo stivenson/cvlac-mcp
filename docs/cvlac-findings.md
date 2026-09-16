@@ -42,7 +42,9 @@ Los índices están fijados por los tests: `tests/extractors.test.ts` corre cada
 ### Resolución de la ambigüedad de "cursos"
 
 - "Curso de corta duración" (`/cvlac/EnProdCurso/all.do?__tipo=2B`, botón "Crear curso de corta duración dictado") **es donde Stivenson tiene registrados sus cursos del portafolio** (Platzi AWS, IBM Coursera, Taller IA USB, SENA Proyecto de Vida/Microcontroladores, etc.). El código apunta aquí → CORRECTO.
-- "Formación complementaria" (`/cvlac/EnFormacionComple/all.do?isTrayectoria=FC`) contiene OTROS ítems (cursos SENA técnicos antiguos: soldadura, instalación de software, etc.). El código define esta URL (`formacionComple`) pero no la usa, y está bien así.
+- "Formación complementaria" (`/cvlac/EnFormacionComple/all.do?isTrayectoria=FC`) contiene OTROS ítems (cursos SENA técnicos antiguos: soldadura, instalación de software, etc.). El código define esta URL (`formacionComple`) pero no la usa.
+
+  **Corregido el 2026-09-16:** aquí decía "y está bien así". No lo está: esa sección tiene **9 registros reales** y ninguna tool. Ver el recorrido completo del menú al final de este documento.
 
 ### Experiencia: por qué queda fuera del diff
 
@@ -179,3 +181,72 @@ Por eso `syncHiddenDuplicates()` corre después de cada `fill` y antes de Guarda
 ## Códigos de país: tres letras
 
 Los selects `sgl_pais` usan códigos de **tres** letras (`COL`, `ARG`). `cvlac.config.json` y el portafolio usan ISO de dos (`CO`), que no coincide con ninguna opción: el select se queda como estaba y la llamada agota su timeout. `countryOption()` traduce lo que sabe con certeza y deja pasar el resto.
+
+## Recorrido completo del menú (2026-09-16)
+
+Se navegaron las **86 entradas** del menú lateral con la cuenta real, solo lectura, contando filas `tr.odd/tr.even` en cada una.
+
+**Cuidado con el conteo:** una lista vacía no trae cero filas, trae **una** con el texto `Ningún dato disponible en esta tabla`. Contar filas sin mirar el contenido da 1 en decenas de secciones vacías.
+
+De las 86, solo **11 tienen datos**:
+
+| Sección | Ítems | ¿Tool? |
+|---|---|---|
+| Formación académica | 7 | ✅ `formacion` |
+| Formación complementaria (`EnFormacionComple/all.do?isTrayectoria=FC`) | 9 | ❌ |
+| Experiencia profesional | 9 | ✅ `experiencia` |
+| Líneas de investigación (`EnLineaInv/all.do`) | 2 | ❌ |
+| Idiomas (`ReRecursoHumIdioma/all.do`) | 2 | ❌ |
+| Curso de corta duración | 9 | ✅ `cursos` |
+| Evento científico | 5 | ✅ `eventos` |
+| Software | 5 | ✅ `software` |
+| Proyectos | 4 | ✅ `proyectos` |
+| Reconocimientos | 6 | ✅ `reconocimientos` |
+| Demás trabajos (`EnProdTecnica/all_demasTrabajos.do`) | 1 | ❌ |
+
+Detalles que valen para cuando se automatice alguna:
+
+- **Formación complementaria** usa la misma forma de tabla que `formacion` (Año inicio, Categoría, Año fin, Institución, Nombre) — es la candidata más barata. Ojo: uno de sus registros **no trae enlace Eliminar**; CvLAC bloquea el borrado de algunos ítems, así que su CRUD no es simétrico.
+- **Estancias posdoctorales** es un tercer sabor del mismo endpoint: `EnTrayectoriaEscolar/all.do?isTrayectoria=FP`.
+- **Áreas de actuación** (`ReRecursoHumAreaCon/detail.do`) no es lista: es un `select multiple cod_area_conocimiento` que llega con una sola opción — es cascada (gran área → área), y habrá que resolver catálogo como con municipios.
+
+## Los dos registros únicos: perfil y redes académicas
+
+Ninguno tiene `all.do` ni ficha por ítem. Son un formulario cada uno, con un solo `Guardar`.
+
+### Redes sociales académicas — `ReRedSocialIdent/create.do` → `insert.do`
+
+`create.do` es a la vez la vista de lectura y el formulario: los valores guardados vienen en el `value=` de cada `URL_n` y en un bloque `$(document).ready` que marca las casillas.
+
+Trece filas, cada una con `CHECK_n` (checkbox) y `URL_n` (texto), más `cod_rh` oculto:
+
+| n | Etiqueta en CvLAC |
+|---|---|
+| 1 | Google Scholar |
+| 2 | ResearchGate |
+| 3 | Social Sciences Research |
+| 4 | Network (SSRN) |
+| 5 | Academia.edu |
+| 6 | Mendeley (Elservier - Scopus) |
+| 7 | Linkedln |
+| 8 | Repositorios disciplinares (Directorio Exit, eLIS, etc.) |
+| 9 | Repositorios institucionales |
+| 10 | ResearcherID (Thomson Reuters - WOS) |
+| 11 | Autor ID (Scopus) |
+| 12 | Open Researcher and Contributor ID (ORCID) |
+| 13 | Otro (+ `txt_otro` con el nombre) |
+
+Cuatro cosas que muerden:
+
+1. **`insert.do` reescribe la tabla entera** con lo que reciba el POST. Enviar solo la red nueva borra todas las demás. Por eso `update_profile` lee primero y reenvía todo (`mergeRedes`).
+2. **Las filas 3 y 4 son una sola red partida en dos.** El JSP corta "Social Sciences Research Network (SSRN)" en dos `<tr>`, cada uno con su checkbox y su URL. Son dos slots reales; el código los mantiene separados porque el formulario los mantiene separados.
+3. **CvLAC escribe "Linkedln"**, con ele donde va la i. `resolveNetwork` acepta `linkedin`.
+4. **`txt_otro` vive dentro de `<div id="otro" style="display:none">`**, que solo se muestra al hacer clic en su checkbox (`mostrarCampoOtro()`). Un `page.fill` ahí espera a que sea editable hasta agotar el timeout. Los `onchange` de todas las casillas llaman a jQuery-validate y el `$("#formulario").validate(...)` ni siquiera engancha (el form no tiene ese id). Por eso `applyRedesState` escribe valores y `checked` por JS, sin clics.
+
+La validación que sí importa: el formulario espera URLs **con esquema**. `normalizeNetworkUrl` antepone `https://` a un host pelado y rechaza lo que no sea una dirección.
+
+### Perfil del investigador — `enPerfilInvestigador.do` → `perfilUpdate.do`
+
+Un solo `textarea txt_desc_perfil`, y **diez hidden con la identidad de la persona** que se reenvían en el POST: `nro_documento_ident`, `txt_names_rh`, `txt_prim_apell`, `tpo_nacionalidad`, `tpo_sexo`, `cod_mun_nacim`, `dta_nacim`, `cod_mun_exped_doc`, `dta_nacimString`, `staPerfilInvestigador`.
+
+Regla: **tocar solo el textarea**. Reconstruir o reordenar ese formulario arriesga la cédula y la fecha de nacimiento del registro oficial. (De paso, `cod_mun_nacim=991` confirma la numeración de municipios documentada arriba.)

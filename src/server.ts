@@ -8,6 +8,7 @@ import { diffTool } from './tools/diff.js';
 import { updateSectionTool } from './tools/update-section.js';
 import { syncTool } from './tools/sync.js';
 import { screenshotTool } from './tools/screenshot.js';
+import { readProfileTool, updateProfileTool, networkNames } from './tools/profile.js';
 import { SECTION_SCHEMAS, formatIssues } from './schemas.js';
 import { createLogger } from './logger.js';
 import type { CvLACSectionName } from './types.js';
@@ -162,6 +163,57 @@ export function createServer(): McpServer {
         data,
         confirmDuplicate: confirm_duplicate,
       });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'read_profile',
+    {
+      description:
+        "Read the two CvLAC pages that hold one record instead of a list: the researcher " +
+        "profile text (txt_desc_perfil) and the table of academic social networks " +
+        "(Google Scholar, ORCID, LinkedIn, Scopus...). Neither appears in read_cvlac.",
+      inputSchema: {},
+    },
+    async () => {
+      const result = await readProfileTool();
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'update_profile',
+    {
+      description:
+        "Write the researcher profile text and/or the academic social networks. Networks are " +
+        "MERGED over what CvLAC already stores — its form rewrites the whole table, so this " +
+        "reads it first and posts everything back. Pass url:null to remove one. A network " +
+        "CvLAC does not list goes in \"otro\" with its name in \"label\".",
+      inputSchema: {
+        description: z
+          .string()
+          .optional()
+          .describe('Replaces the profile text. Omit to leave it untouched.'),
+        networks: z
+          .array(
+            z.object({
+              network: z
+                .string()
+                .describe(`One of: ${networkNames().join(', ')}`),
+              url: z.string().nullable().describe('The profile URL, or null to remove this network'),
+              label: z
+                .string()
+                .optional()
+                .describe('Only for network:"otro" — the name CvLAC stores beside the URL'),
+            })
+          )
+          .optional()
+          .describe('Networks to set or remove. Everything else stored is kept.'),
+      },
+    },
+    async ({ description, networks }) => {
+      const result = await updateProfileTool({ description, networks });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }
   );

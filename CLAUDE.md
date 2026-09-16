@@ -65,9 +65,13 @@ Flujo de datos: `index.ts` → `server.ts` (router) → `tools/*` → `browser/s
 
 ## Tools MCP (registradas en `server.ts`)
 
-`login`, `read_cvlac`, `read_cvlac_detail`, `read_portfolio`, `diff`, `update_section`, `sync`, `screenshot`, `inspect_form`.
+`login`, `read_cvlac`, `read_cvlac_detail`, `read_profile`, `update_profile`, `read_portfolio`, `diff`, `update_section`, `sync`, `screenshot`, `inspect_form`.
 
 **Secciones:** `formacion`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`, `software`, `eventos`.
+
+`read_profile` / `update_profile` quedan aparte a propósito: el perfil y las redes académicas
+son **registros únicos**, sin `all.do` ni `add`/`update`/`delete`, así que no caben en
+`update_section`. Viven en `tools/profile.ts`.
 
 ## Detalles que muerden (lee antes de tocar)
 

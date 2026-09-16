@@ -32,6 +32,8 @@ const EXPECTED = [
   'login',
   'read_cvlac',
   'read_cvlac_detail',
+  'read_profile',
+  'update_profile',
   'read_portfolio',
   'diff',
   'update_section',

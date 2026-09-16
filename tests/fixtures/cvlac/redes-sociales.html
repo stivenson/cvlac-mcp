@@ -1,0 +1,86 @@
+<!--
+  Shape of ReRedSocialIdent/create.do: thirteen rows, each a checkbox plus a URL
+  field, and a "Otro" row whose name lives in a box that starts hidden. The
+  inline handlers are kept because they are what the real page carries; they
+  need jQuery and never run here, which is the point — the filler must not
+  depend on them. One row comes pre-filled. Data is fictional.
+-->
+<form action="/cvlac/ReRedSocialIdent/insert.do" method="POST">
+  <input type="hidden" name="cod_rh" value="0000000000">
+  <table id="tabla">
+    <tbody>
+      <tr>
+        <td>Google Scholar</td>
+        <td><input type="checkbox" id="1_checked" name="CHECK_1" onchange="validarUrl('1_checked','URL_1')"></td>
+        <td><input type="text" id="URL_1" name="URL_1" value="" onblur="verificarCheck('1_checked','URL_1')"></td>
+      </tr>
+      <tr>
+        <td>ResearchGate</td>
+        <td><input type="checkbox" id="2_checked" name="CHECK_2" onchange="validarUrl('2_checked','URL_2')"></td>
+        <td><input type="text" id="URL_2" name="URL_2" value="" onblur="verificarCheck('2_checked','URL_2')"></td>
+      </tr>
+      <tr>
+        <td>Social Sciences Research</td>
+        <td><input type="checkbox" id="3_checked" name="CHECK_3"></td>
+        <td><input type="text" id="URL_3" name="URL_3" value=""></td>
+      </tr>
+      <tr>
+        <td>Network (SSRN)</td>
+        <td><input type="checkbox" id="4_checked" name="CHECK_4"></td>
+        <td><input type="text" id="URL_4" name="URL_4" value=""></td>
+      </tr>
+      <tr>
+        <td>Academia.edu</td>
+        <td><input type="checkbox" id="5_checked" name="CHECK_5"></td>
+        <td><input type="text" id="URL_5" name="URL_5" value=""></td>
+      </tr>
+      <tr>
+        <td>Mendeley (Elservier - Scopus)</td>
+        <td><input type="checkbox" id="6_checked" name="CHECK_6"></td>
+        <td><input type="text" id="URL_6" name="URL_6" value=""></td>
+      </tr>
+      <tr>
+        <td>Linkedln</td>
+        <td><input type="checkbox" id="7_checked" name="CHECK_7"></td>
+        <td><input type="text" id="URL_7" name="URL_7" value=""></td>
+      </tr>
+      <tr>
+        <td>Repositorios disciplinares (Directorio Exit, eLIS, etc.)</td>
+        <td><input type="checkbox" id="8_checked" name="CHECK_8"></td>
+        <td><input type="text" id="URL_8" name="URL_8" value=""></td>
+      </tr>
+      <tr>
+        <td>Repositorios institucionales</td>
+        <td><input type="checkbox" id="9_checked" name="CHECK_9"></td>
+        <td><input type="text" id="URL_9" name="URL_9" value=""></td>
+      </tr>
+      <tr>
+        <td>ResearcherID (Thomson Reuters - WOS)</td>
+        <td><input type="checkbox" id="10_checked" name="CHECK_10"></td>
+        <td><input type="text" id="URL_10" name="URL_10" value=""></td>
+      </tr>
+      <tr>
+        <td>Autor ID (Scopus)</td>
+        <td><input type="checkbox" id="11_checked" name="CHECK_11"></td>
+        <td><input type="text" id="URL_11" name="URL_11" value=""></td>
+      </tr>
+      <tr>
+        <td>Open Researcher and Contributor ID (ORCID)</td>
+        <td><input type="checkbox" id="12_checked" name="CHECK_12" checked></td>
+        <td><input type="text" id="URL_12" name="URL_12" value="https://orcid.org/0000-0002-1825-0097"></td>
+      </tr>
+      <tr>
+        <td>
+          Otro
+          <div id="otro" style="display: none">
+            ¿Cuál?
+            <input type="text" id="txt_otro" name="txt_otro" value="" size="50">
+          </div>
+        </td>
+        <td><input type="checkbox" id="13_checked" name="CHECK_13" onclick="mostrarCampoOtro()"></td>
+        <td><input type="text" id="URL_13" name="URL_13" value=""></td>
+      </tr>
+    </tbody>
+  </table>
+  <input type="submit" value="Guardar">
+</form>

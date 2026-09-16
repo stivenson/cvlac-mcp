@@ -482,7 +482,7 @@ async function gotoFormWithRelogin(
 }
 
 /** Click the form's save button and wait for the navigation it triggers */
-async function clickGuardar(page: Page): Promise<void> {
+export async function clickGuardar(page: Page): Promise<void> {
   const btn = page.getByRole('button', { name: /guardar|aceptar|enviar|save/i });
   await btn.waitFor({ timeout: 10000 });
   await btn.click();
@@ -1195,7 +1195,7 @@ async function syncHiddenDuplicates(page: Page): Promise<string[]> {
  * It is served for any URL and carries no CvLAC markup, so a submit that lands
  * on it has left the form without having been saved — which read as success.
  */
-async function landedOnOutage(page: Page): Promise<boolean> {
+export async function landedOnOutage(page: Page): Promise<boolean> {
   const html = await page.content().catch(() => '');
   return isOutageMarkup(html);
 }
