@@ -6,6 +6,10 @@
  * it, reads its record page, re-adds it to check the duplicate guard, edits it,
  * verifies the edit on the record page and deletes it — then verifies it is gone.
  *
+ * `perfil` covers the two singleton records — the profile text and the academic
+ * networks — which have no list. It runs on an account that holds none of them:
+ * it picks an unused row, and puts back whatever it found.
+ *
  * This writes to an official MinCiencias record, so it refuses to run without
  * CVLAC_E2E=1 and it always attempts cleanup, reporting anything it could not
  * remove so a human can delete it by hand.
@@ -377,9 +381,184 @@ async function runSection(client, section) {
   }
 }
 
+
+// ── Perfil y redes académicas ────────────────────────────────────────────────
+
+/**
+ * CRUD over the two singleton records: the profile text and the network table.
+ *
+ * These have no list and no per-item page, so the shape is different: the whole
+ * state is read first and put back at the end. That snapshot is not a nicety —
+ * `ReRedSocialIdent/insert.do` rewrites the whole table from what the form
+ * posts, so the test worth running is whether an account's *real* networks
+ * survive a write that only meant to add one.
+ *
+ * It runs on an account that has none of this: it picks a row nobody is using,
+ * and restores whatever it found.
+ */
+async function runProfile(client) {
+  const section = 'perfil';
+  console.log(`\n──────── ${section} ────────`);
+
+  const snapshot = await step(section, 'snapshot', () => call(client, 'read_profile', {}));
+  if (!snapshot || !Array.isArray(snapshot.networks)) {
+    record(section, 'snapshot', false, 'read_profile no devolvió el perfil', snapshot);
+    return;
+  }
+  const storedKeys = snapshot.networks.map((n) => n.key);
+  record(
+    section,
+    'snapshot',
+    true,
+    `${snapshot.networks.length} red(es) [${storedKeys.join(', ') || 'ninguna'}], ` +
+      `perfil de ${snapshot.description.length} caracteres`
+  );
+
+  // A row nobody is using, so a real profile is never overwritten. "otro" is
+  // left alone on purpose: it is the one a person is most likely to have filled.
+  const free = ['researchgate', 'academia_edu', 'mendeley', 'ssr', 'researcher_id'].find(
+    (k) => !storedKeys.includes(k)
+  );
+  if (!free) {
+    record(section, 'elegir red', null, 'todas las redes candidatas están ocupadas por datos reales');
+    return;
+  }
+  record(section, 'elegir red', true, `"${free}" está libre`);
+
+  const TEST_URL = 'https://example.org/zz-prueba-mcp';
+  const TEST_URL_2 = 'https://example.org/zz-prueba-mcp-editada';
+  const TEST_TEXT = `${TAG} — texto de prueba del perfil, escrito por la suite e2e.`;
+
+  /** Every pre-existing network must still be there, with its URL untouched. */
+  const realSurvived = (networks) =>
+    snapshot.networks.every((was) => networks.find((n) => n.key === was.key)?.url === was.url);
+
+  let wrote = false;
+  try {
+    // 1. add
+    const added = await step(section, 'add red', () =>
+      call(client, 'update_profile', { networks: [{ network: free, url: TEST_URL }] })
+    );
+    if (added?.status === 'ok' || added?.status === 'unverified') wrote = true;
+    record(
+      section,
+      'add red',
+      added?.status === 'unverified' ? null : added?.status === 'ok',
+      added?.message ?? added?.raw ?? 'sin respuesta',
+      added
+    );
+
+    // 2. verify — both that it landed and that nothing else was swept away
+    const afterAdd = await step(section, 'verificar add', () => call(client, 'read_profile', {}));
+    const addedRow = (afterAdd?.networks ?? []).find((n) => n.key === free);
+    record(
+      section,
+      'verificar add',
+      addedRow?.url === TEST_URL && realSurvived(afterAdd?.networks ?? []),
+      addedRow?.url === TEST_URL
+        ? realSurvived(afterAdd?.networks ?? [])
+          ? `"${free}" guardada y las ${snapshot.networks.length} red(es) reales siguen intactas`
+          : `⚠️ "${free}" se guardó pero SE PERDIERON redes reales: ${storedKeys.join(', ')}`
+        : `"${free}" no quedó guardada (leí ${addedRow?.url ?? 'nada'})`,
+      afterAdd
+    );
+
+    // 3. update — the same row, another URL
+    const edited = await step(section, 'update red', () =>
+      call(client, 'update_profile', { networks: [{ network: free, url: TEST_URL_2 }] })
+    );
+    record(
+      section,
+      'update red',
+      edited?.status === 'unverified' ? null : edited?.status === 'ok',
+      edited?.message ?? edited?.raw ?? 'sin respuesta',
+      edited
+    );
+
+    const afterEdit = await step(section, 'verificar update', () => call(client, 'read_profile', {}));
+    const editedRow = (afterEdit?.networks ?? []).find((n) => n.key === free);
+    record(
+      section,
+      'verificar update',
+      editedRow?.url === TEST_URL_2,
+      editedRow?.url === TEST_URL_2 ? 'la URL quedó actualizada' : `leí "${editedRow?.url ?? 'nada'}"`,
+      afterEdit
+    );
+
+    // 4. a network this server cannot place must be refused, not guessed
+    const bogus = await step(section, 'red desconocida', () =>
+      call(client, 'update_profile', { networks: [{ network: 'Fotolog', url: TEST_URL }] })
+    );
+    record(
+      section,
+      'red desconocida',
+      bogus?.status === 'failed',
+      bogus?.status === 'failed'
+        ? `rechazada: ${String(bogus.message).slice(0, 120)}`
+        : `esperaba failed, obtuve "${bogus?.status}"`,
+      bogus
+    );
+
+    // 5. the profile text, written and read back
+    const textWritten = await step(section, 'escribir perfil', () =>
+      call(client, 'update_profile', { description: TEST_TEXT })
+    );
+    record(
+      section,
+      'escribir perfil',
+      textWritten?.status === 'unverified' ? null : textWritten?.status === 'ok',
+      textWritten?.message ?? textWritten?.raw ?? 'sin respuesta',
+      textWritten
+    );
+
+    const afterText = await step(section, 'verificar perfil', () => call(client, 'read_profile', {}));
+    record(
+      section,
+      'verificar perfil',
+      (afterText?.description ?? '').includes(TAG),
+      (afterText?.description ?? '').includes(TAG)
+        ? `${afterText.description.length} caracteres guardados`
+        : `el texto no quedó: "${(afterText?.description ?? '').slice(0, 120)}"`,
+      afterText
+    );
+  } finally {
+    // 6. delete + restore: the test row goes, the snapshot comes back
+    const restored = await step(section, 'restaurar', () =>
+      call(client, 'update_profile', {
+        description: snapshot.description,
+        networks: wrote ? [{ network: free, url: null }] : [],
+      })
+    );
+    record(
+      section,
+      'restaurar',
+      restored?.status === 'unverified' ? null : restored?.status === 'ok',
+      restored?.message ?? restored?.raw ?? 'sin respuesta',
+      restored
+    );
+
+    const finalState = await step(section, 'estado final', () => call(client, 'read_profile', {}));
+    const leftovers = (finalState?.networks ?? []).filter((n) => n.url.includes('zz-prueba-mcp'));
+    const textLeft = (finalState?.description ?? '').includes(TAG);
+    record(
+      section,
+      'estado final',
+      leftovers.length === 0 && !textLeft && realSurvived(finalState?.networks ?? []),
+      leftovers.length || textLeft
+        ? `⚠️ QUEDÓ BASURA EN TU CvLAC: ${[...leftovers.map((l) => l.key), textLeft ? 'texto de perfil' : ''].filter(Boolean).join(', ')} — bórralo a mano`
+        : realSurvived(finalState?.networks ?? [])
+          ? 'quedó como estaba'
+          : `⚠️ faltan redes que existían antes: ${storedKeys.join(', ')}`,
+      finalState
+    );
+  }
+}
+
 async function main() {
-  const sections = (only ?? Object.keys(PLAN)).filter((s) => {
-    if (PLAN[s]) return true;
+  // `perfil` is not in PLAN: it has no list, so it runs its own shape.
+  const all = [...Object.keys(PLAN), 'perfil'];
+  const sections = (only ?? all).filter((s) => {
+    if (all.includes(s)) return true;
     console.error(`Sección desconocida: ${s}`);
     return false;
   });
@@ -387,7 +566,8 @@ async function main() {
   const client = await connect({ logFile: join(HERE, 'live-crud.log') });
   try {
     for (const section of sections) {
-      await runSection(client, section);
+      if (section === 'perfil') await runProfile(client);
+      else await runSection(client, section);
     }
   } finally {
     await client.close();
