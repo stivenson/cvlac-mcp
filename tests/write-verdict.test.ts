@@ -154,6 +154,12 @@ describe('verifiableFields', () => {
     ).toEqual({ id_institucion: '663', cod_rh_prog_acad: '0000000000-14888' });
   });
 
+  // The country input of the location picker carries name="null" — CvLAC's own
+  // slip. The form does not keep it, so it disagreed with every write.
+  it('drops the input CvLAC named "null"', () => {
+    expect(verifiableFields({ null: 'COL', cod_municipio: '991' })).toEqual({ cod_municipio: '991' });
+  });
+
   it('keeps ordinary fields', () => {
     expect(verifiableFields({ nro_ano_obten: '2022' })).toEqual({ nro_ano_obten: '2022' });
   });

@@ -93,6 +93,9 @@ export function verificationVerdict(
  * next to them are compared instead, and those are exact.
  */
 const DISPLAY_ONLY_FIELDS = new Set([
+  // Not a field name: the location picker's country input carries name="null",
+  // and the form does not keep whatever is put there.
+  'null',
   'cod_municipio_text',
   'txt_nme_institucion',
   'txt_nme_institucion_fin',

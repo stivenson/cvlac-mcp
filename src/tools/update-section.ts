@@ -981,8 +981,22 @@ async function fillEvento(page: Page, ev: EventoCientificoItem, report: FillRepo
   await humanDelay(200, 400);
 
   // Dates are readonly → inject via JS
-  await setReadonlyField(page, report, 'dta_inicioString', ev.startDate);
-  if (ev.endDate) await setReadonlyField(page, report, 'dta_finString', ev.endDate);
+  // CvLAC stores these as yyyy-mm-dd; writing a day-first date leaves the form
+  // holding one shape and the record another.
+  const startDate = cvlacDateString(ev.startDate);
+  if (startDate) {
+    await setReadonlyField(page, report, 'dta_inicioString', startDate);
+  } else {
+    missingValue(report, 'dta_inicioString', `no se pudo leer "${ev.startDate}" como fecha`);
+  }
+  if (ev.endDate) {
+    const endDate = cvlacDateString(ev.endDate);
+    if (endDate) {
+      await setReadonlyField(page, report, 'dta_finString', endDate);
+    } else {
+      missingValue(report, 'dta_finString', `no se pudo leer "${ev.endDate}" como fecha`);
+    }
+  }
   await humanDelay(200, 400);
 
   await setMunicipio(

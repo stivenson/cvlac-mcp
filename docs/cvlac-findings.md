@@ -145,3 +145,13 @@ No todas las fichas muestran lo que se editó, y eso limita qué se puede verifi
 | `formacion` | **sin fechas**; el período solo está en la lista (`all.do`) |
 
 La ficha de `formacion` además mete etiqueta y valor **en la misma celda** (`Municipio CÚCUTA`), un tercer layout que `extractDetailFields` todavía no separa.
+
+## Campos que no se pueden usar para verificar una escritura
+
+Al releer un formulario para confirmar que un cambio quedó, estos campos discrepan **siempre**, sin que nada esté mal:
+
+| Campo | Por qué |
+|---|---|
+| `cod_municipio_text`, `txt_nme_institucion`, `txt_nme_programa_acad`, `nme_inst` | son el rótulo legible de un picker; CvLAC los re-renderiza a su manera (`"Colombia - NORTE DE SANTANDER - CÚCUTA"` vuelve como `"CÚCUTA"`). El código oculto de al lado sí es exacto. |
+| `null` | no es un nombre de campo: el input de país del picker de ubicación lleva literalmente `name="null"`, y el formulario no conserva lo que se le ponga. |
+| `dta_inicioString`, `dta_finString` | se guardan en `yyyy-mm-dd`; escribirles `dd/mm/yyyy` deja el formulario con una forma y la ficha con otra. |
