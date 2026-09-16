@@ -3,7 +3,9 @@ import {
   changedFields,
   classifySubmit,
   isOutageMarkup,
+  disagreeingFields,
   storedMatchesSubmitted,
+  verifiableFields,
   verificationVerdict,
 } from '../src/tools/write-verdict.js';
 
@@ -125,5 +127,48 @@ describe('verificationVerdict', () => {
 
   it('has nothing to check when the filler changed nothing', () => {
     expect(verificationVerdict({ a: '1' }, {})).toBe('unreadable');
+  });
+});
+
+
+// Each of these is the readable half of a picker whose hidden code is what the
+// form stores, and CvLAC re-renders it its own way: a municipality submitted as
+// "Colombia - NORTE DE SANTANDER - CÚCUTA" comes back as "CÚCUTA". Comparing
+// them reported three saved updates as failures.
+describe('verifiableFields', () => {
+  it('drops the display half of a picker', () => {
+    expect(verifiableFields({ cod_municipio_text: 'Colombia - X - CÚCUTA', cod_municipio: '991' })).toEqual({
+      cod_municipio: '991',
+    });
+  });
+
+  it('drops the institution and programme captions too', () => {
+    expect(
+      verifiableFields({
+        txt_nme_institucion: 'UNIVERSIDAD X',
+        id_institucion: '663',
+        txt_nme_programa_acad: 'INGENIERIA',
+        cod_rh_prog_acad: '0000000000-14888',
+        nme_inst: 'UNIVERSIDAD X',
+      })
+    ).toEqual({ id_institucion: '663', cod_rh_prog_acad: '0000000000-14888' });
+  });
+
+  it('keeps ordinary fields', () => {
+    expect(verifiableFields({ nro_ano_obten: '2022' })).toEqual({ nro_ano_obten: '2022' });
+  });
+});
+
+describe('disagreeingFields', () => {
+  it('names the field that did not survive, so the message can say which', () => {
+    expect(disagreeingFields({ nro_ano: '2024' }, { nro_ano: '2025' })).toEqual(['nro_ano']);
+  });
+
+  it('says nothing when everything matches', () => {
+    expect(disagreeingFields({ nro_ano: '2025' }, { nro_ano: '2025' })).toEqual([]);
+  });
+
+  it('ignores fields the reread does not carry', () => {
+    expect(disagreeingFields({ nro_ano: '2025' }, { nro_ano: '2025', otro: 'x' })).toEqual([]);
   });
 });

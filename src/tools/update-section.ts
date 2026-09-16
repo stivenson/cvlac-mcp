@@ -33,7 +33,9 @@ import {
 import {
   changedFields,
   classifySubmit,
+  disagreeingFields,
   isOutageMarkup,
+  verifiableFields,
   verificationVerdict,
 } from './write-verdict.js';
 import { loadConfig } from '../config.js';
@@ -1257,7 +1259,9 @@ async function updateItem(
   await humanDelay();
   const beforeFill = await readFormValues(pageRef.page);
   await cfg.fill(pageRef.page, data, report);
-  const edits = changedFields(beforeFill, await readFormValues(pageRef.page));
+  // Captions the picker fills are left out: CvLAC re-renders them its own way,
+  // and the hidden codes beside them are what it actually stores.
+  const edits = verifiableFields(changedFields(beforeFill, await readFormValues(pageRef.page)));
   await humanDelay(400, 800);
   await clickGuardar(pageRef.page);
   const screenshotBase64 = await shot(pageRef.page);
@@ -1292,9 +1296,10 @@ async function updateItem(
 
     const verdict = verificationVerdict(stored, edits);
     if (verdict === 'contradicted') {
+      const disagreed = disagreeingFields(stored, edits);
       return failed(
-        `CvLAC returned the form again for "${label}" and the stored values do not match what was sent. ` +
-          'Nothing confirms the change; check it before retrying.',
+        `CvLAC returned the form again for "${label}" and kept its previous values in: ` +
+          `${disagreed.join(', ')}. The change was not stored.`,
         report,
         screenshotBase64
       );

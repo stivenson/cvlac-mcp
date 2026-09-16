@@ -82,3 +82,36 @@ export function verificationVerdict(
   if (comparable.length === 0) return 'unreadable';
   return storedMatchesSubmitted(stored, submitted) ? 'confirmed' : 'contradicted';
 }
+
+/**
+ * Fields whose stored form is CvLAC's to decide, not ours.
+ *
+ * Each is the readable half of a picker: the form keeps the hidden code beside
+ * it and re-renders the caption its own way, so a municipality submitted as
+ * "Colombia - NORTE DE SANTANDER - CÚCUTA" reads back as "CÚCUTA". Comparing
+ * captions reported three updates as failed that CvLAC had stored; the codes
+ * next to them are compared instead, and those are exact.
+ */
+const DISPLAY_ONLY_FIELDS = new Set([
+  'cod_municipio_text',
+  'txt_nme_institucion',
+  'txt_nme_institucion_fin',
+  'txt_nme_programa_acad',
+  'nme_inst',
+]);
+
+export function verifiableFields(fields: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(fields).filter(([key]) => !DISPLAY_ONLY_FIELDS.has(key))
+  );
+}
+
+/** Which submitted fields the reread contradicts — named, so the message can say so. */
+export function disagreeingFields(
+  stored: Record<string, string>,
+  submitted: Record<string, string>
+): string[] {
+  return Object.keys(submitted).filter(
+    (key) => key in stored && norm(stored[key]) !== norm(submitted[key])
+  );
+}
