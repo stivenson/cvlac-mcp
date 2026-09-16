@@ -1,24 +1,26 @@
 # Roadmap
 
-Dónde está `cvlac-mcp` y qué falta. Actualizado: **2026-09-13**.
+Dónde está `cvlac-mcp` y qué falta. Actualizado: **2026-09-16**.
 
 ## Estado actual
 
-Funciona de punta a punta contra el CvLAC real: lee las 7 secciones, calcula el diff contra el portafolio y escribe con supervisión. Verificado en vivo el 2026-07-20 (`add` y `delete` de un ítem de prueba en reconocimientos, revertido después).
+Funciona de punta a punta contra el CvLAC real: lee las 7 secciones, calcula el diff contra el portafolio y escribe con supervisión. **CRUD completo verificado en vivo en las 7 secciones el 2026-09-16** con `tests/e2e/live-crud.mjs`: lista → `add` → lista → detalle → `add` repetido (bloqueado) → `update` → verificación → `delete` → lista final, sin dejar nada atrás.
 
 | Área | Estado |
 |---|---|
 | Lectura de las 7 secciones | ✅ Verificada contra el CvLAC real |
 | Diff (faltantes / a actualizar / parecidos / al día) | ✅ |
 | Bloqueo de duplicados (`needs_confirmation`) | ✅ Verificado en vivo |
-| Escritura `add` / `delete` | ✅ Verificada en reconocimientos |
-| Escritura `update` | ⚠️ Implementada, sin probar en vivo |
+| Escritura `add` / `delete` | ✅ Verificada en vivo en las 7 secciones |
+| Escritura `update` | ✅ Verificada en vivo en las 7 secciones |
+| Veredicto honesto de una escritura | ✅ `ok` / `failed` / `unverified`, decidido por lo que CvLAC almacenó, no por cómo respondió |
+| Ritmo de peticiones y anti-bloqueo | ✅ Pacer, backoff, `Retry-After` y cortacircuitos, configurables por env |
 | Warnings por campo + errores del servidor | ✅ |
 | CvLAC caído (5xx) reportado como tal | ✅ Antes la sección se leía vacía |
 | Configuración personal fuera del código | ✅ |
 | Logging con redacción de secretos | ✅ |
 | Lectura de la ficha de detalle de un ítem | ✅ `read_cvlac_detail`, genérica para las 7 secciones |
-| Tests | ✅ 175 unitarios sin red, + suite e2e en vivo opt-in |
+| Tests | ✅ 291 unitarios sin red, + suite e2e en vivo opt-in |
 
 ## Limitaciones conocidas
 
@@ -27,18 +29,16 @@ Cosas que el diseño actual no puede hacer, no bugs pendientes.
 - **Experiencia profesional está fuera del diff.** Los nombres de empresa en CvLAC difieren demasiado de los del portafolio ("MO TECNOLOGIAS COLOMBIA SAS" vs "Mo Technologies (Mastercard)") y el cargo no aparece en la lista, solo en el detalle. Un match automático generaría falsos faltantes. Se gestiona a mano.
 - **Proyectos, software y eventos solo se pueden crear, nunca actualizar.** Su vista de lista muestra únicamente el nombre, así que no hay con qué comparar para detectar un cambio.
 - **El parseo del portafolio es frágil por diseño.** `portfolio.ts` lee el bundle minificado de una SPA con expresiones regulares que dependen del orden exacto de propiedades. Un cambio del bundler lo rompe en silencio (devuelve listas vacías).
-- **Los pickers readonly de fecha y municipio se inyectan por JS.** Funciona, pero algunos formularios no persisten el valor — pasó con las fechas del evento ACOFI 2026, que hubo que corregir a mano.
+- **Los pickers readonly de fecha y municipio se inyectan por JS.** Ya no se pierden valores: el municipio se resuelve por la cascada del popup (su código no es el DANE) y las fechas van en `yyyy-mm-dd`. Ver `docs/cvlac-findings.md`.
 - **No hay tools para áreas de actuación, líneas de investigación ni idiomas.** Esas secciones se completan en la interfaz web.
 
 ## Siguiente
 
 Ordenado por relación valor/riesgo.
 
-### 1. Correr la suite e2e en vivo
+### 1. Fichas antiguas con un tercer layout
 
-`tests/e2e/live-crud.mjs` automatiza lo que antes era una prueba manual en reconocimientos, y lo hace para las 7 secciones: lista → `add` → lista → `read_cvlac_detail` → `add` repetido (debe dar `needs_confirmation`) → `update` → detalle → `delete` → lista final. Corre con `CVLAC_E2E=1 npm run test:e2e:live`.
-
-Queda pendiente **la corrida**, no el código: CvLAC estuvo devolviendo 503 el 2026-09-13. Hasta que corra, `update` sigue sin verificación en vivo en ninguna sección.
+`extractDetailFields` cubre los dos layouts conocidos (etiqueta y valor en la misma fila; fila de etiquetas en `<b>` sobre fila de valores). Algunas fichas viejas —vistas en `cursos`— no marcan sus etiquetas con `<b>` y salen emparejadas mal (`Sitio web (URL)=DOI`). No afecta escrituras, solo la lectura de esos registros.
 
 ### 2. Cerrar las secciones manuales del CvLAC
 
