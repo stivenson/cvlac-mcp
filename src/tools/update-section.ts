@@ -17,6 +17,7 @@ import { BASE_URL, URLS, SECTION_LIST } from '../browser/navigation.js';
 import { navigate } from '../browser/navigate.js';
 import {
   catalogueQuery,
+  countryOption,
   cvlacDateString,
   projectValueApplies,
   municipioDisplayName,
@@ -629,7 +630,7 @@ async function fillFormacion(page: Page, edu: EducationItem, report: FillReport)
 
   if (defaults.horasSemanales !== undefined) {
     await tryField(report, 'nro_horas_semanales', () =>
-      page.fill('input[name="nro_horas_semanales"]', String(defaults.horasSemanales))
+      page.fill('input:not([type="hidden"])[name="nro_horas_semanales"]', String(defaults.horasSemanales))
     );
   } else {
     missingValue(report, 'nro_horas_semanales', 'define defaults.horasSemanales en cvlac.config.json');
@@ -659,7 +660,7 @@ async function fillExperiencia(page: Page, exp: ExperienceItem, report: FillRepo
   // alone stored every experience as zero hours a week.
   if (defaults.horasSemanales !== undefined) {
     await tryField(report, 'nro_hora_dedicacion', () =>
-      page.fill('input[name="nro_hora_dedicacion"]', String(defaults.horasSemanales))
+      page.fill('input:not([type="hidden"])[name="nro_hora_dedicacion"]', String(defaults.horasSemanales))
     );
   } else {
     missingValue(report, 'nro_hora_dedicacion', 'define defaults.horasSemanales en cvlac.config.json');
@@ -681,7 +682,7 @@ async function fillExperiencia(page: Page, exp: ExperienceItem, report: FillRepo
     );
     if (!ok) {
       report.warnings.pop();
-      await tryField(report, 'nro_ano_inicio', () => page.fill('input[name="nro_ano_inicio"]', start));
+      await tryField(report, 'nro_ano_inicio', () => page.fill('input:not([type="hidden"])[name="nro_ano_inicio"]', start));
     }
   }
   if (end) {
@@ -690,7 +691,7 @@ async function fillExperiencia(page: Page, exp: ExperienceItem, report: FillRepo
     );
     if (!ok) {
       report.warnings.pop();
-      await tryField(report, 'nro_ano_fin', () => page.fill('input[name="nro_ano_fin"]', end));
+      await tryField(report, 'nro_ano_fin', () => page.fill('input:not([type="hidden"])[name="nro_ano_fin"]', end));
     }
   }
   await humanDelay(200, 400);
@@ -699,7 +700,7 @@ async function fillExperiencia(page: Page, exp: ExperienceItem, report: FillRepo
 async function fillCurso(page: Page, course: CourseItem, report: FillReport): Promise<void> {
   const defaults = loadConfig().defaults ?? {};
 
-  await tryField(report, 'txt_nme_prod', () => page.fill('input[name="txt_nme_prod"]', course.name));
+  await tryField(report, 'txt_nme_prod', () => page.fill('input:not([type="hidden"])[name="txt_nme_prod"]', course.name));
   await humanDelay(200, 500);
 
   // cod_tipo_producto is a radio; without it CvLAC rejects the form.
@@ -732,11 +733,11 @@ async function fillCurso(page: Page, course: CourseItem, report: FillReport): Pr
   }
   if (course.duracionHoras !== undefined) {
     await tryField(report, 'nro_duracion', () =>
-      page.fill('input[name="nro_duracion"]', String(course.duracionHoras))
+      page.fill('input:not([type="hidden"])[name="nro_duracion"]', String(course.duracionHoras))
     );
   }
   if (course.lugar) {
-    await tryField(report, 'txt_lugar', () => page.fill('input[name="txt_lugar"]', course.lugar!));
+    await tryField(report, 'txt_lugar', () => page.fill('input:not([type="hidden"])[name="txt_lugar"]', course.lugar!));
   }
 
   const idioma = course.idioma ?? defaults.idioma;
@@ -748,7 +749,9 @@ async function fillCurso(page: Page, course: CourseItem, report: FillReport): Pr
 
   const pais = course.pais ?? defaults.pais;
   if (pais) {
-    await tryField(report, 'sgl_pais', () => page.selectOption('select[name="sgl_pais"]', pais));
+    await tryField(report, 'sgl_pais', () =>
+      page.selectOption('select[name="sgl_pais"]', countryOption(pais)!)
+    );
   } else {
     missingValue(report, 'sgl_pais', 'define defaults.pais en cvlac.config.json');
   }
@@ -764,7 +767,7 @@ async function fillCurso(page: Page, course: CourseItem, report: FillReport): Pr
 
 async function fillReconocimiento(page: Page, ach: AchievementItem, report: FillReport): Promise<void> {
   await tryField(report, 'txt_nme_reconocimiento', () =>
-    page.fill('input[name="txt_nme_reconocimiento"]', ach.title)
+    page.fill('input:not([type="hidden"])[name="txt_nme_reconocimiento"]', ach.title)
   );
   await humanDelay(200, 400);
 
@@ -798,7 +801,7 @@ async function fillProyecto(page: Page, proj: ProjectItem, report: FillReport): 
   await humanDelay(200, 400);
 
   await tryField(report, 'txt_nme_proyecto', () =>
-    page.fill('input[name="txt_nme_proyecto"]', proj.title)
+    page.fill('input:not([type="hidden"])[name="txt_nme_proyecto"]', proj.title)
   );
   await humanDelay(200, 400);
 
@@ -855,7 +858,7 @@ async function fillProyecto(page: Page, proj: ProjectItem, report: FillReport): 
   // The administrative act and its date stay on screen — and required — whatever
   // the financing is; only the amount hides on a non-financed project.
   await tryField(report, 'txt_acto_adm', () =>
-    page.fill('input[name="txt_acto_adm"]', proj.nroActoAdministrativo ?? 'N/A', {
+    page.fill('input:not([type="hidden"])[name="txt_acto_adm"]', proj.nroActoAdministrativo ?? 'N/A', {
       timeout: FIELD_TIMEOUT_MS,
     })
   );
@@ -885,7 +888,7 @@ async function fillProyecto(page: Page, proj: ProjectItem, report: FillReport): 
   if (projectValueApplies(tipoFin)) {
     if (proj.valorSinContrapartida) {
       await tryField(report, 'nro_valor', () =>
-        page.fill('input[name="nro_valor"]', proj.valorSinContrapartida!, { timeout: FIELD_TIMEOUT_MS })
+        page.fill('input:not([type="hidden"])[name="nro_valor"]', proj.valorSinContrapartida!, { timeout: FIELD_TIMEOUT_MS })
       );
       if (Number(proj.valorSinContrapartida) < 10000000) {
         report.warnings.push(
@@ -910,7 +913,7 @@ async function fillSoftware(page: Page, sw: SoftwareItem, report: FillReport): P
   );
   await humanDelay(200, 400);
 
-  await tryField(report, 'txt_nme_prod', () => page.fill('input[name="txt_nme_prod"]', sw.name));
+  await tryField(report, 'txt_nme_prod', () => page.fill('input:not([type="hidden"])[name="txt_nme_prod"]', sw.name));
   await humanDelay(200, 400);
 
   await tryField(report, 'nro_ano_presenta', () =>
@@ -925,7 +928,7 @@ async function fillSoftware(page: Page, sw: SoftwareItem, report: FillReport): P
 
   if (sw.url) {
     await tryField(report, 'txt_web_producto', () =>
-      page.fill('input[name="txt_web_producto"]', sw.url!)
+      page.fill('input:not([type="hidden"])[name="txt_web_producto"]', sw.url!)
     );
     await humanDelay(200, 300);
   }
@@ -965,7 +968,7 @@ async function fillEvento(page: Page, ev: EventoCientificoItem, report: FillRepo
   await page.waitForLoadState('networkidle').catch(() => {});
   await humanDelay(400, 800);
 
-  await tryField(report, 'txt_nme_evento', () => page.fill('input[name="txt_nme_evento"]', ev.name));
+  await tryField(report, 'txt_nme_evento', () => page.fill('input:not([type="hidden"])[name="txt_nme_evento"]', ev.name));
   await humanDelay(200, 400);
 
   if (ev.tipoEvento) {
@@ -1008,7 +1011,7 @@ async function fillEvento(page: Page, ev: EventoCientificoItem, report: FillRepo
   await humanDelay(200, 400);
 
   if (ev.lugar) {
-    await tryField(report, 'txt_lugar', () => page.fill('input[name="txt_lugar"]', ev.lugar!));
+    await tryField(report, 'txt_lugar', () => page.fill('input:not([type="hidden"])[name="txt_lugar"]', ev.lugar!));
     await humanDelay(200, 300);
   }
 
@@ -1134,6 +1137,59 @@ export async function findRowActionHref(
 }
 
 /**
+ * Copies what a filler set into the hidden twins that share the field's name.
+ *
+ * CvLAC's edit pages carry a hidden copy of several fields — txt_nme_prod,
+ * nro_ano_presenta and friends — holding the stored value, ahead of the control
+ * a person edits. Both go out in the POST and Struts keeps the first, so an edit
+ * that looked applied on screen was discarded on arrival: the course year never
+ * moved off its original value.
+ */
+async function syncHiddenDuplicates(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const synced: string[] = [];
+    const named = Array.from(
+      document.querySelectorAll('input[name], select[name], textarea[name]')
+    ) as Array<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>;
+
+    const byName = new Map<string, typeof named>();
+    for (const el of named) {
+      const name = el.getAttribute('name');
+      if (!name) continue;
+      const list = byName.get(name) ?? [];
+      list.push(el);
+      byName.set(name, list);
+    }
+
+    const isHidden = (el: Element): boolean =>
+      el instanceof HTMLInputElement && el.type.toLowerCase() === 'hidden';
+
+    for (const [name, group] of byName) {
+      if (group.length < 2) continue;
+      const editable = group.find((el) => !isHidden(el));
+      if (!editable) continue;
+
+      const value =
+        editable instanceof HTMLInputElement &&
+        (editable.type === 'radio' || editable.type === 'checkbox')
+          ? (group.find((el) => el instanceof HTMLInputElement && el.checked) as HTMLInputElement | undefined)
+              ?.value
+          : editable.value;
+      if (value === undefined) continue;
+
+      for (const el of group) {
+        if (el === editable || !isHidden(el)) continue;
+        if (el.value !== value) {
+          (el as HTMLInputElement).value = value;
+          synced.push(name);
+        }
+      }
+    }
+    return synced;
+  });
+}
+
+/**
  * Whether what came back is MinCiencias' outage page rather than CvLAC.
  *
  * It is served for any URL and carries no CvLAC markup, so a submit that lands
@@ -1228,6 +1284,7 @@ async function addItem(
   await gotoFormWithRelogin(pageRef, cfg.createUrl);
   await humanDelay();
   await cfg.fill(pageRef.page, data, report);
+  await syncHiddenDuplicates(pageRef.page);
   await humanDelay(400, 800);
   await clickGuardar(pageRef.page);
   const screenshotBase64 = await shot(pageRef.page);
@@ -1275,6 +1332,10 @@ async function updateItem(
   await cfg.fill(pageRef.page, data, report);
   // Captions the picker fills are left out: CvLAC re-renders them its own way,
   // and the hidden codes beside them are what it actually stores.
+  const synced = await syncHiddenDuplicates(pageRef.page);
+  if (synced.length > 0) {
+    log.debug('hidden duplicates aligned with the visible controls', { fields: synced });
+  }
   const edits = verifiableFields(changedFields(beforeFill, await readFormValues(pageRef.page)));
   await humanDelay(400, 800);
   await clickGuardar(pageRef.page);

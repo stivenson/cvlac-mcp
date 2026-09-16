@@ -155,3 +155,27 @@ Al releer un formulario para confirmar que un cambio quedó, estos campos discre
 | `cod_municipio_text`, `txt_nme_institucion`, `txt_nme_programa_acad`, `nme_inst` | son el rótulo legible de un picker; CvLAC los re-renderiza a su manera (`"Colombia - NORTE DE SANTANDER - CÚCUTA"` vuelve como `"CÚCUTA"`). El código oculto de al lado sí es exacto. |
 | `null` | no es un nombre de campo: el input de país del picker de ubicación lleva literalmente `name="null"`, y el formulario no conserva lo que se le ponga. |
 | `dta_inicioString`, `dta_finString` | se guardan en `yyyy-mm-dd`; escribirles `dd/mm/yyyy` deja el formulario con una forma y la ficha con otra. |
+
+## Los `edit.do` traen copias ocultas de sus propios campos
+
+El formulario de edición de cursos (`EnProdCurso/edit.do?cod_producto=N&cod_rh=...`) arranca con un bloque de hidden que repite nombres del formulario visible, con **los valores almacenados**:
+
+```html
+<input type="hidden" name="txt_nme_prod"     value="Curso Especial en Proyecto de Vida (SENA)">
+<input type="hidden" name="nro_ano_presenta" value="2012">
+<input type="hidden" name="nro_mes_presenta" value="1">
+...
+<input type="text"   name="txt_nme_prod" id="txt_nme_prod" value="Curso Especial...">
+<select name="nro_ano_presenta">...</select>
+```
+
+Dos efectos, los dos silenciosos:
+
+1. Un `page.fill('input[name="txt_nme_prod"]')` apunta al **oculto** (es el primero del DOM) y se queda esperando a que sea editable hasta agotar el timeout.
+2. El POST lleva el campo **dos veces** y Struts se queda con el primero, o sea con el valor viejo. La edición se ve aplicada en pantalla y llega descartada: el año del curso nunca se movía.
+
+Por eso `syncHiddenDuplicates()` corre después de cada `fill` y antes de Guardar, y los `page.fill` apuntan a `input:not([type="hidden"])[name=...]`.
+
+## Códigos de país: tres letras
+
+Los selects `sgl_pais` usan códigos de **tres** letras (`COL`, `ARG`). `cvlac.config.json` y el portafolio usan ISO de dos (`CO`), que no coincide con ninguna opción: el select se queda como estaba y la llamada agota su timeout. `countryOption()` traduce lo que sabe con certeza y deja pasar el resto.

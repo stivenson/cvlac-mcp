@@ -185,3 +185,21 @@ export function municipioDisplayName(
 ): string {
   return [pais, departamento, municipio].filter(Boolean).join(' - ');
 }
+
+/**
+ * The country code a CvLAC select actually carries.
+ *
+ * Its options are three letters (COL, ARG), while `cvlac.config.json` and the
+ * portfolio use the two-letter ISO code. Asking for "CO" matched no option, so
+ * the select kept whatever it had and the call waited out its timeout.
+ *
+ * Only the mapping this server can be sure of is applied; anything else is
+ * passed through, so a wrong guess never reaches a record.
+ */
+const COUNTRY_THREE_LETTER: Record<string, string> = { CO: 'COL' };
+
+export function countryOption(code: string | undefined): string | undefined {
+  if (!code) return code;
+  const upper = code.toUpperCase();
+  return COUNTRY_THREE_LETTER[upper] ?? upper;
+}

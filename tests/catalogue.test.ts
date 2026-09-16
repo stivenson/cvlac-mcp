@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   catalogueQuery,
+  countryOption,
   municipioDisplayName,
   parseDepartamentosXml,
   parseMunicipiosXml,
@@ -201,5 +202,27 @@ describe('municipioDisplayName', () => {
 
   it('leaves the department out when there is none', () => {
     expect(municipioDisplayName('Colombia', null, 'CÚCUTA')).toBe('Colombia - CÚCUTA');
+  });
+});
+
+// CvLAC's country selects speak three-letter codes. cvlac.config.json carries
+// "CO", which matched no option and left the select untouched for 10s.
+describe('countryOption', () => {
+  it('turns the two-letter code into the one the select carries', () => {
+    expect(countryOption('CO')).toBe('COL');
+  });
+
+  it('leaves a three-letter code alone', () => {
+    expect(countryOption('COL')).toBe('COL');
+    expect(countryOption('ARG')).toBe('ARG');
+  });
+
+  it('is case-insensitive', () => {
+    expect(countryOption('co')).toBe('COL');
+  });
+
+  it('passes through anything it does not know, rather than guessing', () => {
+    expect(countryOption('XX')).toBe('XX');
+    expect(countryOption(undefined)).toBeUndefined();
   });
 });
