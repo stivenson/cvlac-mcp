@@ -15,6 +15,7 @@ export const educationSchema = z.object({
   description: z.string().optional(),
   nivel: z.string().optional(),
   startMonth: z.string().optional(),
+  institucionId: z.string().optional(),
 });
 
 export const experienceSchema = z.object({
@@ -24,6 +25,7 @@ export const experienceSchema = z.object({
   modality: z.string().optional(),
   description: z.array(z.string()).optional(),
   technologies: z.array(z.string()).optional(),
+  institucionId: z.string().optional(),
 });
 
 export const courseSchema = z.object({

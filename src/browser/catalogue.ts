@@ -203,3 +203,42 @@ export function countryOption(code: string | undefined): string | undefined {
   const upper = code.toUpperCase();
   return COUNTRY_THREE_LETTER[upper] ?? upper;
 }
+
+export type CatalogueResolution<T> =
+  | { kind: 'exact'; item: T }
+  | { kind: 'ambiguous'; options: T[] }
+  | { kind: 'none' };
+
+/**
+ * Which row of a CvLAC picker a name means — or that a person has to say.
+ *
+ * Searching "UNIVERSIDAD SIMON BOLIVAR" returns 193 institutions: the one in
+ * Venezuela, the Andina, several sedes, a teachers' union and an employees'
+ * fund. Taking the first partial match attached the record to whichever CvLAC
+ * listed first, silently and with no undo.
+ *
+ * An exact name still resolves on its own — that is the ordinary case, and
+ * asking about it would be noise. Anything less decides nothing.
+ */
+export function resolveChoice<T>(
+  items: T[],
+  wanted: string,
+  labelOf: (item: T) => string,
+  limit = 10
+): CatalogueResolution<T> {
+  const target = norm(wanted);
+  if (!target || items.length === 0) return { kind: 'none' };
+
+  const exact = items.filter((item) => norm(labelOf(item)) === target);
+  if (exact.length === 1) return { kind: 'exact', item: exact[0] };
+  if (exact.length > 1) return { kind: 'ambiguous', options: exact.slice(0, limit) };
+
+  const partial = items.filter((item) => {
+    const label = norm(labelOf(item));
+    return label.includes(target) || target.includes(label);
+  });
+  if (partial.length === 1) return { kind: 'exact', item: partial[0] };
+  if (partial.length > 1) return { kind: 'ambiguous', options: partial.slice(0, limit) };
+
+  return { kind: 'none' };
+}

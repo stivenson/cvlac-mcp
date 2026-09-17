@@ -4,6 +4,7 @@ import type {
   UpdateRequest,
   UpdateResult,
   CvLACSectionName,
+  AmbiguousChoice,
   SimilarCandidate,
   EducationItem,
   ExperienceItem,
@@ -30,6 +31,8 @@ import {
   parseProgramaOptions,
   pickMunicipio,
   pickPrograma,
+  resolveChoice,
+  type CatalogueResolution,
   type CatalogueOption,
   type MunicipioRow,
 } from '../browser/catalogue.js';
@@ -45,6 +48,7 @@ import {
   undeletableRefusal,
   isServerErrorMarkup,
   blockedRefusal,
+  choiceConfirmation,
 } from './write-verdict.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logger.js';
@@ -73,6 +77,8 @@ interface FillReport {
    * with a message.
    */
   blockers?: string[];
+  /** Pickers that matched several rows and need a person to choose. */
+  choices?: AmbiguousChoice[];
 }
 
 /**
@@ -117,7 +123,10 @@ function normStr(s: string): string {
  * Returns null when nothing matches: writing id 0 would save an entry pointing at
  * a non-existent institution, which is worse than letting the form reject it.
  */
-async function findInstitucionId(page: Page, name: string): Promise<{ id: number; nme: string } | null> {
+async function findInstitucionId(
+  page: Page,
+  name: string
+): Promise<CatalogueResolution<{ id: number; nmeInst: string }>> {
   // Try progressively shorter search terms: full name, then each word (longest first)
   const searchTerms = [name, ...name.split(/\s+/).filter((w) => w.length > 4).sort((a, b) => b.length - a.length)];
 
@@ -136,26 +145,17 @@ async function findInstitucionId(page: Page, name: string): Promise<{ id: number
       }
     }, url);
 
-    if (!response.ok) return null;
+    if (!response.ok) return { kind: 'none' };
 
     const items = response.items as Array<{ id: number; nmeInst: string }>;
     if (!Array.isArray(items) || items.length === 0) continue;
 
-    const normQuery = normStr(name);
-
-    const exact = items.find((r) => normStr(r.nmeInst) === normQuery);
-    if (exact) return { id: exact.id, nme: exact.nmeInst };
-
-    const partial = items.find((r) => {
-      const n = normStr(r.nmeInst);
-      return n.includes(normQuery) || normQuery.includes(n);
-    });
-    if (partial) return { id: partial.id, nme: partial.nmeInst };
-
-    return null;
+    // A shorter term can only be vaguer, so whatever this one says is the answer.
+    const resolved = resolveChoice(items, name, (r) => r.nmeInst);
+    if (resolved.kind !== 'none') return resolved;
   }
 
-  return null;
+  return { kind: 'none' };
 }
 
 /** Set a readonly institution picker (hidden id + visible readonly name) using the search API */
@@ -164,15 +164,33 @@ async function setInstitucionFields(
   report: FillReport,
   name: string,
   idField: string,
-  nmeField: string
+  nmeField: string,
+  /** CvLAC's own id, when a person has already chosen among the candidates. */
+  explicitId?: string
 ): Promise<void> {
-  const found = await findInstitucionId(page, name);
-  if (!found) {
-    report.warnings.push(
-      `institución "${name}": no existe en el catálogo de CvLAC; el campo queda vacío`
-    );
-    log.warn('institution not found in CvLAC catalogue', { name });
-    return;
+  let found: { id: number; nmeInst: string };
+
+  if (explicitId) {
+    found = { id: Number(explicitId), nmeInst: name };
+  } else {
+    const resolved = await findInstitucionId(page, name);
+    if (resolved.kind === 'none') {
+      report.warnings.push(
+        `institución "${name}": no existe en el catálogo de CvLAC; el campo queda vacío`
+      );
+      log.warn('institution not found in CvLAC catalogue', { name });
+      return;
+    }
+    if (resolved.kind === 'ambiguous') {
+      log.info('institution name matched several rows; asking', { name, options: resolved.options.length });
+      (report.choices ??= []).push({
+        field: 'institución',
+        value: name,
+        options: resolved.options.map((o) => ({ id: String(o.id), label: o.nmeInst })),
+      });
+      return;
+    }
+    found = resolved.item;
   }
   await page.evaluate(
     ({ instId, instNme, idF, nmeF }) => {
@@ -185,7 +203,7 @@ async function setInstitucionFields(
         nmeEl.dispatchEvent(new Event('change', { bubbles: true }));
       }
     },
-    { instId: found.id, instNme: found.nme, idF: idField, nmeF: nmeField }
+    { instId: found.id, instNme: found.nmeInst, idF: idField, nmeF: nmeField }
   );
 }
 
@@ -333,8 +351,13 @@ async function setProgramaAcademico(
 }
 
 /** Default institution picker used by formación / eventos (id_institucion + txt_nme_institucion) */
-async function setInstitucion(page: Page, report: FillReport, name: string): Promise<void> {
-  await setInstitucionFields(page, report, name, 'id_institucion', 'txt_nme_institucion');
+async function setInstitucion(
+  page: Page,
+  report: FillReport,
+  name: string,
+  explicitId?: string
+): Promise<void> {
+  await setInstitucionFields(page, report, name, 'id_institucion', 'txt_nme_institucion', explicitId);
 }
 
 /**
@@ -698,7 +721,7 @@ async function fillTrayectoriaEscolar(
   );
   await humanDelay(200, 500);
 
-  await setInstitucion(page, report, edu.institution);
+  await setInstitucion(page, report, edu.institution, edu.institucionId);
   await humanDelay(200, 500);
 
   await setMunicipio(page, report, defaults.municipio?.nombre, defaults.municipio?.codigoDane);
@@ -765,7 +788,7 @@ const fillFormacionComple = (page: Page, edu: EducationItem, report: FillReport)
 async function fillExperiencia(page: Page, exp: ExperienceItem, report: FillReport): Promise<void> {
   const defaults = loadConfig().defaults ?? {};
 
-  await setInstitucion(page, report, exp.company);
+  await setInstitucion(page, report, exp.company, exp.institucionId);
   await humanDelay(200, 500);
 
   // "Dedicación (*)" is required and defaulted to 0 by the form; leaving it
@@ -1510,6 +1533,10 @@ async function addItem(
   await gotoFormWithRelogin(pageRef, cfg.createUrl);
   await humanDelay();
   await cfg.fill(pageRef.page, data, report);
+  if (report.choices?.length) {
+    const c = report.choices[0];
+    return choiceConfirmation(c.field, c.value, c.options);
+  }
   if (report.blockers?.length) {
     return blockedRefusal(label, report.blockers, report.warnings);
   }
@@ -1572,6 +1599,10 @@ async function updateItem(
   const synced = await syncHiddenDuplicates(pageRef.page);
   if (synced.length > 0) {
     log.debug('hidden duplicates aligned with the visible controls', { fields: synced });
+  }
+  if (report.choices?.length) {
+    const c = report.choices[0];
+    return choiceConfirmation(c.field, c.value, c.options);
   }
   if (report.blockers?.length) {
     return blockedRefusal(label, report.blockers, report.warnings);

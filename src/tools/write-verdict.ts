@@ -7,7 +7,7 @@
  * verdict — when the server says nothing, the stored values decide.
  */
 
-import type { UpdateResult } from '../types.js';
+import type { ChoiceOption, UpdateResult } from '../types.js';
 
 export type SubmitOutcome = 'saved' | 'rejected' | 'unverified';
 
@@ -207,5 +207,28 @@ export function blockedRefusal(label: string, blockers: string[], warnings: stri
       `Nothing was written for "${label}": ${blockers.join('; ')}. ` +
       `CvLAC requires that field, so the form was not submitted.`,
     warnings: warnings.length ? warnings : undefined,
+  };
+}
+
+/**
+ * The answer when a CvLAC picker matched several rows.
+ *
+ * Which organisation a record hangs off is not a detail this server should
+ * settle by list order. It is the same shape as the duplicate guard: nothing is
+ * written, the candidates come back, and a person decides.
+ */
+export function choiceConfirmation(
+  field: string,
+  value: string,
+  options: ChoiceOption[]
+): UpdateResult {
+  return {
+    success: false,
+    status: 'needs_confirmation',
+    message:
+      `Nothing was written: "${value}" matches ${options.length} rows of CvLAC's ${field} catalogue, ` +
+      `and picking the wrong one files the record under another organisation. ` +
+      `Choose one and repeat with its id in "institucionId".`,
+    choices: [{ field, value, options }],
   };
 }

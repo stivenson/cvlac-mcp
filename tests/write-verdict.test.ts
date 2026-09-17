@@ -12,6 +12,7 @@ import {
   undeletableRefusal,
   isServerErrorMarkup,
   blockedRefusal,
+  choiceConfirmation,
 } from '../src/tools/write-verdict.js';
 
 describe('classifySubmit', () => {
@@ -270,5 +271,31 @@ describe('blockedRefusal', () => {
   it('keeps the ordinary warnings apart from the blocker', () => {
     const result = blockedRefusal('x', ['falta el programa'], ['municipio: se ignoró el DANE']);
     expect(result.warnings).toEqual(['municipio: se ignoró el DANE']);
+  });
+});
+
+// Ambiguity in a CvLAC picker is the user's call, not this server's: the wrong
+// row is a record attached to another organisation, and there is no undo.
+describe('choiceConfirmation', () => {
+  const options = [
+    { id: '603', label: 'UNIVERSIDAD SIMÓN BOLÍVAR' },
+    { id: '20324', label: 'Universidad Simón Bolívar - Venezuela' },
+  ];
+
+  it('writes nothing and returns needs_confirmation', () => {
+    const result = choiceConfirmation('institución', 'Universidad Simón Bolívar', options);
+    expect(result.success).toBe(false);
+    expect(result.status).toBe('needs_confirmation');
+  });
+
+  it('carries the candidates, with the id needed to pick one', () => {
+    const result = choiceConfirmation('institución', 'Universidad Simón Bolívar', options);
+    expect(result.choices).toEqual([
+      { field: 'institución', value: 'Universidad Simón Bolívar', options },
+    ]);
+  });
+
+  it('says how to answer', () => {
+    expect(choiceConfirmation('institución', 'x', options).message).toMatch(/institucionId|id/i);
   });
 });

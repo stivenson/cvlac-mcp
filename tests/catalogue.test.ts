@@ -12,6 +12,7 @@ import {
   pickPrograma,
   pickMunicipio,
   needsProgramaAcademico,
+  resolveChoice,
 } from '../src/browser/catalogue.js';
 
 // Shape returned by queryPrograma.do, whitespace and all.
@@ -224,5 +225,50 @@ describe('countryOption', () => {
   it('passes through anything it does not know, rather than guessing', () => {
     expect(countryOption('XX')).toBe('XX');
     expect(countryOption(undefined)).toBeUndefined();
+  });
+});
+
+// Searching an institution by name returns 193 rows for "UNIVERSIDAD SIMON
+// BOLIVAR": the one in Venezuela, the Andina, sedes, a teachers' union and an
+// employees' fund. Taking the first partial match attaches a record to whichever
+// of them CvLAC happened to list first.
+describe('resolveChoice', () => {
+  const rows = [
+    { id: 42724, name: 'Sindicato de Profesores Universidad Simón Bolívar' },
+    { id: 603, name: 'UNIVERSIDAD SIMÓN BOLÍVAR' },
+    { id: 20324, name: 'Universidad Simón Bolívar - Venezuela' },
+  ];
+  const label = (r: { name: string }) => r.name;
+
+  it('settles on the row whose name matches exactly, wherever it sits', () => {
+    const out = resolveChoice(rows, 'Universidad Simon Bolivar', label);
+    expect(out.kind).toBe('exact');
+    expect(out.kind === 'exact' && out.item.id).toBe(603);
+  });
+
+  it('asks when only partial matches are left', () => {
+    const out = resolveChoice(rows, 'Simón Bolívar', label);
+    expect(out.kind).toBe('ambiguous');
+    expect(out.kind === 'ambiguous' && out.options.length).toBe(3);
+  });
+
+  it('takes a lone partial match without asking', () => {
+    const out = resolveChoice(rows, 'Venezuela', label);
+    expect(out.kind).toBe('exact');
+    expect(out.kind === 'exact' && out.item.id).toBe(20324);
+  });
+
+  it('reports nothing matched rather than offering the whole list', () => {
+    expect(resolveChoice(rows, 'Universidad de Nariño', label).kind).toBe('none');
+  });
+
+  it('caps how many options it offers, since the search returns hundreds', () => {
+    const many = Array.from({ length: 50 }, (_, i) => ({ id: i, name: `Universidad ${i}` }));
+    const out = resolveChoice(many, 'Universidad', label, 10);
+    expect(out.kind === 'ambiguous' && out.options.length).toBe(10);
+  });
+
+  it('handles an empty result', () => {
+    expect(resolveChoice([], 'x', label).kind).toBe('none');
   });
 });

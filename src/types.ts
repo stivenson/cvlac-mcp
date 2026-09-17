@@ -13,6 +13,11 @@ export interface EducationItem {
   nivel?: string;
   /** Month of 1-12. Only formación complementaria asks for it. */
   startMonth?: string;
+  /**
+   * CvLAC's own institution id. Searching by name can match hundreds of rows;
+   * when it does, the write stops and asks, and the answer comes back here.
+   */
+  institucionId?: string;
 }
 
 export interface ExperienceItem {
@@ -22,6 +27,8 @@ export interface ExperienceItem {
   modality: string;
   description: string[];
   technologies?: string[];
+  /** CvLAC's own institution id, when the name matched several rows. */
+  institucionId?: string;
 }
 
 export interface CourseItem {
@@ -204,6 +211,21 @@ export interface DiffItem {
 /** How closely a portfolio item matched something already in CvLAC. */
 export type MatchType = 'exact' | 'same' | 'similar' | 'none';
 
+/** One row of a CvLAC picker, offered so a person can say which was meant. */
+export interface ChoiceOption {
+  id: string;
+  label: string;
+}
+
+/** A picker whose search did not settle on one row. */
+export interface AmbiguousChoice {
+  /** Which picker: "institución", "municipio"… */
+  field: string;
+  /** What was searched for. */
+  value: string;
+  options: ChoiceOption[];
+}
+
 export interface SimilarCandidate {
   label: string;
   matchType: Exclude<MatchType, 'none'>;
@@ -293,6 +315,8 @@ export interface UpdateResult {
   warnings?: string[];
   /** Existing CvLAC items that blocked an add; set when status is 'needs_confirmation'. */
   similar?: SimilarCandidate[];
+  /** Pickers that matched several rows; set when status is 'needs_confirmation'. */
+  choices?: AmbiguousChoice[];
   screenshotBase64?: string;
 }
 

@@ -71,6 +71,8 @@ Flujo de datos: `index.ts` → `server.ts` (router) → `tools/*` → `browser/s
 
 `idiomas` y `lineas` se leen y escriben, pero no se diffean: el portafolio no tiene de dónde compararlas.
 
+**Todo combobox ambiguo pregunta.** Buscar una institución por nombre puede devolver cientos de filas — "UNIVERSIDAD SIMON BOLIVAR" da 193, incluida la de Venezuela y un sindicato de profesores. Antes se tomaba la primera coincidencia parcial. Ahora: coincidencia exacta resuelve sola; cualquier otra cosa devuelve `needs_confirmation` con los candidatos y no escribe. La respuesta vuelve en `data.institucionId`.
+
 **Todo borrado pide confirmación.** `update_section` con `action:"delete"` y `update_profile` con una red en `url:null` devuelven `needs_confirmation` y no escriben nada hasta que se repitan con `confirm_delete:true`. La etiqueta con la que se encuentra una fila hace match flexible: sin la segunda vuelta, un nombre parecido borra el registro del vecino.
 
 `read_profile` / `update_profile` quedan aparte a propósito: el perfil y las redes académicas

@@ -339,4 +339,15 @@ Buscar "UNIVERSIDAD SIMON BOLIVAR" devuelve **193 instituciones** — la de Vene
 
 Ninguna de las primeras doce tiene programas en niveles de formación complementaria, y el registro real de este CvLAC está bajo "UNIVERSIDAD SIMON BOLIVAR (SEDE CÚCUTA)", que no sale entre ellas.
 
-Riesgo real y silencioso: un `add` de formación o experiencia puede quedar colgado de la institución equivocada sin que nada lo avise. Pendiente de resolver como los duplicados: preferir coincidencia exacta y, si hay ambigüedad, devolver candidatos en vez de elegir.
+Riesgo real y silencioso: un `add` de formación o experiencia puede quedar colgado de la institución equivocada sin que nada lo avise.
+
+**Resuelto el 2026-09-17.** `resolveChoice` decide así, y sirve para cualquier picker de CvLAC, no solo instituciones:
+
+| Situación | Qué hace |
+|---|---|
+| una coincidencia exacta del nombre | la usa, sin preguntar |
+| varias exactas, o varias parciales | `needs_confirmation` con los candidatos en `choices`, sin escribir |
+| una sola parcial | la usa |
+| ninguna | warning, campo vacío (como antes) |
+
+La respuesta vuelve en `data.institucionId`, que salta la búsqueda. El caso corriente —un nombre que coincide exacto— sigue siendo automático: preguntar por él sería ruido. La de este CvLAC es la 603, "UNIVERSIDAD SIMÓN BOLÍVAR", que coincide exacto.
