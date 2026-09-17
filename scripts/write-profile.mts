@@ -9,7 +9,7 @@
  * The profile text is read from the file given as the argument, so the text a
  * human approved is the text that gets written — nothing is embedded here.
  */
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import * as dotenv from 'dotenv';
 
@@ -23,10 +23,22 @@ const { updateProfileTool, readProfileTool } = await import('../src/tools/profil
 
 const textFile = process.argv[2];
 if (!textFile) {
-  console.error('Usage: npx tsx scripts/write-profile.mts <archivo-con-el-texto-del-perfil>');
+  console.error('Uso: npx tsx scripts/write-profile.mts <archivo-con-el-texto-del-perfil>');
+  process.exit(2);
+}
+if (!existsSync(textFile)) {
+  console.error(
+    `No existe "${textFile}".\n` +
+      'Este script no inventa el texto del perfil: escribe el que haya en ese archivo.\n' +
+      'Crea uno con el texto que quieras publicar y vuelve a correrlo.'
+  );
   process.exit(2);
 }
 const description = readFileSync(textFile, 'utf8').trim();
+if (!description) {
+  console.error(`"${textFile}" está vacío. CvLAC marca el perfil como obligatorio: no acepta texto vacío.`);
+  process.exit(2);
+}
 
 // The limit is checked before writing: a silently truncated bio in an official
 // record is worse than a refusal.
