@@ -120,7 +120,8 @@ export function createServer(): McpServer {
       description:
         'Apply a single change to a CvLAC section. Takes a screenshot for confirmation. ' +
         'An "add" whose item resembles an existing entry returns status "needs_confirmation" ' +
-        'and writes nothing; resolve it with action:"update" or repeat with confirm_duplicate:true.',
+        'and writes nothing; resolve it with action:"update" or repeat with confirm_duplicate:true. ' +
+        'A "delete" also writes nothing until it is repeated with confirm_delete:true.',
       inputSchema: {
         section: sectionSchema,
         action: z.enum(['add', 'update', 'delete']),
@@ -129,9 +130,16 @@ export function createServer(): McpServer {
           .boolean()
           .optional()
           .describe('Create the item even though CvLAC already holds a similar one'),
+        confirm_delete: z
+          .boolean()
+          .optional()
+          .describe(
+            'Required by action:"delete". Without it nothing is removed and the call returns ' +
+              'needs_confirmation — CvLAC has no undo.'
+          ),
       },
     },
-    async ({ section, action, data, confirm_duplicate }) => {
+    async ({ section, action, data, confirm_duplicate, confirm_delete }) => {
       // `data` arrives as untyped JSON; validate it here so a bad field is reported
       // as such instead of silently producing an empty CvLAC entry.
       if (action !== 'delete') {
@@ -162,6 +170,7 @@ export function createServer(): McpServer {
         action,
         data,
         confirmDuplicate: confirm_duplicate,
+        confirmDelete: confirm_delete,
       });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }
@@ -189,7 +198,8 @@ export function createServer(): McpServer {
         "Write the researcher profile text and/or the academic social networks. Networks are " +
         "MERGED over what CvLAC already stores — its form rewrites the whole table, so this " +
         "reads it first and posts everything back. Pass url:null to remove one. A network " +
-        "CvLAC does not list goes in \"otro\" with its name in \"label\".",
+        "CvLAC does not list goes in \"otro\" with its name in \"label\". Removing one needs " +
+        "confirm_delete:true. The profile text cannot be blanked: CvLAC marks it required.",
       inputSchema: {
         description: z
           .string()
@@ -210,10 +220,14 @@ export function createServer(): McpServer {
           )
           .optional()
           .describe('Networks to set or remove. Everything else stored is kept.'),
+        confirm_delete: z
+          .boolean()
+          .optional()
+          .describe('Required when any network carries url:null. Without it nothing is written.'),
       },
     },
-    async ({ description, networks }) => {
-      const result = await updateProfileTool({ description, networks });
+    async ({ description, networks, confirm_delete }) => {
+      const result = await updateProfileTool({ description, networks, confirmDelete: confirm_delete });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }
   );

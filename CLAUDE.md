@@ -69,6 +69,8 @@ Flujo de datos: `index.ts` → `server.ts` (router) → `tools/*` → `browser/s
 
 **Secciones:** `formacion`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`, `software`, `eventos`.
 
+**Todo borrado pide confirmación.** `update_section` con `action:"delete"` y `update_profile` con una red en `url:null` devuelven `needs_confirmation` y no escriben nada hasta que se repitan con `confirm_delete:true`. La etiqueta con la que se encuentra una fila hace match flexible: sin la segunda vuelta, un nombre parecido borra el registro del vecino.
+
 `read_profile` / `update_profile` quedan aparte a propósito: el perfil y las redes académicas
 son **registros únicos**, sin `all.do` ni `add`/`update`/`delete`, así que no caben en
 `update_section`. Viven en `tools/profile.ts`.

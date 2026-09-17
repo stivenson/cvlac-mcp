@@ -221,6 +221,12 @@ export interface UpdateRequest {
    * Without it, such an add returns status 'needs_confirmation' and writes nothing.
    */
   confirmDuplicate?: boolean;
+  /**
+   * Let a `delete` through. Without it, a delete returns 'needs_confirmation'
+   * and removes nothing: CvLAC has no undo, and the label that finds the row is
+   * matched loosely enough to hit a neighbour.
+   */
+  confirmDelete?: boolean;
 }
 
 /**

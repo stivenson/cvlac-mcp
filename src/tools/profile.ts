@@ -14,6 +14,7 @@ import { navigate } from '../browser/navigate.js';
 import { URLS } from '../browser/navigation.js';
 import { createLogger } from '../logger.js';
 import { readFormValues, readFormErrors, clickGuardar, landedOnOutage } from './update-section.js';
+import { deleteConfirmation } from './write-verdict.js';
 import type { UpdateResult, UpdateStatus } from '../types.js';
 
 const log = createLogger('profile');
@@ -259,6 +260,8 @@ export interface UpdateProfileRequest {
   description?: string;
   /** Merged over what is stored; a null url removes that network. */
   networks?: NetworkChange[];
+  /** Required for any change that removes a network. */
+  confirmDelete?: boolean;
 }
 
 /**
@@ -275,6 +278,16 @@ export async function updateProfileTool(req: UpdateProfileRequest): Promise<Upda
       status: 'failed',
       message: 'Nothing to write: pass a description, a list of networks, or both.',
     };
+  }
+
+  // Both refusals happen before anything is opened, let alone written.
+  if (req.description !== undefined) {
+    const problem = checkDescription(req.description);
+    if (problem) return { success: false, status: 'failed', message: problem };
+  }
+  const removals = deletionsIn(req.networks ?? []);
+  if (removals.length > 0 && req.confirmDelete !== true) {
+    return deleteConfirmation(`las redes académicas ${removals.join(', ')}`);
   }
 
   await session.login();
@@ -396,4 +409,82 @@ async function writePerfil(page: Page, description: string): Promise<HalfResult>
     };
   }
   return { status: 'ok', message: 'Profile text saved.' };
+}
+
+/** What `txt_desc_perfil` holds, per its own attributes. */
+const MAX_DESCRIPTION = 3950;
+
+/**
+ * Why CvLAC would refuse this profile text, or null when it would take it.
+ *
+ * The field is marked `required`, so there is no way to blank it once written:
+ * a submit with it empty never leaves the form, and the page comes back showing
+ * the text it just refused to erase — which read as "rejected: <that text>".
+ */
+export function checkDescription(text: string): string | null {
+  const trimmed = (text ?? '').trim();
+  if (!trimmed) {
+    return 'CvLAC marca el texto de perfil como obligatorio: no se puede dejar vacío, solo reemplazar. Bórralo desde la web si de verdad quieres quitarlo.';
+  }
+  if (trimmed.length > MAX_DESCRIPTION) {
+    return `El texto tiene ${trimmed.length} caracteres y el campo acepta ${MAX_DESCRIPTION}.`;
+  }
+  return null;
+}
+
+/** The networks a change would remove, named — so a confirmation can list them. */
+export function deletionsIn(changes: NetworkChange[]): string[] {
+  return changes
+    .filter((c) => c.url === null || (c.url ?? '').trim() === '')
+    .map((c) => c.network);
+}
+
+export interface ProfileSnapshot {
+  description: string;
+  networks: StoredNetwork[];
+}
+
+export interface RestorePoint {
+  /** What to write back, or null when there is nothing to restore. */
+  description: string | null;
+  networks: StoredNetwork[];
+  /** What was found that an earlier run left behind, named for a human. */
+  leftovers: string[];
+}
+
+/**
+ * What a test run should put back when it finishes.
+ *
+ * Not simply the snapshot. A run that could not clean up leaves its own data in
+ * the account, and the next run read that as the real state and restored it
+ * faithfully — the suite kept its own rubbish alive. Anything carrying the tag
+ * is rubbish, not state.
+ *
+ * `description` comes back null when it was empty as well: CvLAC refuses an
+ * empty profile text, so "as it was" is not somewhere this can return to.
+ */
+export function restorePoint(snapshot: ProfileSnapshot, tag: string): RestorePoint {
+  const marker = tag.toLowerCase().replace(/\s+/g, '-');
+  const tagged = (text: string): boolean => {
+    const lower = (text ?? '').toLowerCase();
+    return lower.includes(tag.toLowerCase()) || lower.includes(marker);
+  };
+
+  const leftovers: string[] = [];
+  const description = (snapshot.description ?? '').trim();
+  if (description && tagged(description)) leftovers.push('texto de perfil');
+
+  const networks = snapshot.networks.filter((n) => {
+    if (tagged(n.url) || tagged(n.label)) {
+      leftovers.push(n.key);
+      return false;
+    }
+    return true;
+  });
+
+  return {
+    description: description && !tagged(description) ? description : null,
+    networks,
+    leftovers,
+  };
 }

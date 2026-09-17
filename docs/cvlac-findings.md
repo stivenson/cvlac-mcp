@@ -249,4 +249,6 @@ La validación que sí importa: el formulario espera URLs **con esquema**. `norm
 
 Un solo `textarea txt_desc_perfil`, y **diez hidden con la identidad de la persona** que se reenvían en el POST: `nro_documento_ident`, `txt_names_rh`, `txt_prim_apell`, `tpo_nacionalidad`, `tpo_sexo`, `cod_mun_nacim`, `dta_nacim`, `cod_mun_exped_doc`, `dta_nacimString`, `staPerfilInvestigador`.
 
+`txt_desc_perfil` es **`required` y `maxlength=3950`** (el contador en pantalla dice 4000, el atributo dice 3950). Consecuencia que costó una corrida entera: **no hay forma de vaciarlo**. Un submit con el campo vacío ni siquiera sale del formulario, y la página vuelve mostrando el texto que acaba de negarse a borrar — que el código leyó como *"rejected: \<ese mismo texto\>"*. Solo se reemplaza; para quitarlo de verdad hay que ir a la web.
+
 Regla: **tocar solo el textarea**. Reconstruir o reordenar ese formulario arriesga la cédula y la fecha de nacimiento del registro oficial. (De paso, `cod_mun_nacim=991` confirma la numeración de municipios documentada arriba.)

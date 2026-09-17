@@ -20,6 +20,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { connect, call } from './mcp-client.mjs';
+// From dist/, the same build the suite drives over stdio.
+import { restorePoint } from '../../dist/tools/profile.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -357,8 +359,27 @@ async function runSection(client, section) {
   } finally {
     if (created) {
       // 8. delete
-      const deleted = await step(section, 'delete', () =>
+      // The gate first: a delete that nobody confirmed must remove nothing.
+      const unconfirmed = await step(section, 'delete sin confirmar', () =>
         call(client, 'update_section', { section, action: 'delete', data: { [labelField]: label } })
+      );
+      record(
+        section,
+        'delete sin confirmar',
+        unconfirmed?.status === 'needs_confirmation',
+        unconfirmed?.status === 'needs_confirmation'
+          ? 'bloqueado, como debe ser'
+          : `esperaba needs_confirmation, obtuve "${unconfirmed?.status}" — ${unconfirmed?.message ?? ''}`,
+        unconfirmed
+      );
+
+      const deleted = await step(section, 'delete', () =>
+        call(client, 'update_section', {
+          section,
+          action: 'delete',
+          data: { [labelField]: label },
+          confirm_delete: true,
+        })
       );
       record(
         section,
@@ -485,7 +506,34 @@ async function runProfile(client) {
       afterEdit
     );
 
-    // 4. a network this server cannot place must be refused, not guessed
+    // 4. removing a network must be confirmed first
+    const unconfirmed = await step(section, 'borrar red sin confirmar', () =>
+      call(client, 'update_profile', { networks: [{ network: free, url: null }] })
+    );
+    record(
+      section,
+      'borrar red sin confirmar',
+      unconfirmed?.status === 'needs_confirmation',
+      unconfirmed?.status === 'needs_confirmation'
+        ? 'bloqueado, como debe ser'
+        : `esperaba needs_confirmation, obtuve "${unconfirmed?.status}"`,
+      unconfirmed
+    );
+
+    const stillThere = await step(section, 'la red sigue tras el bloqueo', () =>
+      call(client, 'read_profile', {})
+    );
+    record(
+      section,
+      'la red sigue tras el bloqueo',
+      (stillThere?.networks ?? []).some((n) => n.key === free),
+      (stillThere?.networks ?? []).some((n) => n.key === free)
+        ? 'no se borró nada'
+        : '⚠️ la red desapareció pese al bloqueo',
+      stillThere
+    );
+
+    // 5. a network this server cannot place must be refused, not guessed
     const bogus = await step(section, 'red desconocida', () =>
       call(client, 'update_profile', { networks: [{ network: 'Fotolog', url: TEST_URL }] })
     );
@@ -499,7 +547,7 @@ async function runProfile(client) {
       bogus
     );
 
-    // 5. the profile text, written and read back
+    // 6. the profile text, written and read back
     const textWritten = await step(section, 'escribir perfil', () =>
       call(client, 'update_profile', { description: TEST_TEXT })
     );
@@ -522,11 +570,26 @@ async function runProfile(client) {
       afterText
     );
   } finally {
-    // 6. delete + restore: the test row goes, the snapshot comes back
+    // 7. delete + restore. Not back to the snapshot: a previous run's leftovers
+    // are rubbish, not state, and restoring them is how this suite kept its own
+    // test text alive across runs.
+    const point = restorePoint(snapshot, TAG);
+    if (point.leftovers.length) {
+      record(
+        section,
+        'basura de una corrida anterior',
+        null,
+        `no la restauro: ${point.leftovers.join(', ')}`
+      );
+    }
     const restored = await step(section, 'restaurar', () =>
       call(client, 'update_profile', {
-        description: snapshot.description,
+        // CvLAC marks the profile text required, so there is no way back to an
+        // empty one. When there was nothing to restore, the text is left as is
+        // and reported below for a human to clear from the web.
+        ...(point.description === null ? {} : { description: point.description }),
         networks: wrote ? [{ network: free, url: null }] : [],
+        confirm_delete: true,
       })
     );
     record(
@@ -540,15 +603,22 @@ async function runProfile(client) {
     const finalState = await step(section, 'estado final', () => call(client, 'read_profile', {}));
     const leftovers = (finalState?.networks ?? []).filter((n) => n.url.includes('zz-prueba-mcp'));
     const textLeft = (finalState?.description ?? '').includes(TAG);
+    const networksClean = leftovers.length === 0 && realSurvived(finalState?.networks ?? []);
     record(
       section,
       'estado final',
-      leftovers.length === 0 && !textLeft && realSurvived(finalState?.networks ?? []),
-      leftovers.length || textLeft
-        ? `⚠️ QUEDÓ BASURA EN TU CvLAC: ${[...leftovers.map((l) => l.key), textLeft ? 'texto de perfil' : ''].filter(Boolean).join(', ')} — bórralo a mano`
-        : realSurvived(finalState?.networks ?? [])
-          ? 'quedó como estaba'
-          : `⚠️ faltan redes que existían antes: ${storedKeys.join(', ')}`,
+      // The leftover text is not a failure of this suite: CvLAC refuses to store
+      // an empty profile, so a test text written on an account that had none can
+      // only be replaced, never removed. Everything else must be spotless.
+      networksClean ? (textLeft ? null : true) : false,
+      leftovers.length
+        ? `⚠️ QUEDARON REDES DE PRUEBA: ${leftovers.map((l) => l.key).join(', ')} — bórralas a mano`
+        : !realSurvived(finalState?.networks ?? [])
+          ? `⚠️ faltan redes que existían antes: ${storedKeys.join(', ')}`
+          : textLeft
+            ? 'redes limpias. El texto de prueba queda: CvLAC no acepta un perfil vacío, así que ' +
+              'solo se puede reemplazar — escribe el tuyo o bórralo desde la web'
+            : 'quedó como estaba',
       finalState
     );
   }

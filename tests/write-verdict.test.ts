@@ -7,6 +7,7 @@ import {
   storedMatchesSubmitted,
   verifiableFields,
   verificationVerdict,
+  deleteConfirmation,
 } from '../src/tools/write-verdict.js';
 
 describe('classifySubmit', () => {
@@ -176,5 +177,23 @@ describe('disagreeingFields', () => {
 
   it('ignores fields the reread does not carry', () => {
     expect(disagreeingFields({ nro_ano: '2025' }, { nro_ano: '2025', otro: 'x' })).toEqual([]);
+  });
+});
+
+// CvLAC has no undo. A delete that runs on the first ask is one keystroke away
+// from removing a real record, so it never does.
+describe('deleteConfirmation', () => {
+  it('writes nothing and asks first', () => {
+    const result = deleteConfirmation('cursos › "Curso de Python"');
+    expect(result.success).toBe(false);
+    expect(result.status).toBe('needs_confirmation');
+  });
+
+  it('names what would be deleted, so the answer is informed', () => {
+    expect(deleteConfirmation('cursos › "Curso de Python"').message).toContain('Curso de Python');
+  });
+
+  it('says how to go ahead', () => {
+    expect(deleteConfirmation('x').message).toContain('confirm_delete');
   });
 });

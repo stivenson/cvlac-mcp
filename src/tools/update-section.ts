@@ -38,6 +38,7 @@ import {
   isOutageMarkup,
   verifiableFields,
   verificationVerdict,
+  deleteConfirmation,
 } from './write-verdict.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logger.js';
@@ -1456,6 +1457,9 @@ export async function updateSectionTool(req: UpdateRequest): Promise<UpdateResul
   try {
     const label = cfg.labelOf(req.data);
     log.info('update_section', { section: req.section, action: req.action, label });
+    if (req.action === 'delete' && req.confirmDelete !== true) {
+      return deleteConfirmation(`${req.section} › "${label}"`);
+    }
     switch (req.action) {
       case 'add':
         return await addItem(pageRef, cfg, req.data, label, req.confirmDuplicate === true);

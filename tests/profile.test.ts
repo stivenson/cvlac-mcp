@@ -12,6 +12,9 @@ import {
   mergeRedes,
   readRedesState,
   applyRedesState,
+  checkDescription,
+  deletionsIn,
+  restorePoint,
 } from '../src/tools/profile.js';
 
 // What `readFormValues` returns for ReRedSocialIdent/create.do: an unchecked
@@ -265,5 +268,71 @@ describe('readRedesState / applyRedesState', () => {
     await applyRedesState(page, mergeRedes([], [{ network: 'google_scholar', url: 'https://scholar.google.com/x' }]));
     expect(errors).toEqual([]);
     expect(await isChecked('CHECK_1')).toBe(true);
+  });
+});
+
+// CvLAC marks txt_desc_perfil `required`: a submit with it empty bounces, and
+// the bounce came back carrying the stored text, which read as a rejection
+// naming the very text it had refused to erase.
+describe('checkDescription', () => {
+  it('refuses an empty profile text, which CvLAC will not store', () => {
+    expect(checkDescription('')).toMatch(/vac|empty|required/i);
+    expect(checkDescription('   ')).toBeTruthy();
+  });
+
+  it('accepts any text with content', () => {
+    expect(checkDescription('Ingeniero de Sistemas.')).toBeNull();
+  });
+
+  it('refuses text longer than the field holds', () => {
+    expect(checkDescription('x'.repeat(4000))).toMatch(/3950|largo|long/i);
+  });
+});
+
+describe('deletionsIn', () => {
+  it('names the networks a change would remove', () => {
+    expect(deletionsIn([{ network: 'orcid', url: null }, { network: 'linkedin', url: 'https://x.co' }])).toEqual([
+      'orcid',
+    ]);
+  });
+
+  it('treats an empty url as a removal too', () => {
+    expect(deletionsIn([{ network: 'orcid', url: '' }])).toEqual(['orcid']);
+  });
+
+  it('reports nothing when the change only writes', () => {
+    expect(deletionsIn([{ network: 'orcid', url: 'https://orcid.org/x' }])).toEqual([]);
+  });
+});
+
+// A run that could not clean up leaves its test data behind. The next run read
+// that as the account's real state and faithfully put it back.
+describe('restorePoint', () => {
+  const TAG = 'ZZ PRUEBA MCP';
+  const real = { slot: 12, key: 'orcid', label: 'ORCID', url: 'https://orcid.org/real' };
+  const junk = { slot: 2, key: 'researchgate', label: 'ResearchGate', url: 'https://example.org/zz-prueba-mcp' };
+
+  it('restores what the account really had', () => {
+    const point = restorePoint({ description: 'Perfil real.', networks: [real] }, TAG);
+    expect(point.description).toBe('Perfil real.');
+    expect(point.networks).toEqual([real]);
+    expect(point.leftovers).toEqual([]);
+  });
+
+  it('does not restore a profile text left behind by an earlier run', () => {
+    const point = restorePoint({ description: `${TAG} — texto de prueba.`, networks: [] }, TAG);
+    expect(point.description).toBeNull();
+    expect(point.leftovers).toContain('texto de perfil');
+  });
+
+  it('does not restore a network left behind by an earlier run', () => {
+    const point = restorePoint({ description: 'Perfil real.', networks: [real, junk] }, TAG);
+    expect(point.networks).toEqual([real]);
+    expect(point.leftovers).toContain('researchgate');
+  });
+
+  // CvLAC refuses an empty profile text, so there is no way back to "empty".
+  it('has nothing to restore when the profile text was empty', () => {
+    expect(restorePoint({ description: '', networks: [] }, TAG).description).toBeNull();
   });
 });

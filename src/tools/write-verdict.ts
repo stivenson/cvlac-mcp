@@ -7,6 +7,8 @@
  * verdict — when the server says nothing, the stored values decide.
  */
 
+import type { UpdateResult } from '../types.js';
+
 export type SubmitOutcome = 'saved' | 'rejected' | 'unverified';
 
 export function classifySubmit(input: {
@@ -117,4 +119,21 @@ export function disagreeingFields(
   return Object.keys(submitted).filter(
     (key) => key in stored && norm(stored[key]) !== norm(submitted[key])
   );
+}
+
+/**
+ * The answer to a delete nobody has confirmed yet.
+ *
+ * CvLAC has no undo: a row removed by a misread label is gone, and the only
+ * copy of some of these records is the record itself. So a delete is a two-step
+ * conversation, the same way an add that resembles an existing item already is.
+ */
+export function deleteConfirmation(what: string): UpdateResult {
+  return {
+    success: false,
+    status: 'needs_confirmation',
+    message:
+      `Nothing was deleted. This would remove ${what} from the official CvLAC, which has no undo. ` +
+      `Check it is the right one — read_cvlac_detail shows what it holds — and repeat with confirm_delete:true.`,
+  };
 }
