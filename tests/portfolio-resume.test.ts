@@ -9,6 +9,8 @@ import {
   toEducation,
   toExperience,
   parseCourseLine,
+  readAchievements,
+  readSkillGroups,
 } from '../src/extractors/portfolio.js';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'portfolio');
@@ -129,5 +131,51 @@ describe('parseCourseLine', () => {
 
   it('refuses to invent a name from an empty line', () => {
     expect(parseCourseLine('   ')).toBeNull();
+  });
+});
+
+describe('readAchievements and readSkillGroups', () => {
+  let browser: Browser;
+  let page: Page;
+
+  beforeAll(async () => {
+    browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+    page = await browser.newPage();
+  }, 60000);
+
+  afterAll(async () => {
+    await browser?.close();
+  });
+
+  // reconocimientos is diffed against these. They came back empty after the
+  // site was rewritten, so the diff compared CvLAC's awards against nothing.
+  it('reads each achievement card as a title and its description', async () => {
+    await page.setContent(readFileSync(join(FIXTURES, 'dashboard.html'), 'utf8'));
+    expect(await readAchievements(page)).toEqual([
+      { title: 'Exaltación Académica', description: 'Mención por trabajo social en un municipio.' },
+      { title: 'Primer puesto hackatón', description: 'Ganador de la categoría de IA aplicada.' },
+    ]);
+  });
+
+  it('ignores cards from any other section', async () => {
+    await page.setContent(readFileSync(join(FIXTURES, 'dashboard.html'), 'utf8'));
+    const titles = (await readAchievements(page)).map((a) => a.title);
+    expect(titles).not.toContain('Un proyecto');
+  });
+
+  it('returns nothing when the section is not there, rather than guessing', async () => {
+    await page.setContent('<section class="page-section"><p class="page-section-title">Otra</p></section>');
+    expect(await readAchievements(page)).toEqual([]);
+  });
+
+  // The site groups skills its own way — eight groups, including Backend and
+  // Herramientas — and those names are kept rather than squeezed into six
+  // fixed buckets that no longer match anything on the page.
+  it('reads the skills under the group names the site uses', async () => {
+    await page.setContent(readFileSync(join(FIXTURES, 'resume-skills.html'), 'utf8'));
+    expect(await readSkillGroups(page)).toEqual({
+      Lenguajes: ['Python', 'Rust'],
+      'Cloud & DevOps': ['AWS', 'Docker'],
+    });
   });
 });

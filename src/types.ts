@@ -111,14 +111,15 @@ export interface EventoCientificoItem {
   resumen?: string;
 }
 
-export interface SkillsData {
-  languages: string[];
-  frontend: string[];
-  ai: string[];
-  cloud: string[];
-  devops: string[];
-  databases: string[];
-}
+/**
+ * Skills keyed by the group names the portfolio itself uses — "Lenguajes",
+ * "Cloud & DevOps", "Herramientas"…
+ *
+ * It used to be six fixed buckets (languages, frontend, ai…). The rewritten
+ * site has eight groups, several of which had no bucket and one that spans two,
+ * so the page's own grouping is kept instead of being squeezed to fit.
+ */
+export type SkillsData = Record<string, string[]>;
 
 export interface PortfolioData {
   personal: {

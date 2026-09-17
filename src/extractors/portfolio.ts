@@ -87,11 +87,21 @@ export async function fetchPortfolioData(): Promise<PortfolioData> {
       ? (await readListEntries(page)).map(parseCourseLine).filter((c): c is CourseItem => c !== null)
       : [];
 
+    const skills = (await openTab(page, 'Habilidades')) ? await readSkillGroups(page) : {};
     const personal = await readPersonal(page);
+
+    // The achievements live on the dashboard, not in the résumé.
+    await page.goto(`${base}/#/`, { waitUntil: 'networkidle', timeout: 60000 });
+    await page.waitForSelector('.page-section-title', { timeout: 20000 }).catch(() => {
+      log.warn('the portfolio dashboard rendered no section titles', { base });
+    });
+    const achievements = await readAchievements(page);
     log.info('portfolio rendered', {
       experience: experience.length,
       education: education.length,
       courses: courses.length,
+      achievements: achievements.length,
+      skillGroups: Object.keys(skills).length,
     });
 
     return {
@@ -99,14 +109,11 @@ export async function fetchPortfolioData(): Promise<PortfolioData> {
       education,
       experience,
       courses,
-      // Not read from the rendered site yet: the dashboard lays them out its own
-      // way. Empty rather than guessed — an empty list makes the diff report
-      // nothing, which writes nothing.
-      achievements: [] as AchievementItem[],
+      achievements,
       projects: extra.projects,
       software: extra.software,
       eventos: extra.eventos,
-      skills: { languages: [], frontend: [], ai: [], cloud: [], devops: [], databases: [] },
+      skills,
     };
   } finally {
     await browser.close();
@@ -233,4 +240,44 @@ export function parseCourseLine(line: string): CourseItem | null {
   const month = approved ? MONTHS[approved[1].toLowerCase()] : undefined;
 
   return { name, date: approved && month ? `${approved[2]}-${month}` : '', type: 'curso' };
+}
+
+/**
+ * The achievement cards of the dashboard's "Logros Destacados" section.
+ *
+ * Found by the section's title, not by `.glow-card` alone: other sections of
+ * the dashboard use the same card, and a project read as an award would be
+ * proposed to CvLAC's reconocimientos.
+ */
+export async function readAchievements(page: Page): Promise<AchievementItem[]> {
+  return page.$$eval('section.page-section', (sections) => {
+    const logros = sections.find((section) =>
+      /logros\s+destacados/i.test(section.querySelector('.page-section-title')?.textContent ?? '')
+    );
+    if (!logros) return [];
+    return Array.from(logros.querySelectorAll('.glow-card'))
+      .map((card) => {
+        const parts = Array.from(card.querySelectorAll('p')).map((p) =>
+          (p.textContent ?? '').replace(/\s+/g, ' ').trim()
+        );
+        return { title: parts[0] ?? '', description: parts.slice(1).join(' ') };
+      })
+      .filter((a) => a.title);
+  });
+}
+
+/** The résumé's Habilidades tab, under the group names the site gives them. */
+export async function readSkillGroups(page: Page): Promise<SkillsData> {
+  return page.$$eval('.rf-tabpanel-content .skill-group', (groups) =>
+    Object.fromEntries(
+      groups
+        .map((group) => [
+          (group.querySelector('.eyebrow')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+          Array.from(group.querySelectorAll('.rf-tag')).map((tag) =>
+            (tag.textContent ?? '').replace(/\s+/g, ' ').trim()
+          ),
+        ])
+        .filter(([name]) => name)
+    )
+  );
 }
