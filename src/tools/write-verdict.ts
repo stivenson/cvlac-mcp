@@ -177,3 +177,35 @@ export function undeletableRefusal(label: string): UpdateResult {
       `if at all.`,
   };
 }
+
+/**
+ * CvLAC's own stack trace, which is not a rejected form.
+ *
+ * An insert that reached `insert.do` and came back 500 still has `insert.do` in
+ * the URL, so it read as "landed back on the form" and was reported as a
+ * validation failure — sending the caller to fix a form CvLAC never got to
+ * check. Its validator had thrown.
+ */
+export function isServerErrorMarkup(html: string): boolean {
+  const text = html ?? '';
+  if (/server\s+unavailable/i.test(text)) return false;
+  return /Informe de Excepci[oó]n/i.test(text) || /Estado HTTP 5\d\d/i.test(text);
+}
+
+/**
+ * The answer for a form this server knows is incomplete.
+ *
+ * CvLAC requires the programme picker to have resolved, and submitting without
+ * it did not come back rejected — it crashed the validator. A field the site
+ * demands and the filler could not set is a reason to stop, not to try.
+ */
+export function blockedRefusal(label: string, blockers: string[], warnings: string[]): UpdateResult {
+  return {
+    success: false,
+    status: 'failed',
+    message:
+      `Nothing was written for "${label}": ${blockers.join('; ')}. ` +
+      `CvLAC requires that field, so the form was not submitted.`,
+    warnings: warnings.length ? warnings : undefined,
+  };
+}

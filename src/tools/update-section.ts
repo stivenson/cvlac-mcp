@@ -43,6 +43,8 @@ import {
   deleteConfirmation,
   noChangeRefusal,
   undeletableRefusal,
+  isServerErrorMarkup,
+  blockedRefusal,
 } from './write-verdict.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logger.js';
@@ -65,6 +67,12 @@ const FIELD_TIMEOUT_MS = 5000;
  */
 interface FillReport {
   warnings: string[];
+  /**
+   * Fields CvLAC requires that could not be filled. A form carrying one is not
+   * submitted: doing so crashed CvLAC's own validator rather than coming back
+   * with a message.
+   */
+  blockers?: string[];
 }
 
 /**
@@ -297,7 +305,7 @@ async function setProgramaAcademico(
     .catch(() => '');
 
   if (!institucionId) {
-    report.warnings.push(
+    (report.blockers ??= []).push(
       'programa académico: CvLAC lo busca dentro de una institución y la institución quedó sin resolver'
     );
     return;
@@ -305,7 +313,7 @@ async function setProgramaAcademico(
 
   const programa = await findPrograma(page, { institucionId, institucionNombre, nivel, degree });
   if (!programa) {
-    report.warnings.push(
+    (report.blockers ??= []).push(
       `programa académico: "${degree}" no está entre los programas que ${institucionNombre || 'esa institución'} ` +
         'tiene registrados en ese nivel; CvLAC exige elegir uno de su catálogo'
     );
@@ -1407,6 +1415,12 @@ async function syncHiddenDuplicates(page: Page): Promise<string[]> {
  * It is served for any URL and carries no CvLAC markup, so a submit that lands
  * on it has left the form without having been saved — which read as success.
  */
+/** Whether what came back is CvLAC's own stack trace rather than a form. */
+async function landedOnServerError(page: Page): Promise<boolean> {
+  const html = await page.content().catch(() => '');
+  return isServerErrorMarkup(html);
+}
+
 export async function landedOnOutage(page: Page): Promise<boolean> {
   const html = await page.content().catch(() => '');
   return isOutageMarkup(html);
@@ -1496,10 +1510,21 @@ async function addItem(
   await gotoFormWithRelogin(pageRef, cfg.createUrl);
   await humanDelay();
   await cfg.fill(pageRef.page, data, report);
+  if (report.blockers?.length) {
+    return blockedRefusal(label, report.blockers, report.warnings);
+  }
   await syncHiddenDuplicates(pageRef.page);
   await humanDelay(400, 800);
   await clickGuardar(pageRef.page);
   const screenshotBase64 = await shot(pageRef.page);
+  if (await landedOnServerError(pageRef.page)) {
+    return failed(
+      `CvLAC respondió con un error interno (HTTP 500) al guardar "${label}". No es el formulario: ` +
+        `su propio validador lanzó una excepción. Revisa el screenshot y reintenta más tarde.`,
+      report,
+      screenshotBase64
+    );
+  }
   if (landedOnForm(pageRef.page)) {
     return failed(await describeRejection(pageRef.page, 'adding', label), report, screenshotBase64);
   }
@@ -1548,6 +1573,9 @@ async function updateItem(
   if (synced.length > 0) {
     log.debug('hidden duplicates aligned with the visible controls', { fields: synced });
   }
+  if (report.blockers?.length) {
+    return blockedRefusal(label, report.blockers, report.warnings);
+  }
   const edits = verifiableFields(changedFields(beforeFill, await readFormValues(pageRef.page)));
   // Submitting an untouched form is indistinguishable from a successful save,
   // so it does not get submitted.
@@ -1558,6 +1586,14 @@ async function updateItem(
   await clickGuardar(pageRef.page);
   const screenshotBase64 = await shot(pageRef.page);
 
+  if (await landedOnServerError(pageRef.page)) {
+    return failed(
+      `CvLAC respondió con un error interno (HTTP 500) al actualizar "${label}"; su propio validador ` +
+        `lanzó una excepción. Verifica con read_cvlac_detail antes de reintentar.`,
+      report,
+      screenshotBase64
+    );
+  }
   const outage = await landedOnOutage(pageRef.page);
   const outcome = classifySubmit({
     landedOnForm: landedOnForm(pageRef.page),

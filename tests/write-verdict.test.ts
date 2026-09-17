@@ -10,6 +10,8 @@ import {
   deleteConfirmation,
   noChangeRefusal,
   undeletableRefusal,
+  isServerErrorMarkup,
+  blockedRefusal,
 } from '../src/tools/write-verdict.js';
 
 describe('classifySubmit', () => {
@@ -229,5 +231,44 @@ describe('undeletableRefusal', () => {
     expect(result.status).toBe('failed');
     expect(result.message).toContain('Diplomado en IA');
     expect(result.message).toMatch(/Eliminar/);
+  });
+});
+
+// CvLAC answered the insert with HTTP 500 and a Java stack trace from its own
+// validator. The URL still ended in insert.do, so it read as "landed back on
+// the form" and was reported as a validation failure the caller could fix.
+describe('isServerErrorMarkup', () => {
+  const CRASH =
+    '<h1>Estado HTTP 500 - </h1><b>type</b> Informe de Excepción' +
+    '<p>co.gov.colciencias.cvlac.en_trayectoria_escolar.web.EnTrayectoriaEscolarInsertForm.validate' +
+    '(EnTrayectoriaEscolarInsertForm.java:505)</p>';
+
+  it('recognises the JBoss exception page', () => {
+    expect(isServerErrorMarkup(CRASH)).toBe(true);
+  });
+
+  it('does not mistake an ordinary rejected form for a crash', () => {
+    expect(isServerErrorMarkup('<div class="error">Seleccione un programa académico</div>')).toBe(false);
+  });
+
+  it('is not the outage page, which is a different thing', () => {
+    expect(isServerErrorMarkup('<h1>Server Unavailable!</h1>')).toBe(false);
+  });
+});
+
+// The programme picker could not resolve, and the form was submitted anyway —
+// which is what crashed CvLAC's validator. A form known to be incomplete in a
+// field CvLAC requires does not get sent.
+describe('blockedRefusal', () => {
+  it('writes nothing and says which field blocked it', () => {
+    const result = blockedRefusal('Diplomado en IA', ['programa académico: no está en el catálogo'], []);
+    expect(result.success).toBe(false);
+    expect(result.status).toBe('failed');
+    expect(result.message).toContain('programa académico');
+  });
+
+  it('keeps the ordinary warnings apart from the blocker', () => {
+    const result = blockedRefusal('x', ['falta el programa'], ['municipio: se ignoró el DANE']);
+    expect(result.warnings).toEqual(['municipio: se ignoró el DANE']);
   });
 });

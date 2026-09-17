@@ -316,6 +316,19 @@ async function runSection(client, section) {
     if (added?.status === 'ok') {
       created = true;
       record(section, 'add', true, added.message, added);
+    } else if (/programa académico/i.test(added?.message ?? '')) {
+      // Not a defect: CvLAC only offers programmes already registered for that
+      // institution and level, and its picker has no way to add one. The tool
+      // refused instead of submitting a form it knew was incomplete.
+      record(
+        section,
+        'add',
+        null,
+        `omitido: CvLAC no tiene ningún programa académico registrado para esa institución en ese nivel, ` +
+          `y su buscador no permite crear uno. ${added.message}`,
+        added
+      );
+      return;
     } else {
       record(section, 'add', false, added?.message ?? added?.raw ?? 'sin respuesta', added);
       return;

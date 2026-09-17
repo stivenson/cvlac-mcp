@@ -306,3 +306,37 @@ De ahí sale una regla general, no solo de idiomas:
 Salir del formulario es el redirect normal de un guardado, así que un envío que devuelve los valores almacenados es indistinguible de uno que guardó algo. `updateItem` compara los campos antes y después de llenar; si no cambió ninguno, devuelve `failed` con los warnings, que es donde está el motivo real.
 
 Es el mismo tipo de fallo que los duplicados ocultos de cursos: la escritura se ve aplicada en pantalla y llega descartada. La diferencia es que ahora hay una red que lo atrapa sin depender de conocer la rareza de cada formulario.
+
+## El buscador de programas académicos solo ofrece lo ya registrado
+
+Verificado el 2026-09-17 intentando crear una formación complementaria.
+
+`queryPrograma.do` **no consulta un catálogo oficial de programas**: devuelve los que ya existen para esa institución en ese nivel. Para SENA en nivel `F` devuelve exactamente los siete que están registrados en este CvLAC. Para la Universidad de los Andes en niveles `8`/`F`/`Y`/`E` devuelve cero.
+
+Y el popup (`searchPrograma.do`) tiene **un solo botón, "Buscar"**. No hay ruta para registrar un programa nuevo.
+
+Consecuencia: un `add` de formación complementaria con un programa que CvLAC no conozca para esa institución y ese nivel **no se puede completar**. No es un límite del server: es del formulario.
+
+### Y CvLAC responde 500, no un rechazo
+
+Enviar ese formulario sin el programa resuelto no devuelve *"Seleccione un programa académico"*. Devuelve **HTTP 500** con una excepción de su propio validador:
+
+```
+co.gov.colciencias.cvlac.en_trayectoria_escolar.web.EnTrayectoriaEscolarInsertForm.validate(...:505)
+```
+
+Como la URL sigue siendo `insert.do`, eso pasaba por "volvió al formulario" y se reportaba como validación fallida — mandando a corregir un formulario que CvLAC nunca llegó a revisar. Se detecta con `isServerErrorMarkup` (ojo: la página de caída, "Server Unavailable", es otra cosa y se distingue).
+
+De ahí sale la segunda regla general, hermana de la del submit sin cambios:
+
+> **Un formulario al que le falta un campo que CvLAC exige no se envía.**
+
+`FillReport.blockers` recoge esos campos; `addItem` y `updateItem` devuelven `failed` nombrándolos, sin llegar a enviar. Fue justamente enviarlo lo que tumbó el validador.
+
+## `findInstitucionId` se queda con la primera coincidencia
+
+Buscar "UNIVERSIDAD SIMON BOLIVAR" devuelve **193 instituciones** — la de Venezuela, la Andina, sedes, un sindicato y un fondo de empleados. El código toma `items[0]`.
+
+Ninguna de las primeras doce tiene programas en niveles de formación complementaria, y el registro real de este CvLAC está bajo "UNIVERSIDAD SIMON BOLIVAR (SEDE CÚCUTA)", que no sale entre ellas.
+
+Riesgo real y silencioso: un `add` de formación o experiencia puede quedar colgado de la institución equivocada sin que nada lo avise. Pendiente de resolver como los duplicados: preferir coincidencia exacta y, si hay ambigüedad, devolver candidatos en vez de elegir.
