@@ -351,3 +351,22 @@ Riesgo real y silencioso: un `add` de formación o experiencia puede quedar colg
 | ninguna | warning, campo vacío (como antes) |
 
 La respuesta vuelve en `data.institucionId`, que salta la búsqueda. El caso corriente —un nombre que coincide exacto— sigue siendo automático: preguntar por él sería ruido. La de este CvLAC es la 603, "UNIVERSIDAD SIMÓN BOLÍVAR", que coincide exacto.
+
+## El catálogo de instituciones tiene duplicados exactos
+
+Buscar "Universidad de los Andes" devuelve **seis filas con ese mismo nombre**:
+
+```
+id=663      UNIVERSIDAD DE LOS ANDES
+id=430868   Universidad de los Andes
+id=463458   Universidad de Los Andes
+id=506751   Universidad de los Andes
+id=1145996  UNIVERSIDAD DE LOS ANDES
+id=1164019  Universidad de los Andes
+```
+
+No son universidades distintas de países distintos: son duplicados del propio catálogo de CvLAC, creados a lo largo del tiempo. Normalizadas son idénticas, así que **ninguna heurística de texto puede elegir**. La 663 es la canónica (id bajo, nombre en mayúsculas como los registros originales); las demás son ruido.
+
+Antes de `resolveChoice` se tomaba la primera y salía bien por casualidad. Ahora devuelve `needs_confirmation` con las seis, que es lo correcto: qué fila se elige determina bajo qué organización queda el registro, y no hay deshacer.
+
+Para la suite e2e esto significa que un candidato puede ser `{ label, institucionId }` en vez de solo un nombre. Los conocidos: **Uniandes 663**, **Universidad Simón Bolívar 603**.

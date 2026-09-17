@@ -54,6 +54,8 @@ const PLAN = {
     candidates: ['INGENIERIA DE ALIMENTOS', 'INGENIERIA BIOMEDICA', 'INGENIERIA AMBIENTAL'],
     add: {
       institution: 'Universidad de los Andes',
+      // Six rows share that name; 663 is CvLAC's canonical one.
+      institucionId: '663',
       degree: '',
       period: '2019 - 2019',
       // FC's level catalogue is its own (Y/8/F/E); "Diplomado" resolves to 8.
@@ -101,6 +103,8 @@ const PLAN = {
     ],
     add: {
       institution: 'Universidad de los Andes',
+      // Six catalogue rows share that name; 663 is CvLAC's canonical one.
+      institucionId: '663',
       degree: '',
       period: '2019 - 2021',
     },
@@ -113,9 +117,9 @@ const PLAN = {
     // its own catalogue — so it cannot be a made-up string like the others.
     // The runner picks the first candidate that collides with no real row.
     candidates: [
-      'Universidad de los Andes',
-      'Universidad Simón Bolívar',
-      'Universidad Francisco de Paula Santander',
+      { label: 'Universidad de los Andes', institucionId: '663' },
+      { label: 'Universidad Simón Bolívar', institucionId: '603' },
+      { label: 'Universidad Francisco de Paula Santander' },
     ],
     add: { company: '', role: 'Prueba automatizada', period: '2019 - 2020' },
     update: { period: '2019 - 2021' },
@@ -292,13 +296,25 @@ async function runSection(client, section) {
   // Experiencia's label must exist in CvLAC's institution catalogue, so pick one
   // that no real row already uses — otherwise update/delete could hit real data.
   if (plan.candidates) {
-    const free = plan.candidates.find((c) => !present(labelsBefore, c) && !labelsBefore.some((l) => norm(c).includes(norm(l))));
+    // A candidate is either a plain name or {label, institucionId}. CvLAC's
+    // institution catalogue holds six rows literally called "Universidad de los
+    // Andes", so a name alone is refused — by design — and the id settles it.
+    const cands = plan.candidates.map((c) => (typeof c === 'string' ? { label: c } : c));
+    const free = cands.find(
+      (c) => !present(labelsBefore, c.label) && !labelsBefore.some((l) => norm(c.label).includes(norm(l)))
+    );
     if (!free) {
-      record(section, 'elegir etiqueta', null, `todos los candidatos chocan con filas reales: ${plan.candidates.join(', ')}`);
+      record(
+        section,
+        'elegir etiqueta',
+        null,
+        `todos los candidatos chocan con filas reales: ${cands.map((c) => c.label).join(', ')}`
+      );
       return;
     }
-    addData[labelField] = free;
-    record(section, 'elegir etiqueta', true, `"${free}" no choca con ninguna fila real`);
+    addData[labelField] = free.label;
+    if (free.institucionId) addData.institucionId = free.institucionId;
+    record(section, 'elegir etiqueta', true, `"${free.label}" no choca con ninguna fila real`);
   }
 
   const label = addData[labelField];
@@ -316,6 +332,19 @@ async function runSection(client, section) {
     if (added?.status === 'ok') {
       created = true;
       record(section, 'add', true, added.message, added);
+    } else if (added?.status === 'needs_confirmation' && added?.choices?.length) {
+      // Working as intended: the name matched several catalogue rows and the
+      // tool refused to choose. The suite has no human to ask.
+      const ch = added.choices[0];
+      record(
+        section,
+        'add',
+        null,
+        `omitido: "${ch.value}" coincide con ${ch.options.length} filas del catálogo de ${ch.field}. ` +
+          `Pásale una en el plan: ${ch.options.map((o) => `${o.id}=${o.label}`).join(' | ').slice(0, 200)}`,
+        added
+      );
+      return;
     } else if (/programa académico/i.test(added?.message ?? '')) {
       // Not a defect: CvLAC only offers programmes already registered for that
       // institution and level, and its picker has no way to add one. The tool
