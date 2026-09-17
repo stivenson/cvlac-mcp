@@ -252,3 +252,41 @@ Un solo `textarea txt_desc_perfil`, y **diez hidden con la identidad de la perso
 `txt_desc_perfil` es **`required` y `maxlength=3950`** (el contador en pantalla dice 4000, el atributo dice 3950). Consecuencia que costó una corrida entera: **no hay forma de vaciarlo**. Un submit con el campo vacío ni siquiera sale del formulario, y la página vuelve mostrando el texto que acaba de negarse a borrar — que el código leyó como *"rejected: \<ese mismo texto\>"*. Solo se reemplaza; para quitarlo de verdad hay que ir a la web.
 
 Regla: **tocar solo el textarea**. Reconstruir o reordenar ese formulario arriesga la cédula y la fecha de nacimiento del registro oficial. (De paso, `cod_mun_nacim=991` confirma la numeración de municipios documentada arriba.)
+
+## Las cuatro secciones sin tool: formularios reales (2026-09-17)
+
+### Formación complementaria **no es un módulo propio**
+
+El hallazgo que cambia el costo de automatizarla. Solo la **lista** vive en `EnFormacionComple`; todo lo demás es `EnTrayectoriaEscolar` — el mismo módulo que `formacion` — discriminado por `isTrayectoria`:
+
+| Acción | URL |
+|---|---|
+| lista | `EnFormacionComple/all.do?isTrayectoria=FC` |
+| crear | `EnTrayectoriaEscolar/create.do?isTrayectoria=FC` → `insert.do?isTrayectoria=FC` |
+| detalle | `EnTrayectoriaEscolar/query.do?isTrayectoria=FC&cod_tray_escolar=N&cod_rh=…` |
+| editar | `EnTrayectoriaEscolar/edit.do?isTrayectoria=FC&…` |
+| borrar | `EnTrayectoriaEscolar/confirm.do?isTrayectoria=FC&…` |
+
+El botón de crear se llama **"Incluir item"**, no "Crear …" — buscar por `/crear|nuevo/` en esa lista no encuentra nada.
+
+Hay un tercer valor, `FP` (estancias posdoctorales), sobre el mismo módulo.
+
+**Pero los niveles son otros.** `cod_nivel_formacion` en FC ofrece `Y:Otros`, `8:Extensión`, `F:Cursos de corta duración`, `E:MBA` — nada que ver con los de TE (1 Pregrado, 2 Especialización, 3 Maestría…). Reusar `inferNivel` tal cual metería un código que este formulario no acepta.
+
+Campos obligatorios de FC que TE no pide: `nro_horas_semanales` y `nro_mes_inicio`. Opcionales: `nro_promedio_notas`, `nro_tiempo_lleva` + `tpo_tiempo_lleva` (`M`/`S`/`A`). Municipio y programa académico usan los mismos pickers ya resueltos.
+
+### Idiomas — `ReRecursoHumIdioma/create.do` → `insert.do`
+
+El más simple de todos: un select `sgl_idioma` (códigos ISO de 2 letras, `ES`, `EN`…) y cuatro grupos de radio con los mismos tres valores.
+
+| Campo | Valores |
+|---|---|
+| `tpo_nivel_leer`, `tpo_nivel_escribir`, `tpo_nivel_hablar`, `tpo_nivel_escuchar` | `P` Deficiente · `R` Aceptable · `B` Bueno |
+
+### Líneas de investigación — `EnLineaInv/create.do?decorator=T&null` → `insert.do?decorator=T&null`
+
+Tres campos: `txt_nme_linea`, `sta_activa` (radio) y `txt_objeto` (textarea). Ojo con la URL: el `?decorator=T&null` es literal, y sin él `create.do` responde una página sin formulario.
+
+### Demás trabajos — `EnProdTecnica/create_demasTrabajos.do` → `insert_demasTrabajos.do`
+
+Once campos: `cod_tipo_producto` (hidden, obligatorio), `txt_nme_prod`, `nro_ano_presenta`, `nro_mes_presenta`, `sgl_idioma`, `tpo_medio_divulgacion` (`I` Papel, `H` Internet, `O` Otro), el picker de municipio (`cod_municipio_text` + `cod_municipio` + `cod_rh_municipio` + `sgl_pais`) y `txt_finalidad`.
