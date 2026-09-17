@@ -34,11 +34,14 @@ const portfolioData: PortfolioData = {
   projects: [],
   software: [],
   eventos: [],
-  skills: { languages: [], frontend: [], ai: [], cloud: [], devops: [], databases: [] },
+  skills: {},
 };
 
 const emptyCvlac: CvLACData = {
   formacion: [],
+  formacionComple: [],
+  idiomas: [],
+  lineas: [],
   experiencia: [],
   cursos: [],
   reconocimientos: [],
@@ -240,5 +243,108 @@ describe('computeDiff', () => {
     const result = computeDiff(portfolioData, emptyCvlac);
     const curso = result.missing.find((d) => d.section === 'cursos');
     expect(curso?.data).toEqual(portfolioData.courses[0]);
+  });
+});
+
+// Both cases came from the first diff run against the rewritten portfolio. Each
+// was reported missing while CvLAC held it, and sync applies "missing" on its
+// own — so each would have become a duplicate in the official record.
+describe('computeDiff — items CvLAC holds under another section or wording', () => {
+  // Only what each case is about: the shared fixture's courses and award would
+  // show up as missing too and bury the one item under test.
+  const only = (overrides: Partial<PortfolioData>): PortfolioData => ({
+    ...portfolioData,
+    education: [],
+    courses: [],
+    achievements: [],
+    ...overrides,
+  });
+
+  // A diplomado is formación complementaria in CvLAC, not formación académica.
+  // Looking only at formacion reported it missing.
+  it('finds a diplomado that CvLAC keeps under formación complementaria', () => {
+    const result = computeDiff(
+      only({
+        education: [
+          {
+            institution: 'Universidad Ejemplo',
+            degree: 'Diplomado - Desarrollo de aplicaciones móviles',
+            period: 'Febrero 2014 - Junio 2014',
+          },
+        ],
+      }),
+      cvlac({
+        formacionComple: [
+          {
+            institution: 'UNIVERSIDAD EJEMPLO (SEDE NORTE)',
+            degree: 'Diplomado en Desarrollo de aplicaciones moviles',
+            period: '2014-2014',
+          },
+        ],
+      })
+    );
+    expect(result.missing).toEqual([]);
+    expect(result.upToDate).toHaveLength(1);
+  });
+
+  it('proposes a new diplomado for formación complementaria, not académica', () => {
+    const result = computeDiff(
+      only({
+        education: [
+          { institution: 'Universidad Ejemplo', degree: 'Diplomado en Ciencia de Datos', period: '2020 - 2020' },
+        ],
+      }),
+      cvlac()
+    );
+    expect(result.missing.map((m) => m.section)).toEqual(['formacionComple']);
+  });
+
+  it('keeps a degree in formación académica', () => {
+    const result = computeDiff(
+      only({
+        education: [{ institution: 'Universidad Ejemplo', degree: 'Ingeniería Civil', period: '2010 - 2015' }],
+      }),
+      cvlac()
+    );
+    expect(result.missing.map((m) => m.section)).toEqual(['formacion']);
+  });
+
+  // The portfolio names the award in two words and explains it in the
+  // description; CvLAC's title is the explanation. The titles share one word,
+  // so matching titles alone found nothing.
+  it('flags an award worded differently as similar, never as missing', () => {
+    const result = computeDiff(
+      only({
+        achievements: [
+          {
+            title: 'Exaltación Académica',
+            description: 'Mención por trabajo social en Villaejemplo. Proyecto que unió técnica y propósito.',
+          },
+        ],
+      }),
+      cvlac({
+        reconocimientos: [
+          {
+            title: 'Exaltación por su apoyo en la gestión del proyecto de estudio socioeconómico de Villaejemplo',
+            year: '2012',
+          },
+        ],
+      })
+    );
+    expect(result.missing).toEqual([]);
+    expect(result.similar).toHaveLength(1);
+    expect(result.similar[0].candidates[0].label).toContain('Villaejemplo');
+  });
+
+  // Sharing only the award type is not evidence: every second place is not the
+  // same second place.
+  it('does not tie two awards that share nothing but their kind', () => {
+    const result = computeDiff(
+      only({
+        achievements: [{ title: 'Exaltación Académica', description: 'Por un trabajo en Bogotá.' }],
+      }),
+      cvlac({ reconocimientos: [{ title: 'Exaltación deportiva en natación', year: '2010' }] })
+    );
+    expect(result.missing).toHaveLength(1);
   });
 });

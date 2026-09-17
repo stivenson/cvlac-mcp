@@ -94,6 +94,45 @@ export function nameMatches(a: string, b: string): boolean {
   return m === 'exact' || m === 'same';
 }
 
+/**
+ * Whether a portfolio education entry belongs to formación complementaria.
+ *
+ * CvLAC files diplomados, courses and workshops there, not under formación
+ * académica. Checking only académica reported a diplomado CvLAC already held
+ * as missing — and sync would have written a second copy into the wrong
+ * section.
+ */
+export function isComplementary(degree: string): boolean {
+  return /diplomado|\bcurso\b|taller|seminario|extensi[oó]n|bootcamp|capacitaci[oó]n/i.test(
+    normalize(degree ?? '')
+  );
+}
+
+/**
+ * Whether two awards may be the same one, worded differently.
+ *
+ * The portfolio names an award in a couple of words and explains it in the
+ * description; CvLAC's title is usually the explanation. Titles alone share one
+ * word at best, which read as "missing" and would have been written again.
+ *
+ * Two signals, both required: a word of the portfolio title (the kind of award)
+ * and a word from its description (what it was for — a place, a project). The
+ * kind alone is not enough: not every "Segundo lugar" is the same one. This
+ * only ever proposes `similar`, where a person decides.
+ */
+export function awardsLookAlike(
+  portfolio: { title: string; description?: string },
+  cvlacTitle: string
+): boolean {
+  const titleWords = tokens(portfolio.title);
+  const cvlacWords = tokens(cvlacTitle);
+  const fromTitle = [...titleWords].some((t) => cvlacWords.has(t));
+  const fromDescription = [...tokens(portfolio.description ?? '')].some(
+    (t) => !titleWords.has(t) && cvlacWords.has(t)
+  );
+  return fromTitle && fromDescription;
+}
+
 /** First 4-digit year in a free-text period, or '' when there is none. */
 function firstYear(s: string | undefined): string {
   return s?.match(/\d{4}/)?.[0] ?? '';
@@ -115,7 +154,12 @@ function classifySection<P, C>(
   cvlacNameOf: (c: C) => string,
   isSame: (p: P, c: C) => boolean,
   differs: (p: P, c: C) => boolean,
-  out: { missing: DiffItem[]; toUpdate: DiffItem[]; similar: SimilarDiffItem[]; upToDate: DiffItem[] }
+  out: { missing: DiffItem[]; toUpdate: DiffItem[]; similar: SimilarDiffItem[]; upToDate: DiffItem[] },
+  /**
+   * A second way to be "similar", for sections whose names alone say too
+   * little. Only ever widens `similar`: it never makes two items the same.
+   */
+  isSimilar?: (p: P, c: C) => boolean
 ): void {
   for (const p of portfolioItems) {
     const base = { section, label: labelOf(p), data: p } as const;
@@ -136,7 +180,9 @@ function classifySection<P, C>(
     }
 
     const candidates: SimilarCandidate[] = cvlacItems
-      .filter((c) => classifyMatch(matchNameOf(p), cvlacNameOf(c)) === 'similar')
+      .filter(
+        (c) => classifyMatch(matchNameOf(p), cvlacNameOf(c)) === 'similar' || (isSimilar?.(p, c) ?? false)
+      )
       .map((c) => ({ label: cvlacNameOf(c), matchType: 'similar' as const }));
 
     if (candidates.length > 0) {
@@ -155,23 +201,35 @@ export function computeDiff(portfolio: PortfolioData, cvlac: CvLACData): DiffRes
     upToDate: [] as DiffItem[],
   };
 
-  // ── Formación académica ──────────────────────────────────────────────────
-  // The list view exposes the start year, so a year mismatch is a real update.
-  classifySection(
-    'formacion',
-    portfolio.education,
-    cvlac.formacion,
-    (e) => `${e.degree} — ${e.institution}`,
-    (e) => e.degree,
-    (c) => c.degree,
-    (e, c) => nameMatches(c.institution, e.institution) && nameMatches(c.degree, e.degree),
-    (e, c) => {
-      const a = firstYear(e.period);
-      const b = firstYear(c.period);
-      return Boolean(a && b && a !== b);
-    },
-    out
-  );
+  // ── Formación académica y complementaria ─────────────────────────────────
+  // One portfolio list, two CvLAC sections. Each entry is proposed for the
+  // section it belongs to, but looked for in both: a diplomado CvLAC holds under
+  // complementaria is not missing just because académica lacks it.
+  const educationHeld = [...cvlac.formacion, ...cvlac.formacionComple];
+  const sameEducation = (e: PortfolioData['education'][number], c: (typeof educationHeld)[number]) =>
+    nameMatches(c.institution, e.institution) && nameMatches(c.degree, e.degree);
+  const educationYearDiffers = (e: PortfolioData['education'][number], c: (typeof educationHeld)[number]) => {
+    const a = firstYear(e.period);
+    const b = firstYear(c.period);
+    return Boolean(a && b && a !== b);
+  };
+
+  for (const [section, entries] of [
+    ['formacion', portfolio.education.filter((e) => !isComplementary(e.degree))],
+    ['formacionComple', portfolio.education.filter((e) => isComplementary(e.degree))],
+  ] as const) {
+    classifySection(
+      section,
+      entries,
+      educationHeld,
+      (e) => `${e.degree} — ${e.institution}`,
+      (e) => e.degree,
+      (c) => c.degree,
+      sameEducation,
+      educationYearDiffers,
+      out
+    );
+  }
 
   // ── Experiencia profesional ──────────────────────────────────────────────
   // Intentionally excluded from the diff (verified live, see docs/cvlac-findings.md):
@@ -210,7 +268,8 @@ export function computeDiff(portfolio: PortfolioData, cvlac: CvLACData): DiffRes
       const b = firstYear(c.year);
       return Boolean(a && b && a !== b);
     },
-    out
+    out,
+    (p, c) => awardsLookAlike(p, c.title)
   );
 
   // ── Eventos científicos ──────────────────────────────────────────────────
