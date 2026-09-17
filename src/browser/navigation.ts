@@ -25,6 +25,12 @@ export const URLS = {
   eventosCreate:        `${BASE_URL}/cvlac/EnEventoCientifico/create.do`,
   // Two singleton records: no list, no create/edit split. `create.do` is both
   // the read view and the form, and its `insert.do` rewrites the whole set.
+  idiomas:              `${BASE_URL}/cvlac/ReRecursoHumIdioma/all.do`,
+  idiomasCreate:        `${BASE_URL}/cvlac/ReRecursoHumIdioma/create.do`,
+  // The `?decorator=T&null` is literal: without it create.do answers a page
+  // with no form at all.
+  lineas:               `${BASE_URL}/cvlac/EnLineaInv/all.do`,
+  lineasCreate:         `${BASE_URL}/cvlac/EnLineaInv/create.do?decorator=T&null`,
   redes:                `${BASE_URL}/cvlac/ReRedSocialIdent/create.do`,
   perfil:               `${BASE_URL}/cvlac/EnRecursoHumano/enPerfilInvestigador.do`,
 } as const;
@@ -52,4 +58,6 @@ export const SECTION_LIST: Record<
   proyectos:       { listUrl: URLS.proyectos,        matchCellIndex: 1 },
   software:        { listUrl: URLS.software,         matchCellIndex: 1 },
   eventos:         { listUrl: URLS.eventos,          matchCellIndex: 1 },
+  idiomas:         { listUrl: URLS.idiomas,          matchCellIndex: 1 },
+  lineas:          { listUrl: URLS.lineas,           matchCellIndex: 1 },
 };

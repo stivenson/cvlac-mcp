@@ -12,6 +12,8 @@ import type {
   ProjectItem,
   SoftwareItem,
   EventoCientificoItem,
+  LanguageInput,
+  ResearchLineInput,
 } from '../types.js';
 import { BASE_URL, URLS, SECTION_LIST } from '../browser/navigation.js';
 import { navigate } from '../browser/navigate.js';
@@ -563,6 +565,34 @@ export async function readFormValues(page: Page): Promise<Record<string, string>
   });
 }
 
+/**
+ * The code CvLAC's four language radio groups carry, or null.
+ *
+ * Its three levels are P/R/B, printed as Deficiente/Aceptable/Bueno. A level it
+ * cannot place returns null and the field is left unset with a warning: a
+ * guessed proficiency in an official record is worse than a missing one.
+ */
+export function languageLevel(text: string): 'P' | 'R' | 'B' | null {
+  const t = (text ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .trim();
+  // Matched whole, not by prefix: "regular tirando a bueno" started with
+  // "regular" and was graded Aceptable, which is not what it says.
+  const LEVELS: Record<string, 'P' | 'R' | 'B'> = {
+    p: 'P', deficiente: 'P', pobre: 'P', bajo: 'P', poor: 'P',
+    r: 'R', aceptable: 'R', regular: 'R', medio: 'R', intermedio: 'R', fair: 'R',
+    b: 'B', bueno: 'B', buena: 'B', alto: 'B', good: 'B',
+  };
+  return LEVELS[t] ?? null;
+}
+
+/** The word CvLAC prints for a level code. */
+export function levelName(code: 'P' | 'R' | 'B'): string {
+  return { P: 'Deficiente', R: 'Aceptable', B: 'Bueno' }[code];
+}
+
 /** Reads the matchable label of every row in a list page. */
 export async function listRowLabels(page: Page, matchCellIndex: number): Promise<string[]> {
   return page.evaluate((idx) => {
@@ -1055,7 +1085,98 @@ interface SectionConfig {
   fill: (page: Page, data: any, report: FillReport) => Promise<void>;
 }
 
+
+/**
+ * A language and the four skills CvLAC grades separately.
+ *
+ * Its select holds every language in Spanish, so the name is matched against
+ * the options themselves rather than against a table this server would have to
+ * keep in step; a two-letter code is taken as given.
+ */
+async function fillIdioma(page: Page, item: LanguageInput, report: FillReport): Promise<void> {
+  const wanted = (item.language ?? '').trim();
+  const code = /^[A-Za-z]{2}$/.test(wanted)
+    ? wanted.toUpperCase()
+    : await page.$$eval(
+        'select[name="sgl_idioma"] option',
+        (options, name: string) => {
+          const norm = (s: string): string =>
+            s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+          const target = norm(name);
+          const hit = options.find((o) => norm(o.textContent ?? '') === target);
+          return hit ? (hit as HTMLOptionElement).value : '';
+        },
+        wanted
+      );
+
+  if (!code) {
+    missingValue(report, 'sgl_idioma', `CvLAC no lista un idioma llamado "${wanted}"`);
+    return;
+  }
+  await tryField(report, 'sgl_idioma', () => page.selectOption('select[name="sgl_idioma"]', code));
+  await humanDelay(200, 400);
+
+  const skills: Array<[keyof LanguageInput, string]> = [
+    ['read', 'tpo_nivel_leer'],
+    ['write', 'tpo_nivel_escribir'],
+    ['speak', 'tpo_nivel_hablar'],
+    ['listen', 'tpo_nivel_escuchar'],
+  ];
+  for (const [key, field] of skills) {
+    const text = (item[key] as string | undefined) ?? item.level;
+    if (!text) {
+      missingValue(report, field, 'el ítem no trae nivel para esta destreza ni un "level" general');
+      continue;
+    }
+    const level = languageLevel(text);
+    if (!level) {
+      missingValue(report, field, `"${text}" no es Deficiente, Aceptable ni Bueno`);
+      continue;
+    }
+    await tryField(report, field, () => page.check(`input[name="${field}"][value="${level}"]`));
+  }
+  await humanDelay(200, 300);
+}
+
+async function fillLinea(page: Page, item: ResearchLineInput, report: FillReport): Promise<void> {
+  await tryField(report, 'txt_nme_linea', () =>
+    page.fill('input:not([type="hidden"])[name="txt_nme_linea"]', item.name)
+  );
+  await humanDelay(200, 400);
+
+  // CvLAC preselects neither radio, so leaving it alone gets the form rejected.
+  // An active line is the ordinary case; the assumption is reported, not hidden.
+  const active = item.active ?? true;
+  if (item.active === undefined) {
+    report.warnings.push('sta_activa: el ítem no dice si la línea está activa; se marcó "Sí"');
+  }
+  await tryField(report, 'sta_activa', () =>
+    page.check(`input[name="sta_activa"][value="${active ? 'T' : 'F'}"]`)
+  );
+
+  if (item.objective) {
+    await tryField(report, 'txt_objeto', () =>
+      page.fill('textarea[name="txt_objeto"]', item.objective!)
+    );
+  } else {
+    missingValue(report, 'txt_objeto', 'el ítem no trae "objective"');
+  }
+  await humanDelay(200, 300);
+}
+
 const SECTIONS: Record<CvLACSectionName, SectionConfig> = {
+  idiomas: {
+    ...SECTION_LIST.idiomas,
+    createUrl: URLS.idiomasCreate,
+    labelOf: (d: LanguageInput) => d.language,
+    fill: fillIdioma,
+  },
+  lineas: {
+    ...SECTION_LIST.lineas,
+    createUrl: URLS.lineasCreate,
+    labelOf: (d: ResearchLineInput) => d.name,
+    fill: fillLinea,
+  },
   formacion: {
     ...SECTION_LIST.formacion,
     createUrl: URLS.formacionCreate,

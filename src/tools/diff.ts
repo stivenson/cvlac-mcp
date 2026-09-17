@@ -17,6 +17,10 @@ export async function diffTool(section?: CvLACSectionName | 'all'): Promise<Diff
     proyectos: cvlacPartial.proyectos ?? [],
     software: cvlacPartial.software ?? [],
     eventos: cvlacPartial.eventos ?? [],
+    // Neither is diffed: the portfolio carries no languages and no research
+    // lines, so every CvLAC row would read as an unexplained extra.
+    idiomas: cvlacPartial.idiomas ?? [],
+    lineas: cvlacPartial.lineas ?? [],
   };
 
   return computeDiff(portfolio, cvlac);

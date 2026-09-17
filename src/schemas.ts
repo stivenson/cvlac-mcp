@@ -103,6 +103,21 @@ export const eventoSchema = z.object({
   resumen: z.string().optional(),
 });
 
+const idiomaSchema = z.object({
+  language: z.string().min(1),
+  level: z.string().optional(),
+  read: z.string().optional(),
+  write: z.string().optional(),
+  speak: z.string().optional(),
+  listen: z.string().optional(),
+});
+
+const lineaSchema = z.object({
+  name: z.string().min(1),
+  active: z.boolean().optional(),
+  objective: z.string().optional(),
+});
+
 export const SECTION_SCHEMAS: Record<CvLACSectionName, z.ZodType> = {
   formacion: educationSchema,
   experiencia: experienceSchema,
@@ -111,6 +126,8 @@ export const SECTION_SCHEMAS: Record<CvLACSectionName, z.ZodType> = {
   proyectos: projectSchema,
   software: softwareSchema,
   eventos: eventoSchema,
+  idiomas: idiomaSchema,
+  lineas: lineaSchema,
 };
 
 export const portfolioExtraSchema = z.object({

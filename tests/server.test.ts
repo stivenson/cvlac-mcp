@@ -101,7 +101,9 @@ describe('argument validation, before anything reaches CvLAC', () => {
   it('refuses a section it does not know instead of navigating somewhere unexpected', async () => {
     const res: any = await client.callTool({
       name: 'update_section',
-      arguments: { section: 'idiomas', action: 'add', data: { name: 'Inglés' } },
+      // A real CvLAC section this server does not drive yet — the point is that
+      // the enum, not the tool body, is what turns it away.
+      arguments: { section: 'patentes', action: 'add', data: { name: 'x' } },
     });
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toMatch(/invalid|arguments/i);

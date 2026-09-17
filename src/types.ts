@@ -130,7 +130,9 @@ export type CvLACSectionName =
   | 'reconocimientos'
   | 'proyectos'
   | 'software'
-  | 'eventos';
+  | 'eventos'
+  | 'idiomas'
+  | 'lineas';
 
 export interface CvLACFormacionItem {
   institution: string;
@@ -174,6 +176,8 @@ export interface CvLACData {
   proyectos: CvLACProyectoItem[];
   software: CvLACSoftwareItem[];
   eventos: CvLACEventoItem[];
+  idiomas: CvLACIdiomaItem[];
+  lineas: CvLACLineaItem[];
 }
 
 // ── Diff types ───────────────────────────────────────────────────────────────
@@ -208,6 +212,39 @@ export interface DiffResult {
   toUpdate: DiffItem[];
   similar: SimilarDiffItem[];
   upToDate: DiffItem[];
+}
+
+/** What a caller passes to add or edit a language. */
+export interface LanguageInput {
+  language: string;
+  /** Sets the four skills at once when the individual ones are absent. */
+  level?: string;
+  read?: string;
+  write?: string;
+  speak?: string;
+  listen?: string;
+}
+
+/** What a caller passes to add or edit a research line. */
+export interface ResearchLineInput {
+  name: string;
+  /** CvLAC stores this as T/F and preselects neither; it defaults to active. */
+  active?: boolean;
+  objective?: string;
+}
+
+/** One language with the four levels CvLAC grades separately. */
+export interface CvLACIdiomaItem {
+  language: string;
+  read: string;
+  write: string;
+  speak: string;
+  listen: string;
+}
+
+/** A research line. Its list view carries only the name. */
+export interface CvLACLineaItem {
+  name: string;
 }
 
 // ── Update types ─────────────────────────────────────────────────────────────

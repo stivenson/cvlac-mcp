@@ -47,6 +47,32 @@ const only = argSections ? argSections.split('=')[1].split(',').map((s) => s.tri
  * `evidence` is the value that must show up on the record page afterwards.
  */
 const PLAN = {
+  idiomas: {
+    labelField: 'language',
+    // The four levels are deliberately different. The update then flips the
+    // first of them, so a mis-mapped column shows up as a failed evidence check
+    // instead of as silently mislabelled data — the list has no <th> to read the
+    // order from, and this account grades every language the same.
+    add: {
+      language: 'Italiano',
+      read: 'Bueno',
+      write: 'Aceptable',
+      speak: 'Deficiente',
+      listen: 'Bueno',
+    },
+    update: { read: 'Deficiente' },
+    evidence: '"read":"Deficiente"',
+  },
+  lineas: {
+    labelField: 'name',
+    add: {
+      name: `${TAG} línea de prueba`,
+      active: true,
+      objective: 'Objeto de prueba escrito por la suite e2e.',
+    },
+    update: { objective: 'Objeto de prueba EDITADO por la suite e2e.' },
+    evidence: 'EDITADO',
+  },
   formacion: {
     labelField: 'degree',
     // CvLAC only accepts a programme its catalogue lists for that institution
@@ -154,6 +180,8 @@ const LIST_LABEL = {
   proyectos: 'title',
   software: 'name',
   eventos: 'name',
+  idiomas: 'language',
+  lineas: 'name',
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

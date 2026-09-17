@@ -67,7 +67,9 @@ Flujo de datos: `index.ts` → `server.ts` (router) → `tools/*` → `browser/s
 
 `login`, `read_cvlac`, `read_cvlac_detail`, `read_profile`, `update_profile`, `read_portfolio`, `diff`, `update_section`, `sync`, `screenshot`, `inspect_form`.
 
-**Secciones:** `formacion`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`, `software`, `eventos`.
+**Secciones:** `formacion`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`, `software`, `eventos`, `idiomas`, `lineas`.
+
+`idiomas` y `lineas` se leen y escriben, pero no se diffean: el portafolio no tiene de dónde compararlas.
 
 **Todo borrado pide confirmación.** `update_section` con `action:"delete"` y `update_profile` con una red en `url:null` devuelven `needs_confirmation` y no escriben nada hasta que se repitan con `confirm_delete:true`. La etiqueta con la que se encuentra una fila hace match flexible: sin la segunda vuelta, un nombre parecido borra el registro del vecino.
 

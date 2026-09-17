@@ -432,7 +432,12 @@ src/
 - `inspect_form`: inspecciona campos reales (`input/select/textarea`) de una URL CvLAC.
 
 Secciones soportadas:
-`formacion`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`, `software`, `eventos`.
+`formacion`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`, `software`, `eventos`, `idiomas`, `lineas`.
+
+`idiomas` y `lineas` no entran al `diff`: el portafolio no lleva ni idiomas ni líneas de investigación, así que cada fila del CvLAC se leería como un sobrante inexplicable. Se gestionan con `update_section` directamente.
+
+- **idiomas** — `language` (nombre en español o código ISO de 2 letras) y los cuatro niveles `read`/`write`/`speak`/`listen`, o un `level` que los fija todos. Valores: Deficiente, Aceptable, Bueno.
+- **lineas** — `name`, `active` (por defecto `true`, y lo avisa) y `objective`.
 
 La suite e2e (`tests/e2e/live-crud.mjs`) acepta además `--sections=perfil`, que ejercita el CRUD de `read_profile`/`update_profile`: toma un snapshot, escribe en una fila de red que nadie use, la edita, la borra y restaura lo que había. Comprueba explícitamente que las redes preexistentes sobrevivan a la escritura — el `insert.do` de CvLAC reescribe la tabla entera.
 
