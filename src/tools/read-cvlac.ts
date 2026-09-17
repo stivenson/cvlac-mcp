@@ -9,6 +9,7 @@ import { extractEventos } from '../extractors/cvlac/eventos.js';
 import { extractFormacionComple } from '../extractors/cvlac/formacion-comple.js';
 import { extractIdiomas } from '../extractors/cvlac/idiomas.js';
 import { extractLineas } from '../extractors/cvlac/lineas.js';
+import { extractDemasTrabajos } from '../extractors/cvlac/demas-trabajos.js';
 import type { CvLACData, CvLACSectionName } from '../types.js';
 
 export async function readCvlacTool(
@@ -49,6 +50,9 @@ export async function readCvlacTool(
   }
   if (target === 'lineas' || target === 'all') {
     result.lineas = await extractLineas(page);
+  }
+  if (target === 'demasTrabajos' || target === 'all') {
+    result.demasTrabajos = await extractDemasTrabajos(page);
   }
 
   await page.close();

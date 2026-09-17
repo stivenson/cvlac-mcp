@@ -149,7 +149,8 @@ export type CvLACSectionName =
   | 'eventos'
   | 'formacionComple'
   | 'idiomas'
-  | 'lineas';
+  | 'lineas'
+  | 'demasTrabajos';
 
 export interface CvLACFormacionItem {
   institution: string;
@@ -196,6 +197,7 @@ export interface CvLACData {
   formacionComple: CvLACFormacionItem[];
   idiomas: CvLACIdiomaItem[];
   lineas: CvLACLineaItem[];
+  demasTrabajos: CvLACDemasTrabajoItem[];
 }
 
 // ── Diff types ───────────────────────────────────────────────────────────────
@@ -273,6 +275,28 @@ export interface CvLACIdiomaItem {
   write: string;
   speak: string;
   listen: string;
+}
+
+/** A row of "Demás trabajos". The list shows the name and the year. */
+export interface CvLACDemasTrabajoItem {
+  name: string;
+  year: string;
+}
+
+/** What a caller passes to add or edit one of "Demás trabajos". */
+export interface OtherWorkInput {
+  name: string;
+  year: string;
+  /** 1-12. The form preselects Enero, so a missing month is stored as January. */
+  month?: string;
+  /** Two-letter code; defaults to defaults.idioma. */
+  idioma?: string;
+  /** Papel, Internet or Otro — or the codes I, H, O. The form preselects Papel. */
+  medio?: string;
+  /** What the work is for: CvLAC's "Finalidad". */
+  finalidad?: string;
+  /** Defaults to defaults.municipio. */
+  ciudad?: string;
 }
 
 /** A research line. Its list view carries only the name. */

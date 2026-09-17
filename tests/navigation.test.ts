@@ -25,13 +25,16 @@ describe('URLS', () => {
     }
   });
 
+  // Several CvLAC modules serve more than one kind of product and name the
+  // action after it: EnProdTecnica/all_demasTrabajos.do, EnTesisOrientada/
+  // all_jurado.do. The suffix is part of the action, not a typo to reject.
   it('points list URLs at all.do and create URLs at create.do', () => {
     for (const section of sections) {
-      expect(new URL(URLS[section as keyof typeof URLS]).pathname, section).toMatch(/\/all\.do$/);
+      expect(new URL(URLS[section as keyof typeof URLS]).pathname, section).toMatch(/\/all(_\w+)?\.do$/);
       expect(
         new URL(URLS[`${section}Create` as keyof typeof URLS]).pathname,
         section
-      ).toMatch(/\/create\.do$/);
+      ).toMatch(/\/create(_\w+)?\.do$/);
     }
   });
 });

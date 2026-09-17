@@ -14,6 +14,7 @@ import type {
   SoftwareItem,
   EventoCientificoItem,
   LanguageInput,
+  OtherWorkInput,
   ResearchLineInput,
 } from '../types.js';
 import { BASE_URL, URLS, SECTION_LIST } from '../browser/navigation.js';
@@ -624,6 +625,26 @@ export function languageLevel(text: string): 'P' | 'R' | 'B' | null {
 /** The word CvLAC prints for a level code. */
 export function levelName(code: 'P' | 'R' | 'B'): string {
   return { P: 'Deficiente', R: 'Aceptable', B: 'Bueno' }[code];
+}
+
+/**
+ * The code of `tpo_medio_divulgacion`: I Papel, H Internet, O Otro.
+ *
+ * The form preselects Papel. A medium this cannot place returns null, so the
+ * filler warns instead of leaving paper in place — which would read as right.
+ */
+export function medioDivulgacion(text: string): 'I' | 'H' | 'O' | null {
+  const t = (text ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .trim();
+  const MEDIOS: Record<string, 'I' | 'H' | 'O'> = {
+    i: 'I', papel: 'I', impreso: 'I',
+    h: 'H', internet: 'H', web: 'H', 'pagina web': 'H', online: 'H', digital: 'H',
+    o: 'O', otro: 'O',
+  };
+  return MEDIOS[t] ?? null;
 }
 
 /** Reads the matchable label of every row in a list page. */
@@ -1279,7 +1300,66 @@ async function fillLinea(page: Page, item: ResearchLineInput, report: FillReport
   await humanDelay(200, 300);
 }
 
+
+async function fillDemasTrabajo(page: Page, item: OtherWorkInput, report: FillReport): Promise<void> {
+  const defaults = loadConfig().defaults ?? {};
+
+  await tryField(report, 'txt_nme_prod', () =>
+    page.fill('input:not([type="hidden"])[name="txt_nme_prod"]', item.name)
+  );
+  await humanDelay(200, 400);
+
+  await tryField(report, 'nro_ano_presenta', () =>
+    page.selectOption('select[name="nro_ano_presenta"]', item.year)
+  );
+  if (item.month) {
+    await tryField(report, 'nro_mes_presenta', () =>
+      page.selectOption('select[name="nro_mes_presenta"]', String(parseInt(item.month!, 10)))
+    );
+  } else {
+    report.warnings.push('nro_mes_presenta: el ítem no trae "month"; CvLAC deja el mes preseleccionado (Enero)');
+  }
+
+  const idioma = item.idioma ?? defaults.idioma;
+  if (idioma) {
+    await tryField(report, 'sgl_idioma', () => page.selectOption('select[name="sgl_idioma"]', idioma));
+  } else {
+    missingValue(report, 'sgl_idioma', 'define defaults.idioma en cvlac.config.json');
+  }
+
+  if (item.medio) {
+    const medio = medioDivulgacion(item.medio);
+    if (medio) {
+      await tryField(report, 'tpo_medio_divulgacion', () =>
+        page.selectOption('select[name="tpo_medio_divulgacion"]', medio)
+      );
+    } else {
+      missingValue(report, 'tpo_medio_divulgacion', `"${item.medio}" no es Papel, Internet ni Otro`);
+    }
+  } else {
+    report.warnings.push('tpo_medio_divulgacion: el ítem no trae "medio"; CvLAC deja el preseleccionado (Papel)');
+  }
+
+  await setMunicipio(page, report, item.ciudad ?? defaults.municipio?.nombre, defaults.municipio?.codigoDane);
+  await humanDelay(200, 400);
+
+  if (item.finalidad) {
+    await tryField(report, 'txt_finalidad', () =>
+      page.fill('input:not([type="hidden"])[name="txt_finalidad"]', item.finalidad!)
+    );
+  } else {
+    missingValue(report, 'txt_finalidad', 'el ítem no trae "finalidad"');
+  }
+  await humanDelay(200, 300);
+}
+
 const SECTIONS: Record<CvLACSectionName, SectionConfig> = {
+  demasTrabajos: {
+    ...SECTION_LIST.demasTrabajos,
+    createUrl: URLS.demasTrabajosCreate,
+    labelOf: (d: OtherWorkInput) => d.name,
+    fill: fillDemasTrabajo,
+  },
   idiomas: {
     ...SECTION_LIST.idiomas,
     createUrl: URLS.idiomasCreate,
@@ -1449,9 +1529,20 @@ export async function landedOnOutage(page: Page): Promise<boolean> {
   return isOutageMarkup(html);
 }
 
+/**
+ * Whether a URL is one of CvLAC's form actions rather than a list or a record.
+ *
+ * Modules that serve several products suffix their actions —
+ * `insert_demasTrabajos.do`, `edit_demasTrabajos.do` — and matching `insert.do`
+ * literally read a rejection on one of those as a save.
+ */
+export function isFormUrl(url: string): boolean {
+  return /\/(create|insert|edit|update)(_\w+)?\.do(\?|$)/.test(url);
+}
+
 /** A submit landed back on a form page (instead of the list) ⇒ validation rejected it. */
 function landedOnForm(page: Page): boolean {
-  return /create\.do|insert\.do|edit\.do|update\.do/.test(page.url());
+  return isFormUrl(page.url());
 }
 
 async function shot(page: Page): Promise<string> {
@@ -1698,7 +1789,7 @@ async function deleteItem(pageRef: { page: Page }, cfg: SectionConfig, label: st
   await gotoFormWithRelogin(pageRef, BASE_URL + confirmHref);
   const deleteHref = await pageRef.page.evaluate(() => {
     const a = Array.from(document.querySelectorAll('a')).find(
-      (el) => /borrar|eliminar/i.test(el.textContent ?? '') || /delete\.do/i.test(el.getAttribute('href') ?? '')
+      (el) => /borrar|eliminar/i.test(el.textContent ?? '') || /delete(_\w+)?\.do/i.test(el.getAttribute('href') ?? '')
     );
     return a ? a.getAttribute('href') : null;
   });

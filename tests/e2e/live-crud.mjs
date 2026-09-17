@@ -47,6 +47,20 @@ const only = argSections ? argSections.split('=')[1].split(',').map((s) => s.tri
  * `evidence` is the value that must show up on the record page afterwards.
  */
 const PLAN = {
+  demasTrabajos: {
+    labelField: 'name',
+    add: {
+      name: `${TAG} trabajo de prueba`,
+      year: '2024',
+      month: '3',
+      // The form preselects Papel; Internet proves the medium was really set.
+      medio: 'Internet',
+      finalidad: 'Finalidad de prueba escrita por la suite e2e.',
+    },
+    // The list shows the year, so the edit is visible without the record page.
+    update: { year: '2025' },
+    evidence: '2025',
+  },
   formacionComple: {
     labelField: 'degree',
     // Same catalogue problem as formación académica: CvLAC only accepts a
@@ -203,6 +217,7 @@ const LIST_LABEL = {
   formacionComple: 'degree',
   idiomas: 'language',
   lineas: 'name',
+  demasTrabajos: 'name',
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

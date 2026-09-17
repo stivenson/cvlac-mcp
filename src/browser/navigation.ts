@@ -35,6 +35,8 @@ export const URLS = {
   // with no form at all.
   lineas:               `${BASE_URL}/cvlac/EnLineaInv/all.do`,
   lineasCreate:         `${BASE_URL}/cvlac/EnLineaInv/create.do?decorator=T&null`,
+  demasTrabajos:        `${BASE_URL}/cvlac/EnProdTecnica/all_demasTrabajos.do`,
+  demasTrabajosCreate:  `${BASE_URL}/cvlac/EnProdTecnica/create_demasTrabajos.do`,
   redes:                `${BASE_URL}/cvlac/ReRedSocialIdent/create.do`,
   perfil:               `${BASE_URL}/cvlac/EnRecursoHumano/enPerfilInvestigador.do`,
 } as const;
@@ -65,4 +67,5 @@ export const SECTION_LIST: Record<
   formacionComple: { listUrl: URLS.formacionComple,  matchCellIndex: 5 },
   idiomas:         { listUrl: URLS.idiomas,          matchCellIndex: 1 },
   lineas:          { listUrl: URLS.lineas,           matchCellIndex: 1 },
+  demasTrabajos:   { listUrl: URLS.demasTrabajos,    matchCellIndex: 1 },
 };

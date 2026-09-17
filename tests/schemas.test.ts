@@ -19,6 +19,7 @@ describe('SECTION_SCHEMAS', () => {
   it('covers every section the server accepts', () => {
     expect(Object.keys(SECTION_SCHEMAS).sort()).toEqual([
       'cursos',
+      'demasTrabajos',
       'eventos',
       'experiencia',
       'formacion',

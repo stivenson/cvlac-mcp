@@ -67,7 +67,7 @@ Flujo de datos: `index.ts` → `server.ts` (router) → `tools/*` → `browser/s
 
 `login`, `read_cvlac`, `read_cvlac_detail`, `read_profile`, `update_profile`, `read_portfolio`, `diff`, `update_section`, `sync`, `screenshot`, `inspect_form`.
 
-**Secciones:** `formacion`, `formacionComple`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`, `software`, `eventos`, `idiomas`, `lineas`.
+**Secciones:** `formacion`, `formacionComple`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`, `software`, `eventos`, `idiomas`, `lineas`, `demasTrabajos`.
 
 `idiomas` y `lineas` se leen y escriben, pero no se diffean: el portafolio no tiene de dónde compararlas.
 
@@ -80,6 +80,8 @@ son **registros únicos**, sin `all.do` ni `add`/`update`/`delete`, así que no 
 `update_section`. Viven en `tools/profile.ts`.
 
 ## Detalles que muerden (lee antes de tocar)
+
+**Acciones con sufijo.** Algunos módulos de CvLAC sirven varios productos y nombran la acción con él: `EnProdTecnica/insert_demasTrabajos.do`, no `insert.do`. Cualquier regex sobre URLs de CvLAC tiene que aceptar `(_\w+)?` — `landedOnForm` no lo hacía, y un `add` rechazado ahí se habría leído como guardado.
 
 **El portafolio se lee renderizando, no descargando el bundle.** `fetchPortfolioData` abre un chromium propio, va a `#/resume` y hace clic en cada pestaña: solo la abierta está en el DOM. Dos trampas ya pagadas: el sidebar usa las mismas clases que el contenido (`.rf-tree-item`), así que los selectores van acotados a `.rf-tabpanel-content`; y no se puede declarar una función con nombre dentro de un `$$eval`, porque esbuild la envuelve en `__name`, que no existe en la página — falla solo fuera de vitest.
 

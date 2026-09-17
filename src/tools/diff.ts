@@ -24,6 +24,7 @@ export async function diffTool(section?: CvLACSectionName | 'all'): Promise<Diff
     formacionComple: cvlacPartial.formacionComple ?? [],
     idiomas: cvlacPartial.idiomas ?? [],
     lineas: cvlacPartial.lineas ?? [],
+    demasTrabajos: cvlacPartial.demasTrabajos ?? [],
   };
 
   return computeDiff(portfolio, cvlac);

@@ -42,6 +42,7 @@ const emptyCvlac: CvLACData = {
   formacionComple: [],
   idiomas: [],
   lineas: [],
+  demasTrabajos: [],
   experiencia: [],
   cursos: [],
   reconocimientos: [],

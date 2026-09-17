@@ -15,7 +15,7 @@ import type { CvLACSectionName } from './types.js';
 
 const log = createLogger('server');
 
-const sectionSchema = z.enum(['formacion', 'experiencia', 'cursos', 'reconocimientos', 'proyectos', 'software', 'eventos', 'formacionComple', 'idiomas', 'lineas']);
+const sectionSchema = z.enum(['formacion', 'experiencia', 'cursos', 'reconocimientos', 'proyectos', 'software', 'eventos', 'formacionComple', 'idiomas', 'lineas', 'demasTrabajos']);
 const sectionAllSchema = z.enum([
   'formacion',
   'experiencia',
@@ -27,6 +27,7 @@ const sectionAllSchema = z.enum([
   'formacionComple',
   'idiomas',
   'lineas',
+  'demasTrabajos',
   'all',
 ]);
 

@@ -122,6 +122,16 @@ const lineaSchema = z.object({
   objective: z.string().optional(),
 });
 
+const demasTrabajoSchema = z.object({
+  name: z.string().min(1),
+  year: z.string().regex(/^\d{4}$/, 'año de 4 cifras'),
+  month: z.string().optional(),
+  idioma: z.string().optional(),
+  medio: z.string().optional(),
+  finalidad: z.string().optional(),
+  ciudad: z.string().optional(),
+});
+
 export const SECTION_SCHEMAS: Record<CvLACSectionName, z.ZodType> = {
   formacion: educationSchema,
   formacionComple: educationSchema,
@@ -133,6 +143,7 @@ export const SECTION_SCHEMAS: Record<CvLACSectionName, z.ZodType> = {
   eventos: eventoSchema,
   idiomas: idiomaSchema,
   lineas: lineaSchema,
+  demasTrabajos: demasTrabajoSchema,
 };
 
 export const portfolioExtraSchema = z.object({

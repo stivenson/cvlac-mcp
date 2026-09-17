@@ -436,7 +436,9 @@ src/
 - `inspect_form`: inspecciona campos reales (`input/select/textarea`) de una URL CvLAC.
 
 Secciones soportadas:
-`formacion`, `formacionComple`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`, `software`, `eventos`, `idiomas`, `lineas`.
+`formacion`, `formacionComple`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`, `software`, `eventos`, `idiomas`, `lineas`, `demasTrabajos`.
+
+- **demasTrabajos** — `name`, `year`, `month`, `medio` (Papel, Internet u Otro), `finalidad`, y opcionalmente `idioma` y `ciudad` (por defecto, los de `cvlac.config.json`). El formulario trae Enero y Papel preseleccionados: si faltan `month` o `medio` se guardan esos, y lo avisa. No entra al diff.
 
 - **formacionComple** — formación complementaria. Mismo formulario que `formacion` (es el mismo módulo con `isTrayectoria=FC`), con dos diferencias: el catálogo de niveles es otro (`Y` Otros, `8` Extensión, `F` Cursos de corta duración, `E` MBA) y pide `startMonth`. Se puede forzar el nivel con `nivel`; si no, se infiere del nombre. Tampoco entra al `diff`: los cursos del portafolio ya se mapean a `cursos`.
 
