@@ -5,6 +5,14 @@ export interface EducationItem {
   degree: string;
   period: string;
   description?: string;
+  /**
+   * CvLAC's own `cod_nivel_formacion` code, when the caller knows it. It wins
+   * over any inference: the two trayectoria sections use different catalogues,
+   * and a name alone cannot always tell them apart.
+   */
+  nivel?: string;
+  /** Month of 1-12. Only formación complementaria asks for it. */
+  startMonth?: string;
 }
 
 export interface ExperienceItem {
@@ -131,6 +139,7 @@ export type CvLACSectionName =
   | 'proyectos'
   | 'software'
   | 'eventos'
+  | 'formacionComple'
   | 'idiomas'
   | 'lineas';
 
@@ -176,6 +185,7 @@ export interface CvLACData {
   proyectos: CvLACProyectoItem[];
   software: CvLACSoftwareItem[];
   eventos: CvLACEventoItem[];
+  formacionComple: CvLACFormacionItem[];
   idiomas: CvLACIdiomaItem[];
   lineas: CvLACLineaItem[];
 }

@@ -158,3 +158,22 @@ export function noChangeRefusal(label: string, warnings: string[]): UpdateResult
     warnings,
   };
 }
+
+/**
+ * The answer for a row CvLAC will not let go of.
+ *
+ * Some records render Detalles and Editar but no Eliminar — one row of
+ * formación complementaria does, presumably because it is endorsed. Looking
+ * only for the delete link reported "no item matching", which is false and
+ * sends the caller hunting for a label that is right there.
+ */
+export function undeletableRefusal(label: string): UpdateResult {
+  return {
+    success: false,
+    status: 'failed',
+    message:
+      `"${label}" exists but CvLAC offers no "Eliminar" link for it — it only allows Detalles ` +
+      `and Editar. Some records are locked that way; this one can only be removed from the web, ` +
+      `if at all.`,
+  };
+}

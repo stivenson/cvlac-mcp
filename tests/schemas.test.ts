@@ -22,6 +22,7 @@ describe('SECTION_SCHEMAS', () => {
       'eventos',
       'experiencia',
       'formacion',
+      'formacionComple',
       'idiomas',
       'lineas',
       'proyectos',

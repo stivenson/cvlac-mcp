@@ -6,6 +6,7 @@ import { extractReconocimientos } from '../extractors/cvlac/reconocimientos.js';
 import { extractProyectos } from '../extractors/cvlac/proyectos.js';
 import { extractSoftware } from '../extractors/cvlac/software.js';
 import { extractEventos } from '../extractors/cvlac/eventos.js';
+import { extractFormacionComple } from '../extractors/cvlac/formacion-comple.js';
 import { extractIdiomas } from '../extractors/cvlac/idiomas.js';
 import { extractLineas } from '../extractors/cvlac/lineas.js';
 import type { CvLACData, CvLACSectionName } from '../types.js';
@@ -39,6 +40,9 @@ export async function readCvlacTool(
   }
   if (target === 'eventos' || target === 'all') {
     result.eventos = await extractEventos(page);
+  }
+  if (target === 'formacionComple' || target === 'all') {
+    result.formacionComple = await extractFormacionComple(page);
   }
   if (target === 'idiomas' || target === 'all') {
     result.idiomas = await extractIdiomas(page);

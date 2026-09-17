@@ -9,6 +9,7 @@ import {
   verificationVerdict,
   deleteConfirmation,
   noChangeRefusal,
+  undeletableRefusal,
 } from '../src/tools/write-verdict.js';
 
 describe('classifySubmit', () => {
@@ -216,5 +217,17 @@ describe('noChangeRefusal', () => {
   it('carries the warnings, which is where the reason usually is', () => {
     const result = noChangeRefusal('Italiano', ['sgl_idioma: no se encontró el campo']);
     expect(result.warnings).toEqual(['sgl_idioma: no se encontró el campo']);
+  });
+});
+
+// CvLAC renders Detalles and Editar but no Eliminar for records it will not let
+// go — one row of formación complementaria is like that. Reporting it as "no
+// item matching" was false: the item is right there.
+describe('undeletableRefusal', () => {
+  it('says the row exists and that CvLAC is the one refusing', () => {
+    const result = undeletableRefusal('Diplomado en IA');
+    expect(result.status).toBe('failed');
+    expect(result.message).toContain('Diplomado en IA');
+    expect(result.message).toMatch(/Eliminar/);
   });
 });

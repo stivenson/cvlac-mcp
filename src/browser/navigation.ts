@@ -25,6 +25,10 @@ export const URLS = {
   eventosCreate:        `${BASE_URL}/cvlac/EnEventoCientifico/create.do`,
   // Two singleton records: no list, no create/edit split. `create.do` is both
   // the read view and the form, and its `insert.do` rewrites the whole set.
+  // Only the list lives under EnFormacionComple; create/edit/delete/detail are
+  // EnTrayectoriaEscolar with isTrayectoria=FC — the same module as formacion.
+  formacionComple:      `${BASE_URL}/cvlac/EnFormacionComple/all.do?isTrayectoria=FC`,
+  formacionCompleCreate:`${BASE_URL}/cvlac/EnTrayectoriaEscolar/create.do?isTrayectoria=FC`,
   idiomas:              `${BASE_URL}/cvlac/ReRecursoHumIdioma/all.do`,
   idiomasCreate:        `${BASE_URL}/cvlac/ReRecursoHumIdioma/create.do`,
   // The `?decorator=T&null` is literal: without it create.do answers a page
@@ -58,6 +62,7 @@ export const SECTION_LIST: Record<
   proyectos:       { listUrl: URLS.proyectos,        matchCellIndex: 1 },
   software:        { listUrl: URLS.software,         matchCellIndex: 1 },
   eventos:         { listUrl: URLS.eventos,          matchCellIndex: 1 },
+  formacionComple: { listUrl: URLS.formacionComple,  matchCellIndex: 5 },
   idiomas:         { listUrl: URLS.idiomas,          matchCellIndex: 1 },
   lineas:          { listUrl: URLS.lineas,           matchCellIndex: 1 },
 };

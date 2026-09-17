@@ -13,6 +13,8 @@ export const educationSchema = z.object({
   degree: z.string().min(1),
   period: z.string(),
   description: z.string().optional(),
+  nivel: z.string().optional(),
+  startMonth: z.string().optional(),
 });
 
 export const experienceSchema = z.object({
@@ -120,6 +122,7 @@ const lineaSchema = z.object({
 
 export const SECTION_SCHEMAS: Record<CvLACSectionName, z.ZodType> = {
   formacion: educationSchema,
+  formacionComple: educationSchema,
   experiencia: experienceSchema,
   cursos: courseSchema,
   reconocimientos: achievementSchema,

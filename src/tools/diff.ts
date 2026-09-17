@@ -19,6 +19,9 @@ export async function diffTool(section?: CvLACSectionName | 'all'): Promise<Diff
     eventos: cvlacPartial.eventos ?? [],
     // Neither is diffed: the portfolio carries no languages and no research
     // lines, so every CvLAC row would read as an unexplained extra.
+    // Not diffed either: the portfolio's courses map to EnProdCurso, and
+    // matching them here as well would report each one missing twice.
+    formacionComple: cvlacPartial.formacionComple ?? [],
     idiomas: cvlacPartial.idiomas ?? [],
     lineas: cvlacPartial.lineas ?? [],
   };

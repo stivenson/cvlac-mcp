@@ -47,6 +47,22 @@ const only = argSections ? argSections.split('=')[1].split(',').map((s) => s.tri
  * `evidence` is the value that must show up on the record page afterwards.
  */
 const PLAN = {
+  formacionComple: {
+    labelField: 'degree',
+    // Same catalogue problem as formación académica: CvLAC only accepts a
+    // programme its own list holds for that institution and level.
+    candidates: ['INGENIERIA DE ALIMENTOS', 'INGENIERIA BIOMEDICA', 'INGENIERIA AMBIENTAL'],
+    add: {
+      institution: 'Universidad de los Andes',
+      degree: '',
+      period: '2019 - 2019',
+      // FC's level catalogue is its own (Y/8/F/E); "Diplomado" resolves to 8.
+      nivel: '8',
+      startMonth: '3',
+    },
+    update: { period: '2019 - 2020' },
+    evidence: '2020',
+  },
   idiomas: {
     labelField: 'language',
     // The four levels are deliberately different. The update then flips the
@@ -180,6 +196,7 @@ const LIST_LABEL = {
   proyectos: 'title',
   software: 'name',
   eventos: 'name',
+  formacionComple: 'degree',
   idiomas: 'language',
   lineas: 'name',
 };

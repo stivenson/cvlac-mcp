@@ -42,6 +42,7 @@ import {
   verificationVerdict,
   deleteConfirmation,
   noChangeRefusal,
+  undeletableRefusal,
 } from './write-verdict.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logger.js';
@@ -637,11 +638,55 @@ export function inferParticipacionProy(p?: string): string {
 
 // ── Per-section form fillers (work for both create.do and edit.do) ────────────
 
-async function fillFormacion(page: Page, edu: EducationItem, report: FillReport): Promise<void> {
+
+/**
+ * The level code of *formación complementaria*, which is a different catalogue.
+ *
+ * The section runs on the same module as formación académica — the list is the
+ * only part under EnFormacionComple — but its `cod_nivel_formacion` offers only
+ * `Y` Otros, `8` Extensión, `F` Cursos de corta duración and `E` MBA. Reusing
+ * `inferNivel` here would send a code (1 Pregrado, 3 Maestría…) the form does
+ * not carry.
+ *
+ * `Y` is the fallback because it is CvLAC's own catch-all, not a guess.
+ */
+export function inferNivelComple(name: string): 'Y' | '8' | 'F' | 'E' {
+  const t = (name ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '');
+  if (/\bmba\b|master of business/.test(t)) return 'E';
+  if (/diplomado|extension/.test(t)) return '8';
+  if (/curso|taller|seminario|bootcamp|capacitacion/.test(t)) return 'F';
+  return 'Y';
+}
+
+/**
+ * How the two trayectoria-escolar sections differ.
+ *
+ * Formación académica and formación complementaria are the same form under
+ * `isTrayectoria=TE` and `=FC`: same fields, same pickers, a different level
+ * catalogue, and a start month that only FC demands.
+ */
+interface TrayectoriaOptions {
+  nivelOf: (edu: EducationItem) => string;
+  /** FC marks "Mes de inicio" required; TE does not have it. */
+  requiresStartMonth: boolean;
+}
+
+async function fillTrayectoriaEscolar(
+  page: Page,
+  edu: EducationItem,
+  report: FillReport,
+  opts: TrayectoriaOptions
+): Promise<void> {
   const defaults = loadConfig().defaults ?? {};
 
+  // An explicit code wins: CvLAC's own wording is the only thing that can
+  // settle an ambiguous name, and the caller may have read it off the form.
+  const nivelCode = edu.nivel ?? opts.nivelOf(edu);
   await tryField(report, 'cod_nivel_formacion', () =>
-    page.selectOption('select[name="cod_nivel_formacion"]', inferNivel(edu.degree))
+    page.selectOption('select[name="cod_nivel_formacion"]', nivelCode)
   );
   await humanDelay(200, 500);
 
@@ -653,7 +698,7 @@ async function fillFormacion(page: Page, edu: EducationItem, report: FillReport)
 
   // CvLAC shows — and requires — the programme picker for every level above
   // secondary school, and validates the hidden code rather than the text.
-  const nivel = inferNivel(edu.degree);
+  const nivel = nivelCode;
   if (needsProgramaAcademico(nivel)) {
     await setProgramaAcademico(page, report, nivel, edu.degree);
     await humanDelay(200, 400);
@@ -679,8 +724,35 @@ async function fillFormacion(page: Page, edu: EducationItem, report: FillReport)
   if (end) {
     await tryField(report, 'nro_ano_obten', () => page.selectOption('select[name="nro_ano_obten"]', end));
   }
+
+  if (opts.requiresStartMonth) {
+    const month = edu.startMonth ? String(parseInt(edu.startMonth, 10)) : undefined;
+    if (month) {
+      await tryField(report, 'nro_mes_inicio', () =>
+        page.selectOption('select[name="nro_mes_inicio"]', month)
+      );
+    } else {
+      // The form preselects Enero, so an item without a month is stored as
+      // January rather than rejected. Saying so beats a silent wrong month.
+      report.warnings.push(
+        'nro_mes_inicio: el ítem no trae "startMonth"; CvLAC deja el mes que trae preseleccionado (Enero)'
+      );
+    }
+  }
   await humanDelay(200, 400);
 }
+
+const fillFormacion = (page: Page, edu: EducationItem, report: FillReport): Promise<void> =>
+  fillTrayectoriaEscolar(page, edu, report, {
+    nivelOf: (e) => inferNivel(e.degree),
+    requiresStartMonth: false,
+  });
+
+const fillFormacionComple = (page: Page, edu: EducationItem, report: FillReport): Promise<void> =>
+  fillTrayectoriaEscolar(page, edu, report, {
+    nivelOf: (e) => inferNivelComple(e.degree),
+    requiresStartMonth: true,
+  });
 
 async function fillExperiencia(page: Page, exp: ExperienceItem, report: FillReport): Promise<void> {
   const defaults = loadConfig().defaults ?? {};
@@ -1189,6 +1261,12 @@ const SECTIONS: Record<CvLACSectionName, SectionConfig> = {
     labelOf: (d: ResearchLineInput) => d.name,
     fill: fillLinea,
   },
+  formacionComple: {
+    ...SECTION_LIST.formacionComple,
+    createUrl: URLS.formacionCompleCreate,
+    labelOf: (d: EducationItem) => d.degree,
+    fill: fillFormacionComple,
+  },
   formacion: {
     ...SECTION_LIST.formacion,
     createUrl: URLS.formacionCreate,
@@ -1545,7 +1623,10 @@ async function deleteItem(pageRef: { page: Page }, cfg: SectionConfig, label: st
   await gotoFormWithRelogin(pageRef, cfg.listUrl);
   const confirmHref = await findRowActionHref(pageRef.page, cfg.matchCellIndex, label, 'Eliminar');
   if (!confirmHref) {
-    return failed(`No item matching "${label}" to delete`, report);
+    // The row may be there and simply locked: CvLAC drops the Eliminar link on
+    // records it will not let go of, and "not found" would be a lie.
+    const exists = await findRowActionHref(pageRef.page, cfg.matchCellIndex, label, 'Detalles');
+    return exists ? undeletableRefusal(label) : failed(`No item matching "${label}" to delete`, report);
   }
   await gotoFormWithRelogin(pageRef, BASE_URL + confirmHref);
   const deleteHref = await pageRef.page.evaluate(() => {
