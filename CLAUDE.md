@@ -81,6 +81,8 @@ son **registros únicos**, sin `all.do` ni `add`/`update`/`delete`, así que no 
 
 ## Detalles que muerden (lee antes de tocar)
 
+**El portafolio se lee renderizando, no descargando el bundle.** `fetchPortfolioData` abre un chromium propio, va a `#/resume` y hace clic en cada pestaña: solo la abierta está en el DOM. Dos trampas ya pagadas: el sidebar usa las mismas clases que el contenido (`.rf-tree-item`), así que los selectores van acotados a `.rf-tabpanel-content`; y no se puede declarar una función con nombre dentro de un `$$eval`, porque esbuild la envuelve en `__name`, que no existe en la página — falla solo fuera de vitest.
+
 - **Fuente de verdad verificada en vivo:** `docs/cvlac-findings.md` documenta (navegación real 2026-05) las URLs, columnas de tabla y nombres de campos de formulario de las 7 secciones. Consúltalo antes de tocar extractores o `update-section.ts`.
 - **Sesión persistente:** `session.ts` guarda `storageState` en `~/.cvlac-session.json` (o `CVLAC_SESSION_PATH`). `checkSession()` valida navegando a `formacion`; si redirige a `Login`, re-loguea. Tras login resetea el context para recargar cookies. Hay medidas anti-bot (user-agent Chrome real, `--disable-blink-features=AutomationControlled`, oculta `navigator.webdriver`, `humanDelay`, `withRetry`).
 - **Login flow:** `tpo_nacionalidad='C'` (verificado: "Colombiana" = value `C`, NO `COL`), llena `#txt_nmes_rh` / `#nro_documento_ident` / `#txt_contrasena`, click `#botonEnviar`. Redirige a `EnRecursoHumano/inicio.do`; ese inicio.do a veces da 503 ("Server Unavailable") pero la sesión queda válida. `update_section` ya NO fuerza re-login en cada llamada: reusa sesión y `gotoForm()` re-loguea solo si cae en la página de login.

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { normalizePortfolioData, loadPortfolioExtra } from '../src/extractors/portfolio.js';
+import { loadPortfolioExtra } from '../src/extractors/portfolio.js';
 import { resetConfigCache } from '../src/config.js';
 
 // Fictional bundles — the repo is public, so no real CV records live in tests.
@@ -39,94 +39,6 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
   process.env = { ...savedEnv };
   resetConfigCache();
-});
-
-describe('normalizePortfolioData', () => {
-  it('extracts education items from raw JS bundle text', () => {
-    const result = normalizePortfolioData(BUNDLE.education);
-    expect(result.education).toHaveLength(2);
-    expect(result.education[0].institution).toBe('Universidad Nacional de Colombia');
-    expect(result.education[0].degree).toBe('Maestría en Ciencia de Datos');
-  });
-
-  it('extracts experience items including description and technologies', () => {
-    const result = normalizePortfolioData(BUNDLE.experience);
-    expect(result.experience).toHaveLength(1);
-    expect(result.experience[0].company).toBe('Empresa Ejemplo (Grupo Ficticio)');
-    expect(result.experience[0].role).toBe('Full Stack - Senior Developer');
-    expect(result.experience[0].technologies).toEqual(['Python']);
-  });
-
-  it('extracts course items with name and date', () => {
-    const result = normalizePortfolioData(BUNDLE.courses);
-    expect(result.courses).toHaveLength(2);
-    expect(result.courses[0].date).toBe('2024-11');
-    expect(result.courses[0].type).toBe('taller');
-  });
-
-  it('ignores course-shaped objects whose date is not YYYY-MM', () => {
-    const bundle = `{name:"Icono",emoji:"x",color:"#000",date:"siempre",type:"icon"}`;
-    expect(normalizePortfolioData(bundle).courses).toHaveLength(0);
-  });
-
-  it('extracts achievements with a description longer than 30 chars', () => {
-    const result = normalizePortfolioData(BUNDLE.achievements);
-    expect(result.achievements).toHaveLength(1);
-    expect(result.achievements[0].title).toBe('Mención de Honor en Innovación');
-  });
-
-  it('skips short title/description pairs, which are UI labels rather than awards', () => {
-    const bundle = `{title:"Cerrar",description:"Cierra el panel"}`;
-    expect(normalizePortfolioData(bundle).achievements).toHaveLength(0);
-  });
-
-  it('extracts skills arrays', () => {
-    const result = normalizePortfolioData(BUNDLE.skills);
-    expect(result.skills.languages).toContain('Python');
-    expect(result.skills.frontend).toContain('React');
-    expect(result.skills.ai).toContain('LLMs');
-  });
-
-  it('returns empty structures for a bundle it cannot parse, rather than throwing', () => {
-    const result = normalizePortfolioData('console.log("nothing useful here")');
-    expect(result.education).toEqual([]);
-    expect(result.courses).toEqual([]);
-    expect(result.personal).toEqual({ name: '', title: '', location: '' });
-  });
-});
-
-describe('extractPersonal', () => {
-  it('reads the single personal block when there is only one', () => {
-    const result = normalizePortfolioData(BUNDLE.personal);
-    expect(result.personal).toEqual({
-      name: 'Ana Ejemplo',
-      title: 'Ingeniera de Sistemas',
-      location: 'Bogotá, Colombia',
-    });
-  });
-
-  it('picks the block matching ownerNamePattern when the bundle has several', () => {
-    const path = join(dir, 'cvlac.config.json');
-    writeFileSync(path, JSON.stringify({ ownerNamePattern: 'Beto' }));
-    process.env.CVLAC_CONFIG_PATH = path;
-    const bundle =
-      `{name:"Ana Ejemplo",title:"Ingeniera",location:"Bogotá"}` +
-      `{name:"Beto Ficticio",title:"Científico de Datos",location:"Medellín"}`;
-    expect(normalizePortfolioData(bundle).personal.name).toBe('Beto Ficticio');
-  });
-
-  it('falls back to the first block when ownerNamePattern matches nothing', () => {
-    const path = join(dir, 'cvlac.config.json');
-    writeFileSync(path, JSON.stringify({ ownerNamePattern: 'Nadie' }));
-    process.env.CVLAC_CONFIG_PATH = path;
-    const bundle = `{name:"Ana Ejemplo",title:"Ingeniera",location:"Bogotá"}`;
-    expect(normalizePortfolioData(bundle).personal.name).toBe('Ana Ejemplo');
-  });
-
-  it('does not hardcode any particular owner name', () => {
-    const bundle = `{name:"Zoraida Otra",title:"Docente",location:"Cali"}`;
-    expect(normalizePortfolioData(bundle).personal.name).toBe('Zoraida Otra');
-  });
 });
 
 describe('loadPortfolioExtra', () => {
@@ -171,21 +83,5 @@ describe('loadPortfolioExtra', () => {
     expect(loadPortfolioExtra()).toEqual({ projects: [], software: [], eventos: [] });
   });
 
-  it('feeds the loaded items straight into PortfolioData', () => {
-    const extra = {
-      projects: [],
-      software: [{ name: 'Biblioteca', year: '2024' }],
-      eventos: [],
-    };
-    const result = normalizePortfolioData(BUNDLE.education, extra);
-    expect(result.software).toEqual(extra.software);
-    expect(result.education).toHaveLength(2);
-  });
 
-  it('defaults to empty extras when the caller passes none', () => {
-    const result = normalizePortfolioData(BUNDLE.education);
-    expect(result.projects).toEqual([]);
-    expect(result.software).toEqual([]);
-    expect(result.eventos).toEqual([]);
-  });
 });
