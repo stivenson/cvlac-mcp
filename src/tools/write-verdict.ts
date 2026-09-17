@@ -137,3 +137,24 @@ export function deleteConfirmation(what: string): UpdateResult {
       `Check it is the right one — read_cvlac_detail shows what it holds — and repeat with confirm_delete:true.`,
   };
 }
+
+/**
+ * The answer when an update reached the form and changed nothing on it.
+ *
+ * Leaving the form is normally the redirect that follows a save, so a submit
+ * that carried the stored values straight back gets exactly the same answer as
+ * one that saved something: an idioma whose radios were never touched — the
+ * filler had given up on a select the edit form does not have — was reported as
+ * "Updated". A no-op is not a save, and it is not the caller's fault to guess.
+ */
+export function noChangeRefusal(label: string, warnings: string[]): UpdateResult {
+  return {
+    success: false,
+    status: 'failed',
+    message:
+      `Nothing was written for "${label}": filling the form changed none of its fields, ` +
+      `so the submit would have sent CvLAC back the values it already had. ` +
+      `The warnings say which fields could not be set.`,
+    warnings,
+  };
+}

@@ -3,7 +3,7 @@ import { chromium, type Browser, type Page } from 'playwright';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { languageLevel, levelName } from '../src/tools/update-section.js';
+import { languageLevel, levelName, fillIdioma } from '../src/tools/update-section.js';
 import { extractIdiomasFromPage } from '../src/extractors/cvlac/idiomas.js';
 import { extractLineasFromPage } from '../src/extractors/cvlac/lineas.js';
 
@@ -79,5 +79,56 @@ describe('extractors', () => {
     await page.setContent('<table><tr class="odd"><td>Ningún dato disponible en esta tabla</td></tr></table>');
     expect(await extractIdiomasFromPage(page)).toEqual([]);
     expect(await extractLineasFromPage(page)).toEqual([]);
+  });
+});
+
+// The edit form has no language select: the language is the key, and travels in
+// a hidden field. Resolving it there found no options, and the filler gave up
+// before touching a single radio — so the submit carried the stored levels back
+// unchanged and CvLAC's redirect read as "Updated".
+describe('fillIdioma on the edit form', () => {
+  let browser: Browser;
+  let page: Page;
+
+  beforeAll(async () => {
+    browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+    page = await browser.newPage();
+  }, 60000);
+
+  afterAll(async () => {
+    await browser?.close();
+  });
+
+  const EDIT_FORM = `
+    <form action="/cvlac/ReRecursoHumIdioma/update.do">
+      <input type="hidden" name="sgl_idioma" value="IT">
+      ${['leer', 'escribir', 'hablar', 'escuchar']
+        .map(
+          (s) => `
+        <input type="radio" name="tpo_nivel_${s}" value="P">
+        <input type="radio" name="tpo_nivel_${s}" value="R" checked>
+        <input type="radio" name="tpo_nivel_${s}" value="B">`
+        )
+        .join('')}
+    </form>`;
+
+  it('sets the levels even though there is no language select', async () => {
+    await page.setContent(EDIT_FORM);
+    const report = { warnings: [] as string[] };
+    await fillIdioma(page, { language: 'Italiano', read: 'Deficiente', level: 'Bueno' }, report);
+
+    const chosen = (name: string) =>
+      page.$eval(`input[name="${name}"]:checked`, (el) => (el as HTMLInputElement).value);
+    expect(await chosen('tpo_nivel_leer')).toBe('P');
+    expect(await chosen('tpo_nivel_escribir')).toBe('B');
+    expect(await chosen('tpo_nivel_hablar')).toBe('B');
+    expect(await chosen('tpo_nivel_escuchar')).toBe('B');
+  });
+
+  it('does not complain about a select the edit form does not have', async () => {
+    await page.setContent(EDIT_FORM);
+    const report = { warnings: [] as string[] };
+    await fillIdioma(page, { language: 'Italiano', level: 'Bueno' }, report);
+    expect(report.warnings.join(' ')).not.toMatch(/sgl_idioma/);
   });
 });

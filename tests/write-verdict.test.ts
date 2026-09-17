@@ -8,6 +8,7 @@ import {
   verifiableFields,
   verificationVerdict,
   deleteConfirmation,
+  noChangeRefusal,
 } from '../src/tools/write-verdict.js';
 
 describe('classifySubmit', () => {
@@ -195,5 +196,25 @@ describe('deleteConfirmation', () => {
 
   it('says how to go ahead', () => {
     expect(deleteConfirmation('x').message).toContain('confirm_delete');
+  });
+});
+
+// A submit that leaves the form reads as saved, and it usually is. But a filler
+// that silently changed nothing submits the stored values back and gets the very
+// same redirect: an idioma whose levels were never touched reported "Updated".
+describe('noChangeRefusal', () => {
+  it('refuses to call an update that changed no field a success', () => {
+    const result = noChangeRefusal('Italiano', []);
+    expect(result.success).toBe(false);
+    expect(result.status).toBe('failed');
+  });
+
+  it('names the item, so the message says what did not change', () => {
+    expect(noChangeRefusal('Italiano', []).message).toContain('Italiano');
+  });
+
+  it('carries the warnings, which is where the reason usually is', () => {
+    const result = noChangeRefusal('Italiano', ['sgl_idioma: no se encontró el campo']);
+    expect(result.warnings).toEqual(['sgl_idioma: no se encontró el campo']);
   });
 });

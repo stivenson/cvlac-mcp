@@ -41,6 +41,7 @@ import {
   verifiableFields,
   verificationVerdict,
   deleteConfirmation,
+  noChangeRefusal,
 } from './write-verdict.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logger.js';
@@ -1093,28 +1094,15 @@ interface SectionConfig {
  * the options themselves rather than against a table this server would have to
  * keep in step; a two-letter code is taken as given.
  */
-async function fillIdioma(page: Page, item: LanguageInput, report: FillReport): Promise<void> {
-  const wanted = (item.language ?? '').trim();
-  const code = /^[A-Za-z]{2}$/.test(wanted)
-    ? wanted.toUpperCase()
-    : await page.$$eval(
-        'select[name="sgl_idioma"] option',
-        (options, name: string) => {
-          const norm = (s: string): string =>
-            s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-          const target = norm(name);
-          const hit = options.find((o) => norm(o.textContent ?? '') === target);
-          return hit ? (hit as HTMLOptionElement).value : '';
-        },
-        wanted
-      );
-
-  if (!code) {
-    missingValue(report, 'sgl_idioma', `CvLAC no lista un idioma llamado "${wanted}"`);
-    return;
+export async function fillIdioma(page: Page, item: LanguageInput, report: FillReport): Promise<void> {
+  // The create form picks the language from a select. The edit form has none:
+  // the language is the record's key, so it travels in a hidden field and
+  // cannot change. Looking for options there found nothing and the filler used
+  // to give up, leaving every level untouched.
+  if (await page.$('select[name="sgl_idioma"]')) {
+    await selectIdioma(page, item, report);
+    if (!report.warnings.some((w) => w.startsWith('sgl_idioma'))) await humanDelay(200, 400);
   }
-  await tryField(report, 'sgl_idioma', () => page.selectOption('select[name="sgl_idioma"]', code));
-  await humanDelay(200, 400);
 
   const skills: Array<[keyof LanguageInput, string]> = [
     ['read', 'tpo_nivel_leer'],
@@ -1136,6 +1124,30 @@ async function fillIdioma(page: Page, item: LanguageInput, report: FillReport): 
     await tryField(report, field, () => page.check(`input[name="${field}"][value="${level}"]`));
   }
   await humanDelay(200, 300);
+}
+
+/** Picks the language on the create form, where the name has to be resolved. */
+async function selectIdioma(page: Page, item: LanguageInput, report: FillReport): Promise<void> {
+  const wanted = (item.language ?? '').trim();
+  const code = /^[A-Za-z]{2}$/.test(wanted)
+    ? wanted.toUpperCase()
+    : await page.$$eval(
+        'select[name="sgl_idioma"] option',
+        (options, name: string) => {
+          const norm = (s: string): string =>
+            s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+          const target = norm(name);
+          const hit = options.find((o) => norm(o.textContent ?? '') === target);
+          return hit ? (hit as HTMLOptionElement).value : '';
+        },
+        wanted
+      );
+
+  if (!code) {
+    missingValue(report, 'sgl_idioma', `CvLAC no lista un idioma llamado "${wanted}"`);
+    return;
+  }
+  await tryField(report, 'sgl_idioma', () => page.selectOption('select[name="sgl_idioma"]', code));
 }
 
 async function fillLinea(page: Page, item: ResearchLineInput, report: FillReport): Promise<void> {
@@ -1459,6 +1471,11 @@ async function updateItem(
     log.debug('hidden duplicates aligned with the visible controls', { fields: synced });
   }
   const edits = verifiableFields(changedFields(beforeFill, await readFormValues(pageRef.page)));
+  // Submitting an untouched form is indistinguishable from a successful save,
+  // so it does not get submitted.
+  if (Object.keys(edits).length === 0) {
+    return noChangeRefusal(label, report.warnings);
+  }
   await humanDelay(400, 800);
   await clickGuardar(pageRef.page);
   const screenshotBase64 = await shot(pageRef.page);

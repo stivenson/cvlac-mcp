@@ -290,3 +290,19 @@ Tres campos: `txt_nme_linea`, `sta_activa` (radio) y `txt_objeto` (textarea). Oj
 ### Demás trabajos — `EnProdTecnica/create_demasTrabajos.do` → `insert_demasTrabajos.do`
 
 Once campos: `cod_tipo_producto` (hidden, obligatorio), `txt_nme_prod`, `nro_ano_presenta`, `nro_mes_presenta`, `sgl_idioma`, `tpo_medio_divulgacion` (`I` Papel, `H` Internet, `O` Otro), el picker de municipio (`cod_municipio_text` + `cod_municipio` + `cod_rh_municipio` + `sgl_pais`) y `txt_finalidad`.
+
+## El `edit.do` de idiomas no tiene el select
+
+Verificado en vivo el 2026-09-17 sobre `ReRecursoHumIdioma/edit.do?sgl_idioma=EN&cod_rh=…` (→ `update.do`).
+
+El formulario de creación elige el idioma con un `<select name="sgl_idioma">`. El de edición **no lo tiene**: el idioma es la clave del registro y viaja en un `<input type="hidden">`. Por lo demás el form es limpio — no hay duplicados ocultos como en cursos.
+
+Consecuencia: el filler resolvía el nombre del idioma contra las `<option>` del select, no encontraba ninguna, y **se iba sin tocar un solo radio**. El submit devolvía a CvLAC los niveles que ya tenía, CvLAC redirigía como ante cualquier guardado, y el resultado se reportaba como `Updated`.
+
+De ahí sale una regla general, no solo de idiomas:
+
+> **Un submit que no cambió ningún campo del formulario no se envía.**
+
+Salir del formulario es el redirect normal de un guardado, así que un envío que devuelve los valores almacenados es indistinguible de uno que guardó algo. `updateItem` compara los campos antes y después de llenar; si no cambió ninguno, devuelve `failed` con los warnings, que es donde está el motivo real.
+
+Es el mismo tipo de fallo que los duplicados ocultos de cursos: la escritura se ve aplicada en pantalla y llega descartada. La diferencia es que ahora hay una red que lo atrapa sin depender de conocer la rareza de cada formulario.
