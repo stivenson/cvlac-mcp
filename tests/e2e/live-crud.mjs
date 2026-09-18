@@ -529,12 +529,14 @@ async function runProfile(client) {
     return;
   }
   const storedKeys = snapshot.networks.map((n) => n.key);
+  const storedAreas = (snapshot.areas ?? []).map((a) => a.code);
   record(
     section,
     'snapshot',
     true,
     `${snapshot.networks.length} red(es) [${storedKeys.join(', ') || 'ninguna'}], ` +
-      `perfil de ${snapshot.description.length} caracteres`
+      `perfil de ${snapshot.description.length} caracteres, ` +
+      `${storedAreas.length} área(s) [${storedAreas.join(', ') || 'ninguna'}]`
   );
 
   // A row nobody is using, so a real profile is never overwritten. "otro" is
@@ -649,7 +651,52 @@ async function runProfile(client) {
       bogus
     );
 
-    // 6. the profile text, written and read back
+    // 6. áreas de actuación. The code is used rather than the name so the test
+    // is deterministic: a name can match several rows of the catalogue, and the
+    // tool would rightly stop to ask — with no human here to answer.
+    const TEST_AREA = '0-2G'; // Ingeniería Ambiental
+    const withArea = [...storedAreas, TEST_AREA];
+
+    const areaAdded = await step(section, 'add área', () =>
+      call(client, 'update_profile', { areas: withArea })
+    );
+    record(
+      section,
+      'add área',
+      areaAdded?.status === 'unverified' ? null : areaAdded?.status === 'ok',
+      areaAdded?.message ?? areaAdded?.raw ?? 'sin respuesta',
+      areaAdded
+    );
+
+    const afterArea = await step(section, 'verificar área', () => call(client, 'read_profile', {}));
+    const areaCodes = (afterArea?.areas ?? []).map((a) => a.code);
+    record(
+      section,
+      'verificar área',
+      areaCodes.includes(TEST_AREA) && storedAreas.every((c) => areaCodes.includes(c)),
+      areaCodes.includes(TEST_AREA)
+        ? storedAreas.every((c) => areaCodes.includes(c))
+          ? `quedó [${areaCodes.join(', ')}]; las ${storedAreas.length} área(s) reales siguen`
+          : `⚠️ se agregó pero SE PERDIERON áreas reales: ${storedAreas.join(', ')}`
+        : `no quedó guardada; leí [${areaCodes.join(', ')}]`,
+      afterArea
+    );
+
+    // Dropping one from the list is a deletion, and deletions are confirmed.
+    const areaDrop = await step(section, 'quitar área sin confirmar', () =>
+      call(client, 'update_profile', { areas: storedAreas })
+    );
+    record(
+      section,
+      'quitar área sin confirmar',
+      areaDrop?.status === 'needs_confirmation',
+      areaDrop?.status === 'needs_confirmation'
+        ? 'bloqueado, como debe ser'
+        : `esperaba needs_confirmation, obtuve "${areaDrop?.status}"`,
+      areaDrop
+    );
+
+    // 7. the profile text, written and read back
     const textWritten = await step(section, 'escribir perfil', () =>
       call(client, 'update_profile', { description: TEST_TEXT })
     );
@@ -686,6 +733,7 @@ async function runProfile(client) {
     }
     const restored = await step(section, 'restaurar', () =>
       call(client, 'update_profile', {
+        areas: storedAreas,
         // CvLAC marks the profile text required, so there is no way back to an
         // empty one. When there was nothing to restore, the text is left as is
         // and reported below for a human to clear from the web.
@@ -703,6 +751,21 @@ async function runProfile(client) {
     );
 
     const finalState = await step(section, 'estado final', () => call(client, 'read_profile', {}));
+    const areasLeft = (finalState?.areas ?? []).map((a) => a.code);
+    const areasClean =
+      areasLeft.length === storedAreas.length && storedAreas.every((c) => areasLeft.includes(c));
+    if (!areasClean) {
+      record(
+        section,
+        'áreas restauradas',
+        false,
+        `⚠️ las áreas quedaron [${areasLeft.join(', ')}] y eran [${storedAreas.join(', ')}] — revísalas a mano`,
+        finalState
+      );
+    } else {
+      record(section, 'áreas restauradas', true, `[${areasLeft.join(', ') || 'ninguna'}]`);
+    }
+
     const leftovers = (finalState?.networks ?? []).filter((n) => n.url.includes('zz-prueba-mcp'));
     const textLeft = (finalState?.description ?? '').includes(TAG);
     const networksClean = leftovers.length === 0 && realSurvived(finalState?.networks ?? []);

@@ -75,9 +75,14 @@ Flujo de datos: `index.ts` → `server.ts` (router) → `tools/*` → `browser/s
 
 **Todo borrado pide confirmación.** `update_section` con `action:"delete"` y `update_profile` con una red en `url:null` devuelven `needs_confirmation` y no escriben nada hasta que se repitan con `confirm_delete:true`. La etiqueta con la que se encuentra una fila hace match flexible: sin la segunda vuelta, un nombre parecido borra el registro del vecino.
 
-`read_profile` / `update_profile` quedan aparte a propósito: el perfil y las redes académicas
-son **registros únicos**, sin `all.do` ni `add`/`update`/`delete`, así que no caben en
-`update_section`. Viven en `tools/profile.ts`.
+`read_profile` / `update_profile` quedan aparte a propósito: el perfil, las redes académicas y
+las áreas de actuación son **registros únicos**, sin `all.do` ni `add`/`update`/`delete`, así que
+no caben en `update_section`. Viven en `tools/profile.ts` y `tools/areas.ts`.
+
+**Áreas de actuación** no es ni lista ni picker: un `<select multiple>` usado como lista
+ordenada, que un popup va llenando y dos botones reordenan. El `save.do` reescribe el conjunto,
+y un `<select multiple>` solo envía lo seleccionado — por eso `applyAreas` deja todas las
+opciones seleccionadas en vez de confiar en el `forma_onsubmit()` de la página.
 
 ## Detalles que muerden (lee antes de tocar)
 
