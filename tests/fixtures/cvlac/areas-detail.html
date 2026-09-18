@@ -1,0 +1,12 @@
+<!--
+  ReRecursoHumAreaCon/detail.do: one multi-select used as an ordered list of the
+  areas already chosen. The inline forma_onsubmit() selects them all before
+  posting. Data is fictional.
+-->
+<form name="reRecursoHumAreaConSaveForm" action="/cvlac/ReRecursoHumAreaCon/save.do?null" method="post">
+  <select name="cod_area_conocimiento" id="lista_sectores" multiple size="10">
+    <option value="1.0-1B01">1. Ciencias de la Computación</option>
+    <option value="2.0-2B">2. Ingenierías Eléctrica, Electrónica e Informática</option>
+  </select>
+  <input type="submit" value="Aceptar" onclick="forma_onsubmit()">
+</form>

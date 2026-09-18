@@ -14,7 +14,9 @@ import { navigate } from '../browser/navigate.js';
 import { URLS } from '../browser/navigation.js';
 import { createLogger } from '../logger.js';
 import { readFormValues, readFormErrors, clickGuardar, landedOnOutage } from './update-section.js';
-import { deleteConfirmation } from './write-verdict.js';
+import { deleteConfirmation, choiceConfirmation } from './write-verdict.js';
+import { resolveChoice } from '../browser/catalogue.js';
+import { readAreas, applyAreas, readAreaCatalogue, areaRemovals, type Area } from './areas.js';
 import type { UpdateResult, UpdateStatus } from '../types.js';
 
 const log = createLogger('profile');
@@ -230,6 +232,8 @@ export interface CvLACProfile {
   /** `txt_desc_perfil` — empty when nothing has been written. */
   description: string;
   networks: StoredNetwork[];
+  /** Áreas de actuación, in CvLAC's order: the first one is the main one. */
+  areas: Area[];
 }
 
 export async function readProfileTool(): Promise<CvLACProfile> {
@@ -242,8 +246,15 @@ export async function readProfileTool(): Promise<CvLACProfile> {
     await navigate(page, URLS.perfil);
     const description = await readPerfilDescription(page);
 
-    log.info('profile read', { networks: networks.length, description: description.length });
-    return { description, networks };
+    await navigate(page, URLS.areas);
+    const areas = await readAreas(page);
+
+    log.info('profile read', {
+      networks: networks.length,
+      description: description.length,
+      areas: areas.length,
+    });
+    return { description, networks, areas };
   } finally {
     await page.close();
   }
@@ -260,7 +271,13 @@ export interface UpdateProfileRequest {
   description?: string;
   /** Merged over what is stored; a null url removes that network. */
   networks?: NetworkChange[];
-  /** Required for any change that removes a network. */
+  /**
+   * The whole list of áreas de actuación, in order, by name or by CvLAC code.
+   * Replaces what is stored — its order is data — so anything left out is a
+   * removal and needs `confirmDelete`.
+   */
+  areas?: string[];
+  /** Required for any change that removes a network or an área. */
   confirmDelete?: boolean;
 }
 
@@ -272,11 +289,15 @@ export interface UpdateProfileRequest {
  * mistake that reported three writes as saved during an outage.
  */
 export async function updateProfileTool(req: UpdateProfileRequest): Promise<UpdateResult> {
-  if (req.description === undefined && (req.networks === undefined || req.networks.length === 0)) {
+  if (
+    req.description === undefined &&
+    (req.networks === undefined || req.networks.length === 0) &&
+    req.areas === undefined
+  ) {
     return {
       success: false,
       status: 'failed',
-      message: 'Nothing to write: pass a description, a list of networks, or both.',
+      message: 'Nothing to write: pass a description, a list of networks, a list of areas, or several.',
     };
   }
 
@@ -300,6 +321,14 @@ export async function updateProfileTool(req: UpdateProfileRequest): Promise<Upda
   try {
     if (req.networks && req.networks.length > 0) {
       const outcome = await writeRedes(page, req.networks);
+      done.push(outcome.message);
+      if (outcome.status !== 'ok') status = outcome.status;
+      if (outcome.warnings) warnings.push(...outcome.warnings);
+    }
+
+    if (req.areas !== undefined) {
+      const outcome = await writeAreas(page, req.areas, req.confirmDelete === true);
+      if (outcome.status === 'needs_confirmation') return outcome.result!;
       done.push(outcome.message);
       if (outcome.status !== 'ok') status = outcome.status;
       if (outcome.warnings) warnings.push(...outcome.warnings);
@@ -331,9 +360,98 @@ export async function updateProfileTool(req: UpdateProfileRequest): Promise<Upda
 }
 
 interface HalfResult {
-  status: UpdateStatus;
+  status: UpdateStatus | 'needs_confirmation';
   message: string;
   warnings?: string[];
+  /** Carried through unchanged when a half has to stop and ask. */
+  result?: UpdateResult;
+}
+
+/**
+ * Writes the áreas de actuación.
+ *
+ * The whole list is replaced, because its order is what CvLAC stores. Each name
+ * is resolved against the catalogue the popup page carries, and an ambiguous one
+ * is a question, not a guess — the same rule the institution picker follows.
+ */
+async function writeAreas(page: Page, names: string[], confirmDelete: boolean): Promise<HalfResult> {
+  await navigate(page, URLS.areas);
+  const current = await readAreas(page);
+
+  await navigate(page, URLS.areasCatalogo);
+  const catalogue = await readAreaCatalogue(page);
+  if (catalogue.length === 0) {
+    return {
+      status: 'failed',
+      message: 'Áreas de actuación: CvLAC no devolvió su catálogo de áreas, así que no se escribió nada.',
+    };
+  }
+
+  const desired: Area[] = [];
+  for (const name of names) {
+    const byCode = catalogue.find((a) => a.code.toLowerCase() === name.trim().toLowerCase());
+    if (byCode) {
+      desired.push({ code: byCode.code, name: byCode.name });
+      continue;
+    }
+    const resolved = resolveChoice(catalogue, name, (a) => a.name);
+    if (resolved.kind === 'none') {
+      return {
+        status: 'failed',
+        message: `Áreas de actuación: "${name}" no está en el catálogo de CvLAC, y no se escribió nada.`,
+      };
+    }
+    if (resolved.kind === 'ambiguous') {
+      return {
+        status: 'needs_confirmation',
+        message: 'ambiguous area',
+        result: choiceConfirmation(
+          'área de conocimiento',
+          name,
+          resolved.options.map((a) => ({ id: a.code, label: a.name }))
+        ),
+      };
+    }
+    desired.push({ code: resolved.item.code, name: resolved.item.name });
+  }
+
+  const removals = areaRemovals(current, desired);
+  if (removals.length > 0 && !confirmDelete) {
+    return {
+      status: 'needs_confirmation',
+      message: 'areas removed',
+      result: deleteConfirmation(`las áreas de actuación ${removals.join(', ')}`),
+    };
+  }
+
+  await navigate(page, URLS.areas);
+  await applyAreas(page, desired);
+  await clickGuardar(page);
+
+  if (await landedOnOutage(page)) {
+    return {
+      status: 'unverified',
+      message: 'Áreas de actuación: se envió con CvLAC caído; verifícalo con read_profile antes de reintentar.',
+    };
+  }
+  const errors = await readFormErrors(page);
+  if (errors.length > 0) {
+    return { status: 'failed', message: `Áreas de actuación rechazadas: ${errors.join(' | ')}` };
+  }
+
+  await navigate(page, URLS.areas);
+  const stored = await readAreas(page);
+  const same =
+    stored.length === desired.length && stored.every((a, i) => a.code === desired[i].code);
+  if (!same) {
+    return {
+      status: 'unverified',
+      message:
+        `Áreas de actuación: CvLAC devolvió ${stored.length} (${stored.map((a) => a.name).join(', ') || 'ninguna'}) ` +
+        `en vez de las ${desired.length} enviadas; verifícalo con read_profile.`,
+    };
+  }
+  return { status: 'ok', message: `Áreas de actuación guardadas (${stored.length}).` };
 }
 
 async function writeRedes(page: Page, changes: NetworkChange[]): Promise<HalfResult> {

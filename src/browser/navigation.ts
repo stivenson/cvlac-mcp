@@ -37,6 +37,9 @@ export const URLS = {
   lineasCreate:         `${BASE_URL}/cvlac/EnLineaInv/create.do?decorator=T&null`,
   demasTrabajos:        `${BASE_URL}/cvlac/EnProdTecnica/all_demasTrabajos.do`,
   demasTrabajosCreate:  `${BASE_URL}/cvlac/EnProdTecnica/create_demasTrabajos.do`,
+  areas:                `${BASE_URL}/cvlac/ReRecursoHumAreaCon/detail.do`,
+  // The popup that carries the whole knowledge-area catalogue as JS globals.
+  areasCatalogo:        `${BASE_URL}/cvlac/popup/ReProductoAreaCon/areaAll.do?pro=false`,
   redes:                `${BASE_URL}/cvlac/ReRedSocialIdent/create.do`,
   perfil:               `${BASE_URL}/cvlac/EnRecursoHumano/enPerfilInvestigador.do`,
 } as const;

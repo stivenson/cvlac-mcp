@@ -188,8 +188,9 @@ export function createServer(): McpServer {
     {
       description:
         "Read the two CvLAC pages that hold one record instead of a list: the researcher " +
-        "profile text (txt_desc_perfil) and the table of academic social networks " +
-        "(Google Scholar, ORCID, LinkedIn, Scopus...). Neither appears in read_cvlac.",
+        "profile text (txt_desc_perfil), the table of academic social networks " +
+        "(Google Scholar, ORCID, LinkedIn, Scopus...) and the áreas de actuación. " +
+        "None of them appears in read_cvlac.",
       inputSchema: {},
     },
     async () => {
@@ -206,7 +207,8 @@ export function createServer(): McpServer {
         "MERGED over what CvLAC already stores — its form rewrites the whole table, so this " +
         "reads it first and posts everything back. Pass url:null to remove one. A network " +
         "CvLAC does not list goes in \"otro\" with its name in \"label\". Removing one needs " +
-        "confirm_delete:true. The profile text cannot be blanked: CvLAC marks it required.",
+        "confirm_delete:true. The profile text cannot be blanked: CvLAC marks it required. " +
+        "The areas list is replaced whole, so dropping one also needs confirm_delete:true.",
       inputSchema: {
         description: z
           .string()
@@ -227,14 +229,30 @@ export function createServer(): McpServer {
           )
           .optional()
           .describe('Networks to set or remove. Everything else stored is kept.'),
+        areas: z
+          .array(z.string())
+          .optional()
+          .describe(
+            'The whole list of áreas de actuación, in order — the first is the main one — by name ' +
+              'or by CvLAC code. It replaces what is stored, so anything left out is a removal. ' +
+              'An ambiguous name comes back in "choices" instead of being guessed.'
+          ),
         confirm_delete: z
           .boolean()
           .optional()
-          .describe('Required when any network carries url:null. Without it nothing is written.'),
+          .describe(
+            'Required when a network carries url:null or the areas list drops one. ' +
+              'Without it nothing is written.'
+          ),
       },
     },
-    async ({ description, networks, confirm_delete }) => {
-      const result = await updateProfileTool({ description, networks, confirmDelete: confirm_delete });
+    async ({ description, networks, areas, confirm_delete }) => {
+      const result = await updateProfileTool({
+        description,
+        networks,
+        areas,
+        confirmDelete: confirm_delete,
+      });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }
   );
