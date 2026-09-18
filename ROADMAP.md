@@ -17,7 +17,7 @@ Un recorrido de las **86 entradas** del menú de CvLAC (2026-09-16) encontró qu
 | Escritura `update` | ✅ Verificada en vivo en las 11 secciones |
 | Confirmación antes de borrar | ✅ `confirm_delete`; sin él no se escribe nada |
 | Combobox ambiguo resuelto por una persona | ✅ `needs_confirmation` con candidatos en `choices` |
-| Perfil del investigador y redes académicas | ✅ `read_profile` / `update_profile` |
+| Perfil, redes académicas y áreas de actuación | ✅ `read_profile` / `update_profile`, CRUD verificado en vivo |
 | No enviar un formulario incompleto o sin cambios | ✅ Enviarlo tumbaba el validador de CvLAC con un 500 |
 | Veredicto honesto de una escritura | ✅ `ok` / `failed` / `unverified`, decidido por lo que CvLAC almacenó, no por cómo respondió |
 | Ritmo de peticiones y anti-bloqueo | ✅ Pacer, backoff, `Retry-After` y cortacircuitos, configurables por env |
@@ -26,7 +26,7 @@ Un recorrido de las **86 entradas** del menú de CvLAC (2026-09-16) encontró qu
 | Configuración personal fuera del código | ✅ |
 | Logging con redacción de secretos | ✅ |
 | Lectura de la ficha de detalle de un ítem | ✅ `read_cvlac_detail`, genérica |
-| Tests | ✅ 401 unitarios sin red, + suite e2e en vivo opt-in |
+| Tests | ✅ 421 unitarios sin red, + suite e2e en vivo opt-in |
 
 ## Limitaciones conocidas
 
@@ -37,7 +37,6 @@ Cosas que el diseño actual no puede hacer, no bugs pendientes.
 - **El `add` de formación complementaria depende del catálogo de CvLAC.** Su buscador de programas académicos solo ofrece los ya registrados para esa institución y ese nivel, y el popup no permite crear uno. Si no hay ninguno, la sección no admite altas — ni desde aquí ni desde la web con ese picker.
 - **El portafolio se lee renderizándolo.** Ya no se parsea el bundle: `fetchPortfolioData` abre un chromium y lee el DOM de `#/resume` y del dashboard. Sigue dependiendo de los nombres de clase del sitio, pero ahora un cambio se ve como listas vacías con warning en el log, no en silencio. `achievements` y `skills` también se leen.
 - **Los pickers readonly de fecha y municipio se inyectan por JS.** Ya no se pierden valores: el municipio se resuelve por la cascada del popup (su código no es el DANE) y las fechas van en `yyyy-mm-dd`. Ver `docs/cvlac-findings.md`.
-- **No hay tool para áreas de actuación.** Es un `select multiple` en cascada de catálogo, no una lista; se completa en la interfaz web. Líneas de investigación e idiomas ya tienen tool.
 
 ## Siguiente
 
@@ -51,9 +50,9 @@ Ordenado por relación valor/riesgo.
 
 Declara funciones con nombre dentro de un `$$eval`, y esbuild —que usa `tsx`— las envuelve en un `__name` que no existe en la página. Revienta solo en modo dev: el `dist` que ejecuta el MCP y la suite e2e no está afectado. Arreglo: escribir esos callbacks sin funciones nombradas, como ya se hace en `portfolio.ts`.
 
-### 3. Cerrar las secciones manuales del CvLAC
+### 3. Cerrar lo que queda a mano en el CvLAC
 
-Queda **áreas de actuación** (vacía) y los textos genéricos de experiencia profesional. El contenido sugerido está en `CVLAC_GUIA_SECCIONES_MANUALES.md` del workspace cliente.
+Ya no queda ninguna sección sin tool. Lo que sigue siendo manual es el **contenido**: los textos de experiencia profesional están genéricos, y áreas de actuación tiene una sola área registrada. El contenido sugerido está en `CVLAC_GUIA_SECCIONES_MANUALES.md` del workspace cliente.
 
 ### 4. Sacar los datos del portafolio de una fuente estable
 
@@ -76,7 +75,7 @@ Lo que se ganó preparándolo vale igual sin publicar nunca: `CVLAC_ENV_FILE` pe
 ## Ideas sin compromiso
 
 - Cachear el resultado de `findInstitucionId` — hoy hace una petición por institución en cada escritura.
-- Tool para áreas de actuación (selector en cascada de catálogo).
+- Tools para identificación y direcciones, los dos registros únicos que quedan sin explorar.
 - Un `--dry-run` de verdad a nivel de formulario: llenar y capturar screenshot sin enviar.
 
 ## Checklist de apertura del repo
@@ -96,7 +95,7 @@ El repo **ya está público**. Queda lo que sigue pendiente de todos modos.
 
 ## Historial
 
-- **2026-09-18** — Todas las secciones con datos quedaron gestionadas: formación complementaria, idiomas, líneas de investigación y demás trabajos, más el perfil del investigador y las redes académicas. Tres reglas nuevas, cada una nacida de una escritura que mintió: un `delete` no se ejecuta a la primera, un formulario sin cambios o sin un campo obligatorio no se envía (enviarlo devolvía un 500 del validador de CvLAC que se leía como validación fallida), y un combobox ambiguo lo resuelve una persona — el catálogo tiene seis "Universidad de los Andes" y antes se tomaba la primera. `read_portfolio` pasó de parsear el bundle a renderizar el sitio, que llevaba devolviendo todo vacío desde que el portafolio se reescribió. El diff dejó de reportar como faltante lo que CvLAC guarda en otra sección o con otra redacción: `sync` habría duplicado dos registros. Tests de 291 a 401.
+- **2026-09-18** — Todas las secciones con datos quedaron gestionadas: formación complementaria, idiomas, líneas de investigación y demás trabajos, más el perfil del investigador y las redes académicas. Tres reglas nuevas, cada una nacida de una escritura que mintió: un `delete` no se ejecuta a la primera, un formulario sin cambios o sin un campo obligatorio no se envía (enviarlo devolvía un 500 del validador de CvLAC que se leía como validación fallida), y un combobox ambiguo lo resuelve una persona — el catálogo tiene seis "Universidad de los Andes" y antes se tomaba la primera. `read_portfolio` pasó de parsear el bundle a renderizar el sitio, que llevaba devolviendo todo vacío desde que el portafolio se reescribió. El diff dejó de reportar como faltante lo que CvLAC guarda en otra sección o con otra redacción: `sync` habría duplicado dos registros. Áreas de actuación cerró la lista: su catálogo de 267 áreas viaja entero dentro de la página del popup, y el `select multiple` que las guarda solo envía lo seleccionado, así que se escriben seleccionadas en vez de confiar en el handler de la página. Tests de 291 a 421.
 
 - **2026-09-12** — Un 5xx de CvLAC ya no se lee como sección vacía: `assertAvailable` corta en cada navegación y el usuario recibe el motivo. Tests del borde MCP (registro de tools, validación previa a cualquier navegación) y de las URLs por sección. Empaquetado para npm listo pero **sin publicar** (ver punto 5). `CVLAC_ENV_FILE` para instalaciones fuera del repo; corregido que dotenv escribía su banner en el stdout del MCP, o sea tráfico malformado en el canal JSON-RPC de cada arranque. README cubre los siete editores MCP en vez de solo Cursor. Tests de 138 a 142.
 - **2026-07-20** — Configuración personal externalizada; logging con redacción; warnings por campo y lectura de los errores del formulario; diff con cuatro grupos y bloqueo de duplicados; tests de 12 a 138. Se descubrió y corrigió que una sesión expirada no redirige (habría duplicado los 23 ítems del portafolio en un `sync`).
