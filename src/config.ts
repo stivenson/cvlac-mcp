@@ -32,6 +32,12 @@ export interface CvlacConfig {
     municipio?: { nombre: string; codigoDane: string };
     /** Institution used when an item does not name one (proyectos). */
     institucionFallback?: string;
+  /**
+   * CvLAC's id for that institution. Its catalogue holds duplicates — six rows
+   * are called "Universidad de los Andes" — so a fallback named only by text
+   * stops every project write to ask which one.
+   */
+  institucionFallbackId?: string;
     /** Weekly hours for formación académica. */
     horasSemanales?: number;
     /** Language code for cursos, e.g. 'ES'. */

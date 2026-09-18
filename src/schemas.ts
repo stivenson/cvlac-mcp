@@ -72,6 +72,7 @@ export const projectSchema = z.object({
   fechaActoAdministrativo: z.string().optional(),
   valorSinContrapartida: z.string().optional(),
   participacion: z.string().optional(),
+  institucionId: z.string().optional(),
 });
 
 export const softwareSchema = z.object({

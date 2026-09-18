@@ -13,6 +13,9 @@
     "_institucionFallback": "Institución usada cuando un proyecto no indica una. Debe existir en el catálogo de instituciones de CvLAC.",
     "institucionFallback": "Universidad Nacional de Colombia",
 
+    "_institucionFallbackId": "Id de esa institución en CvLAC. Su catálogo tiene duplicados exactos —seis filas se llaman 'Universidad de los Andes'—, así que un nombre a secas detiene cada escritura para preguntar cuál. Se obtiene del campo 'choices' que devuelve esa pregunta.",
+    "institucionFallbackId": "",
+
     "_horasSemanales": "Intensidad horaria semanal: formación la exige, y experiencia la guarda como Dedicación.",
     "horasSemanales": 1,
     "idioma": "ES",

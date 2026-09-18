@@ -985,8 +985,11 @@ async function fillProyecto(page: Page, proj: ProjectItem, report: FillReport): 
   await humanDelay(200, 400);
 
   const instName = proj.institution ?? defaults.institucionFallback;
+  // The id, when there is one, skips the name search — and the question it
+  // raises when several catalogue rows share that name.
+  const instId = proj.institucionId ?? (proj.institution ? undefined : defaults.institucionFallbackId);
   if (instName) {
-    await setInstitucionFields(page, report, instName, 'id_inst', 'nme_inst');
+    await setInstitucionFields(page, report, instName, 'id_inst', 'nme_inst', instId);
   } else {
     missingValue(
       report,

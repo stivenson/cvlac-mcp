@@ -67,6 +67,8 @@ export interface ProjectItem {
   endYear?: string;
   endMonth?: string;
   institution?: string;
+  /** CvLAC's own institution id, when the name matches several catalogue rows. */
+  institucionId?: string;
   link?: string;
   // Financiación
   tipoFinanciacion?: 'FI' | 'SO'; // Financiado | Solidario
