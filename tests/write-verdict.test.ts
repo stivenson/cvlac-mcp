@@ -76,7 +76,7 @@ describe('storedMatchesSubmitted', () => {
   it('ignores fields the form carries but nobody submitted', () => {
     expect(
       storedMatchesSubmitted(
-        { nro_ano_fin: '2021', cod_rh: '0001402041' },
+        { nro_ano_fin: '2021', cod_rh: '0000000000' },
         { nro_ano_fin: '2021' }
       )
     ).toBe(true);

@@ -20,7 +20,7 @@ import {
 // What `readFormValues` returns for ReRedSocialIdent/create.do: an unchecked
 // checkbox is absent, a checked one reads 'on', and every URL_n is present.
 const emptyForm = (): Record<string, string> => {
-  const out: Record<string, string> = { cod_rh: '0001402041', txt_otro: '' };
+  const out: Record<string, string> = { cod_rh: '0000000000', txt_otro: '' };
   for (let n = 1; n <= 13; n++) out[`URL_${n}`] = '';
   return out;
 };
