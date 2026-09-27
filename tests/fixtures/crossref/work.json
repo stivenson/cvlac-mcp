@@ -1,0 +1,20 @@
+{
+  "status": "ok",
+  "message": {
+    "DOI": "10.1234/ejemplo.2024.001",
+    "title": ["Un artículo de ejemplo sobre visión por computador"],
+    "container-title": ["Revista de Ejemplo"],
+    "ISSN": ["0120-5609", "2248-8723"],
+    "issn-type": [
+      { "value": "0120-5609", "type": "print" },
+      { "value": "2248-8723", "type": "electronic" }
+    ],
+    "volume": "44",
+    "issue": "2",
+    "page": "10-25",
+    "language": "es",
+    "type": "journal-article",
+    "published": { "date-parts": [[2024, 11, 3]] },
+    "URL": "https://doi.org/10.1234/ejemplo.2024.001"
+  }
+}

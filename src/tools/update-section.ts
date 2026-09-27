@@ -1,4 +1,6 @@
 import type { Page } from 'playwright';
+import { PRODUCT_SECTIONS } from './products/index.js';
+import { TECNICA_SECTIONS } from './products/tecnica.js';
 import { session, isLoginPage } from '../browser/session.js';
 import type {
   UpdateRequest,
@@ -56,221 +58,34 @@ import { createLogger } from '../logger.js';
 import { classifyMatch } from '../diff.js';
 import { collectListPages, visitListPages, type ListNavigator } from '../browser/jmesa.js';
 import { pickRow, exactLabelCount } from './row-match.js';
+import {
+  FIELD_TIMEOUT_MS,
+  humanDelay,
+  missingValue,
+  normStr,
+  relaxHiddenRequired,
+  setInstitucionFields,
+  setMunicipio,
+  setReadonlyField,
+  tryField,
+  type FillReport,
+  type SectionConfig,
+} from './form-kit.js';
+
+export {
+  FIELD_TIMEOUT_MS,
+  humanDelay,
+  missingValue,
+  normStr,
+  relaxHiddenRequired,
+  setInstitucionFields,
+  setMunicipio,
+  setReadonlyField,
+  tryField,
+} from './form-kit.js';
+export type { FillReport, SectionConfig } from './form-kit.js';
 
 const log = createLogger('update-section');
-
-/**
- * How long to wait for one field. Playwright's default is 30s, which a form
- * that hides a section turns into half a minute of waiting per hidden input.
- */
-const FIELD_TIMEOUT_MS = 5000;
-
-/**
- * Fields that could not be filled during one form submission.
- *
- * CvLAC rejects a form without saying which control was at fault, so every
- * skipped field is recorded here and returned to the caller alongside whatever
- * the server itself complained about.
- */
-interface FillReport {
-  warnings: string[];
-  /**
-   * Fields CvLAC requires that could not be filled. A form carrying one is not
-   * submitted: doing so crashed CvLAC's own validator rather than coming back
-   * with a message.
-   */
-  blockers?: string[];
-  /** Pickers that matched several rows and need a person to choose. */
-  choices?: AmbiguousChoice[];
-}
-
-/**
- * Runs one field interaction, recording a warning instead of aborting.
- *
- * Fillers touch fields that only exist on some CvLAC forms, so a missing control
- * is normal — but it must never be invisible, which is what the old
- * `.catch(() => {})` made it.
- */
-async function tryField(report: FillReport, field: string, fn: () => Promise<unknown>): Promise<boolean> {
-  try {
-    await fn();
-    return true;
-  } catch (err) {
-    const detail = err instanceof Error ? err.message.split('\n')[0] : String(err);
-    report.warnings.push(`${field}: ${detail}`);
-    log.debug('field not filled', { field, detail });
-    return false;
-  }
-}
-
-/** Records that a value was unavailable, without touching the page. */
-function missingValue(report: FillReport, field: string, hint: string): void {
-  report.warnings.push(`${field}: sin valor (${hint})`);
-  log.debug('field left empty', { field, hint });
-}
-
-/** Normalize string for fuzzy comparison: lowercase, no accents, no punctuation */
-function normStr(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/[^a-z0-9\s]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-/**
- * Search the CvLAC institution catalogue.
- *
- * Returns null when nothing matches: writing id 0 would save an entry pointing at
- * a non-existent institution, which is worse than letting the form reject it.
- */
-async function findInstitucionId(
-  page: Page,
-  name: string
-): Promise<CatalogueResolution<{ id: number; nmeInst: string }>> {
-  // Try progressively shorter search terms: full name, then each word (longest first)
-  const searchTerms = [name, ...name.split(/\s+/).filter((w) => w.length > 4).sort((a, b) => b.length - a.length)];
-
-  for (const term of searchTerms) {
-    const url = `${BASE_URL}/cvlac/json/EnInstitucion/buscar.do?txt_nombre=${encodeURIComponent(catalogueQuery(term))}`;
-
-    const response = await page.evaluate(async (fetchUrl: string) => {
-      const res = await fetch(fetchUrl, { credentials: 'include' });
-      if (!res.ok) return { ok: false, items: [] as unknown[] };
-      const buf = await res.arrayBuffer();
-      const text = new TextDecoder('latin1').decode(buf);
-      try {
-        return { ok: true, items: JSON.parse(text) };
-      } catch {
-        return { ok: true, items: [] };
-      }
-    }, url);
-
-    if (!response.ok) return { kind: 'none' };
-
-    const items = response.items as Array<{ id: number; nmeInst: string }>;
-    if (!Array.isArray(items) || items.length === 0) continue;
-
-    // A shorter term can only be vaguer, so whatever this one says is the answer.
-    const resolved = resolveChoice(items, name, (r) => r.nmeInst);
-    if (resolved.kind !== 'none') return resolved;
-  }
-
-  return { kind: 'none' };
-}
-
-/** Set a readonly institution picker (hidden id + visible readonly name) using the search API */
-async function setInstitucionFields(
-  page: Page,
-  report: FillReport,
-  name: string,
-  idField: string,
-  nmeField: string,
-  /** CvLAC's own id, when a person has already chosen among the candidates. */
-  explicitId?: string
-): Promise<void> {
-  let found: { id: number; nmeInst: string };
-
-  if (explicitId) {
-    found = { id: Number(explicitId), nmeInst: name };
-  } else {
-    const resolved = await findInstitucionId(page, name);
-    if (resolved.kind === 'none') {
-      report.warnings.push(
-        `institución "${name}": no existe en el catálogo de CvLAC; el campo queda vacío`
-      );
-      log.warn('institution not found in CvLAC catalogue', { name });
-      return;
-    }
-    if (resolved.kind === 'ambiguous') {
-      log.info('institution name matched several rows; asking', { name, options: resolved.options.length });
-      (report.choices ??= []).push({
-        field: 'institución',
-        value: name,
-        options: resolved.options.map((o) => ({ id: String(o.id), label: o.nmeInst })),
-      });
-      return;
-    }
-    found = resolved.item;
-  }
-  await page.evaluate(
-    ({ instId, instNme, idF, nmeF }) => {
-      const idEl = document.getElementById(idF) as HTMLInputElement | null;
-      const nmeEl = document.getElementById(nmeF) as HTMLInputElement | null;
-      if (idEl) idEl.value = String(instId);
-      if (nmeEl) {
-        nmeEl.removeAttribute('readonly');
-        nmeEl.value = instNme;
-        nmeEl.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-    },
-    { instId: found.id, instNme: found.nmeInst, idF: idField, nmeF: nmeField }
-  );
-}
-
-/**
- * Resolves a municipality the way the picker popup does.
- *
- * Three numberings exist and only one is the code the form stores: the DANE
- * code wrote Sketty (Wales), the id from the JSON search wrote Neiva, and this
- * cascade — country, department, municipality — writes the right one. The JSON search
- * is still the cheapest way to learn which department a town belongs to, so it
- * is used for that and nothing else.
- */
-async function resolveMunicipio(
-  page: Page,
-  name: string
-): Promise<{ codMunicipio: string; codRh: string; text: string; sglPais: string } | null> {
-  const get = (url: string): Promise<string> =>
-    page.evaluate(async (fetchUrl: string) => {
-      const res = await fetch(fetchUrl, { credentials: 'include' });
-      if (!res.ok) return '';
-      return new TextDecoder('latin1').decode(await res.arrayBuffer());
-    }, url);
-
-  const raw = await get(
-    `${BASE_URL}/cvlac/json/EnMunicipio/buscar.do?txt_nombre=${encodeURIComponent(catalogueQuery(name))}`
-  );
-  let hit: { txtNmeMunicipio: string; departamento?: { txtNmeDepartamento?: string; pais?: { txtNmePais?: string } } } | null =
-    null;
-  try {
-    const rows = JSON.parse(raw);
-    hit = Array.isArray(rows) ? pickMunicipio(rows as MunicipioRow[], name) : null;
-  } catch {
-    hit = null;
-  }
-  if (!hit) return null;
-
-  const paisNombre = hit.departamento?.pais?.txtNmePais ?? 'Colombia';
-  const deptoNombre = hit.departamento?.txtNmeDepartamento ?? null;
-  // The cascade speaks three-letter country codes; the JSON returns two.
-  const sglPais = paisNombre.toLowerCase() === 'colombia' ? 'COL' : '';
-  if (!sglPais) return null;
-
-  const deptos = parseDepartamentosXml(
-    await get(`${BASE_URL}/cvlac/binary/ubicacion.xml?methodToCall=getDepartamentosAsXML&sglPais=${sglPais}`)
-  );
-  const depto = deptoNombre ? pickByName(deptos, deptoNombre) : null;
-  if (!depto) return null;
-
-  const municipios = parseMunicipiosXml(
-    await get(
-      `${BASE_URL}/cvlac/binary/ubicacion.xml?methodToCall=getMunicipiosAsXML` +
-        `&sglDepartamento=${encodeURIComponent(depto.id)}&sglPais=${sglPais}`
-    )
-  );
-  const municipio = pickByName(municipios, name);
-  if (!municipio) return null;
-
-  return {
-    codMunicipio: municipio.id,
-    codRh: municipio.codRh,
-    text: municipioDisplayName(paisNombre, depto.name, municipio.name),
-    sglPais,
-  };
-}
 
 /**
  * Finds the programme among those the institution registered at that level.
@@ -361,123 +176,6 @@ async function setInstitucion(
   explicitId?: string
 ): Promise<void> {
   await setInstitucionFields(page, report, name, 'id_institucion', 'txt_nme_institucion', explicitId);
-}
-
-/**
- * Fills the municipality picker: a readonly text input plus a hidden code whose
- * id carries a per-render suffix (_loc_NNNNN / _locValue_NNNNN).
- */
-async function setMunicipio(
-  page: Page,
-  report: FillReport,
-  nombre: string | undefined,
-  codigoDane: string | undefined
-): Promise<void> {
-  if (!nombre) {
-    missingValue(report, 'municipio', 'define defaults.municipio.nombre en cvlac.config.json');
-    return;
-  }
-
-  const found = await resolveMunicipio(page, nombre);
-  if (!found) {
-    report.warnings.push(
-      `municipio "${nombre}": no se pudo resolver en el catálogo de CvLAC; el campo queda vacío`
-    );
-    log.warn('municipality not resolved', { nombre });
-    return;
-  }
-  if (codigoDane && codigoDane !== found.codMunicipio) {
-    report.warnings.push(
-      `municipio: se ignoró el código ${codigoDane} porque CvLAC numera sus municipios aparte del DANE ` +
-        `(${found.text} es ${found.codMunicipio} para el formulario)`
-    );
-  }
-
-  // The picker writes four fields, not one: the readable path, the code, the
-  // 10-character prefix beside it and the country.
-  const applied = await page.evaluate(
-    ({ text, code, codRh, sglPais }) => {
-      const textEl = document.querySelector('input[name="cod_municipio_text"]') as HTMLInputElement | null;
-      if (!textEl) return false;
-      textEl.removeAttribute('readonly');
-      textEl.value = text;
-
-      const suffix = textEl.id.replace('_loc_', '');
-      const setById = (id: string, value: string): void => {
-        const el = document.getElementById(id) as HTMLInputElement | null;
-        if (el) el.value = value;
-      };
-      setById('_locValue_' + suffix, code);
-      setById('_locRHValue_' + suffix, codRh);
-      setById('_locPaisValue_' + suffix, sglPais);
-
-      for (const el of Array.from(
-        document.querySelectorAll('input[name="cod_municipio"]')
-      ) as HTMLInputElement[]) {
-        el.value = code;
-      }
-      for (const el of Array.from(
-        document.querySelectorAll('input[name="cod_rh_municipio"]')
-      ) as HTMLInputElement[]) {
-        el.value = codRh;
-      }
-      return true;
-    },
-    { text: found.text, code: found.codMunicipio, codRh: found.codRh, sglPais: found.sglPais }
-  );
-  if (!applied) report.warnings.push('municipio: el formulario no tiene cod_municipio_text');
-}
-
-/** Remove readonly from any field and set its value via JS. False when the field is absent. */
-async function forceSetReadonly(page: Page, fieldId: string, value: string): Promise<boolean> {
-  return page.evaluate(
-    ({ id, val }) => {
-      const el = document.getElementById(id) as HTMLInputElement | null;
-      if (!el) return false;
-      el.removeAttribute('readonly');
-      el.value = val;
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      return true;
-    },
-    { id: fieldId, val: value }
-  );
-}
-
-/** Set a readonly field selected by name attribute (some forms have no id) */
-async function forceSetReadonlyByName(page: Page, fieldName: string, value: string): Promise<boolean> {
-  return page.evaluate(
-    ({ name, val }) => {
-      const el = document.querySelector(`[name="${name}"]`) as HTMLInputElement | null;
-      if (!el) return false;
-      el.removeAttribute('readonly');
-      el.value = val;
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      return true;
-    },
-    { name: fieldName, val: value }
-  );
-}
-
-/** forceSetReadonly + warning when the field is not on this form. */
-async function setReadonlyField(
-  page: Page,
-  report: FillReport,
-  fieldName: string,
-  value: string,
-  byId = false
-): Promise<void> {
-  const ok = byId
-    ? await forceSetReadonly(page, fieldName, value)
-    : await forceSetReadonlyByName(page, fieldName, value);
-  if (!ok) report.warnings.push(`${fieldName}: el formulario no tiene ese campo`);
-}
-
-/** Random delay to simulate human behaviour */
-async function humanDelay(min = 300, max = 800): Promise<void> {
-  const ms = min + Math.random() * (max - min);
-  await new Promise((r) => setTimeout(r, ms));
 }
 
 /** Navigate to a URL; throws SessionExpiredError if redirected to login (caller must reopen page) */
@@ -1202,20 +900,6 @@ async function fillEvento(page: Page, ev: EventoCientificoItem, report: FillRepo
 
 // ── Section registry ─────────────────────────────────────────────────────────
 
-interface SectionConfig {
-  /** List page (all.do) used to find existing rows for update/delete. */
-  listUrl: string;
-  /** Create form (create.do). */
-  createUrl: string;
-  /** Index of the <td> in a list row that holds the matchable label. */
-  matchCellIndex: number;
-  /** Extract the matchable label from the item data. */
-  labelOf: (data: any) => string;
-  /** Fill the create/edit form with the item data (no navigation, no submit). */
-  fill: (page: Page, data: any, report: FillReport) => Promise<void>;
-}
-
-
 /**
  * A language and the four skills CvLAC grades separately.
  *
@@ -1359,6 +1043,12 @@ async function fillDemasTrabajo(page: Page, item: OtherWorkInput, report: FillRe
 }
 
 const SECTIONS: Record<CvLACSectionName, SectionConfig> = {
+  ...PRODUCT_SECTIONS,
+  informesTecnicos: TECNICA_SECTIONS.informesTecnicos,
+  innovacionesProceso: TECNICA_SECTIONS.innovacionesProceso,
+  productosTecnologicos: TECNICA_SECTIONS.productosTecnologicos,
+  consultorias: TECNICA_SECTIONS.consultorias,
+  prototipos: TECNICA_SECTIONS.prototipos,
   demasTrabajos: {
     ...SECTION_LIST.demasTrabajos,
     createUrl: URLS.demasTrabajosCreate,
@@ -1804,6 +1494,8 @@ export async function addItem(
     return blockedRefusal(label, report.blockers, report.warnings);
   }
   await syncHiddenDuplicates(pageRef.page);
+  const relaxed = await relaxHiddenRequired(pageRef.page);
+  if (relaxed.length) log.debug('required dropped from hidden controls', { relaxed });
   await humanDelay(400, 800);
   await clickGuardar(pageRef.page);
   const screenshotBase64 = await shot(pageRef.page);
@@ -1874,6 +1566,8 @@ async function updateItem(
   if (report.blockers?.length) {
     return blockedRefusal(label, report.blockers, report.warnings);
   }
+  const relaxed = await relaxHiddenRequired(pageRef.page);
+  if (relaxed.length) log.debug('required dropped from hidden controls', { relaxed });
   const edits = verifiableFields(changedFields(beforeFill, await readFormValues(pageRef.page)));
   // Submitting an untouched form is indistinguishable from a successful save,
   // so it does not get submitted.

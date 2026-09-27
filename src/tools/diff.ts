@@ -25,6 +25,16 @@ export async function diffTool(section?: CvLACSectionName | 'all'): Promise<Diff
     idiomas: cvlacPartial.idiomas ?? [],
     lineas: cvlacPartial.lineas ?? [],
     demasTrabajos: cvlacPartial.demasTrabajos ?? [],
+    articulos: cvlacPartial.articulos ?? [],
+    jurados: cvlacPartial.jurados ?? [],
+    tesis: cvlacPartial.tesis ?? [],
+    capitulos: cvlacPartial.capitulos ?? [],
+    libros: cvlacPartial.libros ?? [],
+    informesTecnicos: cvlacPartial.informesTecnicos ?? [],
+    innovacionesProceso: cvlacPartial.innovacionesProceso ?? [],
+    productosTecnologicos: cvlacPartial.productosTecnologicos ?? [],
+    consultorias: cvlacPartial.consultorias ?? [],
+    prototipos: cvlacPartial.prototipos ?? [],
   };
 
   return computeDiff(portfolio, cvlac);

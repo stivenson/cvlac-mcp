@@ -43,6 +43,7 @@ const EXPECTED = [
   'sync',
   'screenshot',
   'inspect_form',
+  'lookup_doi',
 ];
 
 describe('tool registration', () => {
@@ -65,6 +66,14 @@ describe('tool registration', () => {
     expect(schema.properties.action.enum.sort()).toEqual(['add', 'delete', 'update']);
     expect(schema.required).toContain('section');
     expect(schema.required).toContain('action');
+  });
+
+  it('tells the model how to answer catalogue choices for products', async () => {
+    const { tools } = await client.listTools();
+    const description = tools.find((tool) => tool.name === 'update_section')?.description ?? '';
+    for (const field of ['revistaId', 'libroId', 'editorialId', 'programaId', 'areaId', 'institucionId']) {
+      expect(description).toContain(field);
+    }
   });
 
   it('lets read_cvlac and diff address every section plus "all"', async () => {

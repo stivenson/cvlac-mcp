@@ -38,7 +38,7 @@ npm start          # node dist/index.js
 src/
 ├── index.ts                  # Entry point: subcomandos, carga .env (env.ts), stdio transport
 ├── env.ts                    # Ubicación y lectura del .env (UTF-8/UTF-16/latin1) + mensaje de credenciales
-├── server.ts                 # Registra las 8 tools con registerTool (valida data con schemas zod)
+├── server.ts                 # Registra las tools MCP con registerTool (valida data con schemas zod)
 ├── types.ts                  # Interfaces Portfolio*, CvLAC*, Diff*, Update*
 ├── schemas.ts                # Un schema zod por sección + portfolioExtraSchema
 ├── config.ts                 # Carga cvlac.config.json (defaults personales)
@@ -49,7 +49,8 @@ src/
 │   └── navigation.ts         # URLS constantes (list/create) del CvLAC
 ├── tools/                    # Una función por tool MCP
 │   ├── login.ts  read-cvlac.ts  read-cvlac-detail.ts  read-portfolio.ts  diff.ts
-│   ├── update-section.ts     # (grande) llena formularios CvLAC por sección
+│   ├── update-section.ts     # despacha CRUD y llena formularios por sección
+│   ├── form-kit.ts pickers.ts products/ crossref.ts
 │   ├── sync.ts  screenshot.ts
 └── extractors/
     ├── portfolio.ts          # Parsea el bundle React del portafolio (regex) + portfolio-extra.json
@@ -66,11 +67,21 @@ Flujo de datos: `index.ts` → `server.ts` (router) → `tools/*` → `browser/s
 
 ## Tools MCP (registradas en `server.ts`)
 
-`login`, `read_cvlac`, `read_cvlac_detail`, `read_profile`, `update_profile`, `read_portfolio`, `diff`, `update_section`, `sync`, `screenshot`, `inspect_form`.
+`login`, `read_cvlac`, `read_cvlac_detail`, `read_profile`, `update_profile`, `read_portfolio`, `diff`, `update_section`, `sync`, `screenshot`, `inspect_form`, `lookup_doi`.
 
-**Secciones:** `formacion`, `formacionComple`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`, `software`, `eventos`, `idiomas`, `lineas`, `demasTrabajos`.
+**Secciones:** `formacion`, `formacionComple`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`, `software`, `eventos`, `idiomas`, `lineas`, `demasTrabajos`, `articulos`, `libros`, `capitulos`, `tesis`, `jurados`, `informesTecnicos`, `innovacionesProceso`, `productosTecnologicos`, `consultorias`, `prototipos`.
 
 `idiomas` y `lineas` se leen y escriben, pero no se diffean: el portafolio no tiene de dónde compararlas.
+
+Las secciones de producción tampoco entran al diff del portafolio. Se gestionan con `read_cvlac` y
+`update_section`. Revista, libro, editorial, programa, área e institución se resuelven por catálogo;
+si hay varias opciones, la respuesta trae `choices` y se repite con el campo correspondiente terminado
+en `Id` (`revistaId`, `libroId`, `editorialId`, `programaId`, `areaId` o `institucionId`). Las listas
+JMesa se recorren completas, y update/delete solo actúan cuando hay una fila candidata única.
+Coautores, palabras clave, certificados y estudiantes vinculados se completan desde la web.
+
+`lookup_doi` es de solo lectura: consulta `api.crossref.org` y devuelve un borrador de `ArticleInput`
+para revisar antes de pasarlo a `update_section`.
 
 **Todo combobox ambiguo pregunta.** Buscar una institución por nombre puede devolver cientos de filas — el nombre de una universidad común dio 193, incluida una homónima de otro país y un sindicato de profesores. Antes se tomaba la primera coincidencia parcial. Ahora: coincidencia exacta resuelve sola; cualquier otra cosa devuelve `needs_confirmation` con los candidatos y no escribe. La respuesta vuelve en `data.institucionId`.
 

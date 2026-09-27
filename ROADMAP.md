@@ -1,12 +1,12 @@
 # Roadmap
 
-Dónde está `cvlac-mcp` y qué falta. Actualizado: **2026-09-18**.
+Dónde está `cvlac-mcp` y qué falta. Actualizado: **2026-09-27**.
 
 ## Estado actual
 
 Funciona de punta a punta contra el CvLAC real: lee, calcula el diff contra el portafolio y escribe con supervisión.
 
-Un recorrido de las **86 entradas** del menú de CvLAC (2026-09-16) encontró que solo **11 tienen datos**. Las 11 están gestionadas, con **CRUD verificado en vivo** por `tests/e2e/live-crud.mjs`: lista → `add` → lista → detalle → `add` repetido (bloqueado) → `update` → verificación → `delete sin confirmar` (bloqueado) → `delete` → lista final, sin dejar nada atrás. Además se gestionan el perfil del investigador y las redes académicas, que no son listas.
+Un recorrido de las **86 entradas** del menú de CvLAC (2026-09-16) encontró que solo **11 tenían datos**. Esas 11 están gestionadas, con **CRUD verificado en vivo** por `tests/e2e/live-crud.mjs`. Además se gestionan el perfil del investigador y las redes académicas, que no son listas. El bloque de producción bibliográfica, tesis, jurados y cinco familias técnicas ya está implementado y cubierto por pruebas locales; falta la verificación e2e explícita contra una cuenta real.
 
 | Área | Estado |
 |---|---|
@@ -26,7 +26,9 @@ Un recorrido de las **86 entradas** del menú de CvLAC (2026-09-16) encontró qu
 | Configuración personal fuera del código | ✅ |
 | Logging con redacción de secretos | ✅ |
 | Lectura de la ficha de detalle de un ítem | ✅ `read_cvlac_detail`, genérica |
-| Tests | ✅ 456 unitarios sin red, + suite e2e en vivo opt-in |
+| Tests | ✅ 580 pruebas locales sin red, + suite e2e en vivo opt-in |
+| Producción bibliográfica, tesis, jurados y cinco familias técnicas | ✅ Implementada; 580 pruebas locales pasan; CRUD real verificado en artículos y altas/bajas de informes y consultorías |
+| Borrador de artículo desde DOI | ✅ `lookup_doi`, solo lectura contra Crossref |
 
 ## Limitaciones conocidas
 
@@ -50,12 +52,12 @@ Ordenado por relación valor/riesgo.
 
 Declara funciones con nombre dentro de un `$$eval`, y esbuild —que usa `tsx`— las envuelve en un `__name` que no existe en la página. Revienta solo en modo dev: el `dist` que ejecuta el MCP y la suite e2e no está afectado. Arreglo: escribir esos callbacks sin funciones nombradas, como ya se hace en `portfolio.ts`.
 
-### 3. Producción bibliográfica, tesis dirigidas y jurados
+### 3. Segunda fase de productos y verificación e2e
 
-Es lo que más pesa en la convocatoria de medición y lo que más trabajo da llenar, y hoy no está. Empezar
-por artículos con DOI: con Crossref, CvLAC se llena casi solo (revista, ISSN, volumen, páginas,
-coautores). Antes hay que verificar si las listas de CvLAC paginan, porque una hoja de vida senior tiene
-cientos de productos.
+La primera fase ya registra artículos, libros, capítulos, tesis, jurados y cinco familias técnicas.
+Quedan por ejecutar, con autorización explícita, las pruebas CRUD sobre una cuenta real y explorar la
+segunda fase que CvLAC muestra después de guardar: coautores, palabras clave, áreas, reconocimientos,
+certificados y estudiantes vinculados. Esos pasos no se automatizan por ahora.
 
 ### 4. Separar la fuente de datos del motor
 
@@ -147,7 +149,7 @@ El repo **ya está público**. Queda lo que sigue pendiente de todos modos.
   `MSYS_NO_PATHCONV` y `--%`, `--use-system-ca`, valores entre comillas simples, `icacls`, la sesión
   como credencial, versión mayor fijada (`cvlac-mcp@1`) y enlaces absolutos para que se vean en npm.
   El job de CI de Windows ahora prueba el lector con los tres modos de escribir el `.env`. Tests de 433
-  a 456.
+  a 580.
 - **2026-09-27 (tarde)** — Auditoría del paquete publicado, con tres arreglos de portabilidad.
   `install-browser` descarga Chromium con el CLI de Playwright que trae el paquete, no con el último
   publicado: un build de navegador pertenece a una versión de la librería, y `npx playwright install`

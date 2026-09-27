@@ -1,0 +1,15 @@
+<form name="enProdArticuloInsertForm" action="/cvlac/EnProdArticulo/insert.do?null" onsubmit="return false">
+  <input type="radio" name="cod_tipo_producto" value="111"><input type="radio" name="cod_tipo_producto" value="112">
+  <input type="radio" name="cod_tipo_producto" value="113"><input type="radio" name="cod_tipo_producto" value="114">
+  <input type="text" name="txt_nme_prod">
+  <input type="text" name="txt_pagina_inicial"><input type="text" name="txt_pagina_final">
+  <select name="sgl_idioma"><option value="ES">Español</option><option value="EN">Inglés</option></select>
+  <select name="nro_ano_presenta"><option value="">Seleccione</option><option value="2025">2025</option><option value="2024">2024</option></select>
+  <select name="nro_mes_presenta"><option value="1">Enero</option><option value="3">Marzo</option><option value="11">Noviembre</option></select>
+  <input type="text" name="txt_nme_revista" readonly>
+  <input type="hidden" name="cod_revista"><input type="hidden" name="cod_revista_otro"><input type="hidden" name="tpo_revista">
+  <input type="text" name="txt_volumen_revista"><input type="text" name="txt_fasciculo_revista"><input type="text" name="txt_serie_revista">
+  <select name="tpo_medio_divulgacion"><option value="I">Papel</option><option value="H">Electrónico</option></select>
+  <input type="text" name="txt_web_producto"><input type="text" name="txt_doi">
+  <button type="submit">Guardar</button>
+</form>

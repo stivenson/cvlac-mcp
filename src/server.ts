@@ -12,25 +12,13 @@ import { screenshotTool } from './tools/screenshot.js';
 import { readProfileTool, updateProfileTool, networkNames } from './tools/profile.js';
 import { SECTION_SCHEMAS, formatIssues } from './schemas.js';
 import { createLogger } from './logger.js';
-import type { CvLACSectionName } from './types.js';
+import { SECTION_NAMES, type CvLACSectionName } from './types.js';
+import { lookupDoi } from './tools/crossref.js';
 
 const log = createLogger('server');
 
-const sectionSchema = z.enum(['formacion', 'experiencia', 'cursos', 'reconocimientos', 'proyectos', 'software', 'eventos', 'formacionComple', 'idiomas', 'lineas', 'demasTrabajos']);
-const sectionAllSchema = z.enum([
-  'formacion',
-  'experiencia',
-  'cursos',
-  'reconocimientos',
-  'proyectos',
-  'software',
-  'eventos',
-  'formacionComple',
-  'idiomas',
-  'lineas',
-  'demasTrabajos',
-  'all',
-]);
+const sectionSchema = z.enum(SECTION_NAMES);
+const sectionAllSchema = z.enum([...SECTION_NAMES, 'all'] as [string, ...string[]]);
 
 const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
 
@@ -77,7 +65,9 @@ export function createServer(): McpServer {
   server.registerTool(
     'read_cvlac',
     {
-      description: 'Read current CvLAC sections. Returns existing items for comparison.',
+      description:
+        'Read current CvLAC sections, including articles, books, chapters, theses, juries and five kinds of technical production. ' +
+        'Returns existing items for comparison; list results include every JMesa page.',
       inputSchema: {
         section: sectionAllSchema
           .optional()
@@ -151,7 +141,12 @@ export function createServer(): McpServer {
         'A "delete" also writes nothing until it is repeated with confirm_delete:true. ' +
         'A picker whose search matched several rows — a common university name can match close ' +
         'to 200 institutions in CvLAC — also returns needs_confirmation, with the candidates in ' +
-        '"choices"; repeat with the chosen id in data.institucionId.',
+        '"choices"; repeat with the chosen id in data.institucionId. For articles provide title, year and issn/revista; ' +
+        'for books provide title, isbn, year, editorial and area; for chapters provide title, bookTitle, year and area; ' +
+        'for theses provide title, tipo, year, institution and programme; for juries provide title, nivel, year, ' +
+        'orientado, institution and programme; technical sections require title and year, with section-specific fields. ' +
+        'Catalogue choices are answered by repeating the call with revistaId, libroId, editorialId, programaId, areaId ' +
+        'or institucionId in data. Coauthors, keywords, certificates and linked thesis students are completed from the CvLAC website.',
       inputSchema: {
         section: sectionSchema,
         action: z.enum(['add', 'update', 'delete']),
@@ -193,6 +188,16 @@ export function createServer(): McpServer {
       });
       return jsonResult(result);
     }
+  );
+
+  server.registerTool(
+    'lookup_doi',
+    {
+      description:
+        'Read-only: look up a DOI in Crossref and return an article draft. Review it, then pass it to update_section with section:"articulos"; this tool does not write to CvLAC.',
+      inputSchema: { doi: z.string().min(1).describe('DOI, doi:... or https://doi.org/...') },
+    },
+    async ({ doi }) => jsonResult(await lookupDoi(doi))
   );
 
   server.registerTool(

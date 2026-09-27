@@ -202,6 +202,54 @@ const PLAN = {
     update: { lugar: 'Prueba automatizada (editado)' },
     evidence: 'Prueba automatizada (editado)',
   },
+  articulos: {
+    labelField: 'title',
+    add: {
+      title: `${TAG} Artículo`,
+      year: '2024',
+      month: '3',
+      tipo: 'completo',
+      issn: '0120-5609',
+      revista: 'INGENIERIA E INVESTIGACION',
+      idioma: 'ES',
+      medio: 'internet',
+      volumen: '1',
+      fasciculo: '1',
+      doi: '10.1234/zz-prueba-mcp-articulo',
+      url: 'https://example.org/zz-prueba-mcp-articulo',
+    },
+    update: { fasciculo: '99' },
+    evidence: '99',
+  },
+  informesTecnicos: {
+    labelField: 'title',
+    add: {
+      title: `${TAG} Informe técnico`,
+      year: '2024',
+      month: '3',
+      paginas: '2',
+      contrato: `${TAG} contrato`,
+      institucion: 'Universidad Simón Bolívar',
+      institucionId: '603',
+      proyectoId: '10',
+    },
+    update: { paginas: '3' },
+    evidence: '3',
+  },
+  consultorias: {
+    labelField: 'title',
+    add: {
+      title: `${TAG} Consultoría`,
+      tipo: 'otro',
+      year: '2024',
+      month: '3',
+      yearEnd: '2024',
+      monthEnd: '4',
+      duracion: '1',
+    },
+    update: { duracion: '2' },
+    evidence: '2',
+  },
 };
 
 /** Which field of a listed item carries the label, per section. */
@@ -217,6 +265,9 @@ const LIST_LABEL = {
   idiomas: 'language',
   lineas: 'name',
   demasTrabajos: 'name',
+  articulos: 'title',
+  informesTecnicos: 'title',
+  consultorias: 'title',
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
