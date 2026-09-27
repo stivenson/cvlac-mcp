@@ -4,6 +4,7 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { URLS } from './navigation.js';
 import { createLogger } from '../logger.js';
+import { explainLaunchFailure } from '../cli.js';
 import { assertAvailable } from './availability.js';
 
 const log = createLogger('session');
@@ -84,14 +85,20 @@ export class BrowserSession {
   private async init(): Promise<void> {
     const headless = process.env.CVLAC_HEADLESS !== 'false';
     log.debug('launching browser', { headless });
-    this.browser = await chromium.launch({
-      headless,
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-      ],
-    });
+    try {
+      this.browser = await chromium.launch({
+        headless,
+        args: [
+          '--disable-blink-features=AutomationControlled',
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+        ],
+      });
+    } catch (error) {
+      // A missing browser is the first wall a fresh install hits, and
+      // Playwright's own advice points at the wrong version. See cli.ts.
+      throw new Error(explainLaunchFailure(error));
+    }
 
     const storageState = existsSync(SESSION_PATH)
       ? JSON.parse(readFileSync(SESSION_PATH, 'utf-8'))
@@ -156,7 +163,9 @@ export class BrowserSession {
 
     if (!nombre || !cedula || !password) {
       throw new Error(
-        'Missing credentials. Set CVLAC_NOMBRE, CVLAC_CEDULA, CVLAC_PASSWORD in .env'
+        'Faltan credenciales. Define CVLAC_NOMBRE, CVLAC_CEDULA y CVLAC_PASSWORD en tu .env, ' +
+          'y apunta a ese archivo con CVLAC_ENV_FILE en la configuración MCP de tu editor ' +
+          '(obligatorio si instalaste con npx: el servidor vive en la caché y no tiene .env propio).'
       );
     }
 

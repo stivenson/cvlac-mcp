@@ -1,6 +1,6 @@
 {
   "name": "cvlac-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Actualiza tu hoja de vida de CvLAC (MinCiencias) desde el chat de tu editor, sin llenar formularios a mano. Servidor MCP con Playwright.",
   "type": "module",
   "main": "dist/index.js",
@@ -53,7 +53,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^17.4.2",
-    "playwright": "^1.59.1",
+    "playwright": "1.59.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {

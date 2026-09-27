@@ -78,13 +78,18 @@ ejecuta. Si vas a modificar el código, salta a
 ### 1. Node 20+ y el navegador
 
 ```bash
-node --version                     # debe mostrar v20 o superior
-npx playwright install chromium    # el navegador que maneja CvLAC (~150 MB, una sola vez)
+node --version                      # debe mostrar v20 o superior
+npx -y cvlac-mcp install-browser    # el navegador que maneja CvLAC (~150 MB, una sola vez)
 ```
+
+Usa el CLI de Playwright que trae este paquete, no el último publicado. Importa: cada build de
+navegador pertenece a una versión de Playwright, y `npx playwright install` —que resuelve siempre a la
+última— puede dejarte un Chromium que este servidor no sabe arrancar.
 
 ¿No tienes Node 20? [nvm](https://github.com/nvm-sh/nvm) (`nvm install 20`) en Linux/macOS,
 `brew install node@20` con Homebrew, o `winget install OpenJS.NodeJS.LTS` en Windows.
-En algunas distros de Linux hace falta además `npx playwright install-deps chromium`.
+En algunas distros de Linux hace falta además `npx playwright install-deps chromium`, que instala
+librerías del sistema y no depende de la versión.
 
 ### 2. Guarda tus credenciales en un archivo aparte
 
@@ -108,13 +113,19 @@ chmod 600 ~/.config/cvlac-mcp/.env
 
 ```powershell
 mkdir "$HOME\.config\cvlac-mcp" -Force
-@"
+$contenido = @"
 CVLAC_NOMBRE=tu_primer_nombre
 CVLAC_CEDULA=tu_numero_de_cedula
 CVLAC_PASSWORD=tu_clave
 CVLAC_SESSION_PATH=$HOME\.cvlac-session.json
-"@ | Set-Content "$HOME\.config\cvlac-mcp\.env"
+"@
+[IO.File]::WriteAllText("$HOME\.config\cvlac-mcp\.env", $contenido)
 ```
+
+> Se escribe con `[IO.File]::WriteAllText` a propósito. `Out-File` guarda en UTF-16 en Windows
+> PowerShell 5.1 y el lector de `.env` no ve **ninguna** variable en ese archivo: el servidor arranca y
+> luego dice que faltan credenciales que sí escribiste. `Set-Content` guarda en ANSI y te daña las
+> tildes. `WriteAllText` escribe UTF-8 en las dos versiones de PowerShell.
 
 ### 3. Registra el MCP en tu editor
 
@@ -132,7 +143,9 @@ CVLAC_SESSION_PATH=$HOME\.cvlac-session.json
 }
 ```
 
-Cambia `TU_USUARIO` por tu usuario: la ruta debe ser **absoluta**. `CVLAC_ENV_FILE` es obligatorio en esta
+Cambia `TU_USUARIO` por tu usuario: la ruta debe ser **absoluta**. En Windows va con las barras
+invertidas duplicadas, porque el archivo es JSON:
+`"CVLAC_ENV_FILE": "C:\\Users\\TU_USUARIO\\.config\\cvlac-mcp\\.env"`. `CVLAC_ENV_FILE` es obligatorio en esta
 vía — instalado desde npm el servidor vive en la caché de `npx`, un directorio que tú no editas, así que no
 encontraría el `.env` por su cuenta.
 
@@ -147,6 +160,9 @@ Reinicia el editor (Claude Desktop hay que cerrarlo del todo) y en el chat pide,
 2. `read_cvlac` de la sección `formacion` — debe devolver lo que ya tienes en CvLAC.
 
 Si ambas responden sin error, quedó listo. ¿Falla algo? → [Troubleshooting](#troubleshooting).
+
+Para comprobar el paquete sin pasar por el editor: `npx -y cvlac-mcp --version` imprime la versión y
+`npx -y cvlac-mcp --help` lista los comandos.
 
 ### Archivos opcionales
 
@@ -666,8 +682,13 @@ npm start
 
 ### Errores de Playwright al iniciar el navegador
 
-- Ejecuta `npx playwright install chromium`.
-- En Linux, añade dependencias del sistema con `npx playwright install-deps chromium`.
+- `Executable doesn't exist at ...` significa que falta el navegador, o que el instalado pertenece a
+  otra versión de Playwright. Las dos se arreglan igual: `npx -y cvlac-mcp install-browser`, que usa el
+  CLI empaquetado y baja el build correcto. `npx playwright install chromium` resuelve a la última
+  versión publicada y puede dejarte justo en este error.
+- En Linux, si el navegador existe pero no arranca, faltan librerías del sistema:
+  `npx playwright install-deps chromium`.
+- Para ver el navegador y entender dónde se traba: `CVLAC_HEADLESS=false`.
 
 ### Redirección inesperada a login
 

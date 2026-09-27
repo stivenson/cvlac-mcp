@@ -76,7 +76,10 @@ Lo que compró la publicación, y ahora hay que sostener:
 - **Versionado.** `dist` sale del `tsc` local, así que una publicación con el árbol sucio sube código
   que no está en git. Publicar solo desde `master` limpio, con tag.
 - **Issues de instalación.** Chromium de Playwright y `CVLAC_ENV_FILE` son las dos fuentes probables.
-  El Troubleshooting del README ya cubre ambas.
+  El Troubleshooting del README cubre ambas, y `install-browser` quita la primera de raíz.
+- **Playwright queda clavado en una versión exacta.** Un build de navegador pertenece a una versión de
+  la librería: con `^` el usuario podía terminar con un Chromium que el servidor no arranca. Subirla es
+  ahora un cambio deliberado, y obliga a correr la suite e2e en vivo antes de publicar.
 - **El nombre es irreversible.** `npm unpublish` solo aplica dentro de las primeras 72 horas y no
   libera el nombre.
 
@@ -106,6 +109,16 @@ El repo **ya está público**. Queda lo que sigue pendiente de todos modos.
 - [x] Cambiar el repo a público.
 
 ## Historial
+
+- **2026-09-27 (tarde)** — Auditoría del paquete publicado, con tres arreglos de portabilidad.
+  `install-browser` descarga Chromium con el CLI de Playwright que trae el paquete, no con el último
+  publicado: un build de navegador pertenece a una versión de la librería, y `npx playwright install`
+  —que siempre resuelve a la última— dejaba un Chromium que el servidor no arranca. Por lo mismo,
+  Playwright pasó de `^1.59.1` a `1.59.1` exacto. El error de arranque ya no repite el consejo de
+  Playwright, que apunta a la versión equivocada, sino el comando correcto. En Windows, el `.env` que
+  documentaba el README se escribía con `Set-Content` (ANSI, tildes dañadas) y con `Out-File` habría
+  quedado en UTF-16, que el lector de `.env` ignora **entero** sin avisar: se cambió a
+  `[IO.File]::WriteAllText`. Añadidos `--version` y `--help`. Tests de 421 a 433.
 
 - **2026-09-27** — Publicado en npm como `cvlac-mcp@1.0.0`, y el README reposicionado alrededor de esa
   vía: abre diciendo qué hace el servidor —actualizar la hoja de vida sin llenar formularios— en vez de
