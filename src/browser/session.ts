@@ -2,20 +2,48 @@ import { chromium, Browser, BrowserContext, Page } from 'playwright';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
-import { URLS } from './navigation.js';
+import { URLS, isSafeToReload } from './navigation.js';
 import { createLogger } from '../logger.js';
 import { explainLaunchFailure } from '../cli.js';
 import { assertAvailable } from './availability.js';
+import { missingCredentials, missingCredentialsMessage } from '../env.js';
 
 const log = createLogger('session');
 
-const SESSION_PATH =
-  process.env.CVLAC_SESSION_PATH ?? join(homedir(), '.cvlac-session.json');
+/**
+ * Where the authenticated cookies are cached.
+ *
+ * Read on every use, not at import: ESM evaluates this module before
+ * index.ts loads the `.env`, so a module-level constant only ever saw the
+ * editor's `env` block and silently ignored the value the README puts in `.env`.
+ */
+export function sessionPath(env: NodeJS.ProcessEnv = process.env): string {
+  const explicit = env.CVLAC_SESSION_PATH?.trim();
+  return explicit ? explicit : join(homedir(), '.cvlac-session.json');
+}
 
-/** Real Chrome user-agent to avoid bot detection */
-const USER_AGENT =
-  process.env.CVLAC_USER_AGENT ??
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+/**
+ * The user-agent to present, or undefined to keep Playwright's own.
+ *
+ * Playwright's matches the Chromium actually running on this system. A fixed
+ * string claimed Linux and Chrome 124 from a Windows machine running Chrome 15x,
+ * and that mismatch looks more like a bot than any default does.
+ */
+export function userAgent(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  return env.CVLAC_USER_AGENT?.trim() || undefined;
+}
+
+/**
+ * CvLAC turned the credentials down. Never retried: every attempt is another
+ * failed login against the researcher's real account, and a wrong password does
+ * not become right by trying again.
+ */
+export class LoginRejectedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LoginRejectedError';
+  }
+}
 
 /** Random delay between min and max ms to simulate human behaviour */
 async function humanDelay(min = 800, max = 2000): Promise<void> {
@@ -23,8 +51,11 @@ async function humanDelay(min = 800, max = 2000): Promise<void> {
   await new Promise((r) => setTimeout(r, ms));
 }
 
-/** Retry an async operation up to `attempts` times with exponential back-off */
-async function withRetry<T>(
+/**
+ * Retry an async operation up to `attempts` times with exponential back-off.
+ * A LoginRejectedError is thrown straight through — see its comment.
+ */
+export async function withRetry<T>(
   fn: () => Promise<T>,
   attempts = 3,
   baseDelayMs = 5000
@@ -34,6 +65,7 @@ async function withRetry<T>(
     try {
       return await fn();
     } catch (err) {
+      if (err instanceof LoginRejectedError) throw err;
       lastErr = err;
       if (i < attempts - 1) {
         const wait = baseDelayMs * Math.pow(2, i) + Math.random() * 1000;
@@ -69,12 +101,20 @@ export class BrowserSession {
   private context: BrowserContext | null = null;
   /** In-flight login, so concurrent callers wait instead of resetting the context under each other. */
   private loginInFlight: Promise<void> | null = null;
+  /**
+   * The last CvLAC page any tool loaded that is safe to load again. Each tool
+   * closes its page when done, so this URL is all `screenshot` has left to show.
+   */
+  lastUrl: string | null = null;
 
   async getPage(): Promise<Page> {
     if (!this.context) {
       await this.init();
     }
     const page = await this.context!.newPage();
+    page.on('framenavigated', (frame) => {
+      if (frame === page.mainFrame() && isSafeToReload(frame.url())) this.lastUrl = frame.url();
+    });
     // Playwright waits 30s for a control by default. When CvLAC serves its
     // outage page instead of a form, every field a filler touches burns that
     // full half minute before reporting the same thing.
@@ -100,13 +140,12 @@ export class BrowserSession {
       throw new Error(explainLaunchFailure(error));
     }
 
-    const storageState = existsSync(SESSION_PATH)
-      ? JSON.parse(readFileSync(SESSION_PATH, 'utf-8'))
-      : undefined;
+    const path = sessionPath();
+    const storageState = existsSync(path) ? JSON.parse(readFileSync(path, 'utf-8')) : undefined;
 
     this.context = await this.browser.newContext({
       storageState,
-      userAgent: USER_AGENT,
+      userAgent: userAgent(),
       viewport: { width: 1280, height: 800 },
       locale: 'es-CO',
       timezoneId: 'America/Bogota',
@@ -140,7 +179,7 @@ export class BrowserSession {
 
   /**
    * Performs login using credentials from env vars.
-   * Saves session to SESSION_PATH on success.
+   * Saves session to sessionPath() on success.
    * Throws on failure.
    */
   async login(force = false): Promise<void> {
@@ -157,17 +196,11 @@ export class BrowserSession {
       if (valid) return;
     }
 
-    const nombre = process.env.CVLAC_NOMBRE;
-    const cedula = process.env.CVLAC_CEDULA;
-    const password = process.env.CVLAC_PASSWORD;
-
-    if (!nombre || !cedula || !password) {
-      throw new Error(
-        'Faltan credenciales. Define CVLAC_NOMBRE, CVLAC_CEDULA y CVLAC_PASSWORD en tu .env, ' +
-          'y apunta a ese archivo con CVLAC_ENV_FILE en la configuración MCP de tu editor ' +
-          '(obligatorio si instalaste con npx: el servidor vive en la caché y no tiene .env propio).'
-      );
-    }
+    const missing = missingCredentials();
+    if (missing.length > 0) throw new Error(missingCredentialsMessage(missing));
+    const nombre = process.env.CVLAC_NOMBRE!;
+    const cedula = process.env.CVLAC_CEDULA!;
+    const password = process.env.CVLAC_PASSWORD!;
 
     log.info('logging in to CvLAC', { force });
 
@@ -214,19 +247,22 @@ export class BrowserSession {
         const bodyText = (await page.textContent('body')) ?? '';
         log.debug('login rejected', { snippet: bodyText.slice(0, 200).replace(/\s+/g, ' ') });
         await page.close();
-        throw new Error(
-          'Login rejected by CvLAC. Check CVLAC_NOMBRE, CVLAC_CEDULA and CVLAC_PASSWORD; ' +
-            'run with CVLAC_LOG_LEVEL=debug to see the page response.'
+        throw new LoginRejectedError(
+          'CvLAC rechazó el inicio de sesión. Revisa CVLAC_NOMBRE (tu primer nombre, tal como ' +
+            'lo registraste), CVLAC_CEDULA y CVLAC_PASSWORD en tu .env. No se reintentó, para ' +
+            'no bloquear tu cuenta. Con CVLAC_LOG_LEVEL=debug se ve la respuesta de la página.'
         );
       }
 
       // Persist session
       const state = await this.context!.storageState();
-      writeFileSync(SESSION_PATH, JSON.stringify(state, null, 2));
+      // Owner-only on POSIX: these cookies open the account without a password.
+      // Windows ignores the mode and inherits the profile folder's ACL.
+      writeFileSync(sessionPath(), JSON.stringify(state, null, 2), { mode: 0o600 });
 
       await page.close();
 
-      // Reset context so next getPage() loads fresh cookies from SESSION_PATH
+      // Reset context so next getPage() loads fresh cookies from sessionPath()
       await this.context!.close();
       this.context = null;
       log.info('logged in to CvLAC');

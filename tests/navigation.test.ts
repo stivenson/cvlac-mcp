@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BASE_URL, URLS } from '../src/browser/navigation.js';
+import { BASE_URL, URLS, isSafeToReload } from '../src/browser/navigation.js';
 import { SECTION_SCHEMAS } from '../src/schemas.js';
 
 const sections = Object.keys(SECTION_SCHEMAS);
@@ -59,5 +59,34 @@ describe('section-specific query strings', () => {
   it('exposes the login and landing pages the session flow navigates to', () => {
     expect(new URL(URLS.login).pathname).toBe('/cvlac/Login/pre_s_login.do');
     expect(new URL(URLS.inicio).pathname).toBe('/cvlac/EnRecursoHumano/inicio.do');
+  });
+});
+
+describe('isSafeToReload', () => {
+  it('accepts every list and form page the server itself opens', () => {
+    for (const [name, url] of Object.entries(URLS)) {
+      if (name === 'login') continue;
+      expect(isSafeToReload(url), name).toBe(true);
+    }
+  });
+
+  it('accepts record and edit views', () => {
+    expect(isSafeToReload(`${BASE_URL}/cvlac/EnProyecto/edit.do?id=1`)).toBe(true);
+    expect(isSafeToReload(`${BASE_URL}/cvlac/EnProyecto/detalle.do?id=1`)).toBe(true);
+    expect(isSafeToReload(`${BASE_URL}/cvlac/EnProdTecnica/edit_demasTrabajos.do?id=1`)).toBe(true);
+  });
+
+  // Regression: screenshot reloads the last page visited, and a CvLAC delete is a
+  // GET. Remembering the delete link would have deleted the next row on a capture.
+  it('refuses the links that perform a write', () => {
+    for (const action of ['confirmDelete', 'delete', 'insert', 'save', 'update', 'insert_demasTrabajos']) {
+      expect(isSafeToReload(`${BASE_URL}/cvlac/EnProyecto/${action}.do?id=1`), action).toBe(false);
+    }
+  });
+
+  it('refuses what it does not recognise, and what is not a URL', () => {
+    expect(isSafeToReload(`${BASE_URL}/cvlac/EnProyecto/confirm.do?id=1`)).toBe(false);
+    expect(isSafeToReload('about:blank')).toBe(false);
+    expect(isSafeToReload('no es una url')).toBe(false);
   });
 });

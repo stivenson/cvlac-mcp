@@ -64,7 +64,7 @@ export async function syncTool(opts: SyncOptions = {}): Promise<SyncResult> {
   if (similar.length > 0) {
     lines.push(
       '  > Resolver uno por uno con update_section: action:"update" para modificar el existente,',
-      '  > o action:"add" con confirmDuplicate:true para crearlo igualmente.'
+      '  > o action:"add" con confirm_duplicate:true para crearlo igualmente.'
     );
   }
 

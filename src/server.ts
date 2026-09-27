@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { createRequire } from 'module';
 import { loginTool } from './tools/login.js';
 import { readCvlacTool } from './tools/read-cvlac.js';
 import { readCvlacDetailTool } from './tools/read-cvlac-detail.js';
@@ -31,11 +32,33 @@ const sectionAllSchema = z.enum([
   'all',
 ]);
 
+const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
+
+/**
+ * A tool's JSON result, flagged as an error when the tool failed.
+ *
+ * Without the flag a failed login or a rejected form reached the client as a
+ * successful call carrying `"success": false` in its text, and neither the
+ * client nor the model had to notice. `needs_confirmation` and `unverified` are
+ * not errors: nothing went wrong, a person has to decide or look.
+ */
+export function jsonResult(result: unknown): {
+  content: { type: 'text'; text: string }[];
+  isError?: true;
+} {
+  const content = [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }];
+  return isFailure(result) ? { content, isError: true } : { content };
+}
+
+export function isFailure(result: unknown): boolean {
+  if (!result || typeof result !== 'object') return false;
+  const { status, success } = result as { status?: unknown; success?: unknown };
+  if (status !== undefined) return status === 'failed';
+  return success === false;
+}
+
 export function createServer(): McpServer {
-  const server = new McpServer({
-    name: 'cvlac-mcp',
-    version: '1.0.0',
-  });
+  const server = new McpServer({ name: 'cvlac-mcp', version });
 
   server.registerTool(
     'login',
@@ -47,7 +70,7 @@ export function createServer(): McpServer {
     },
     async ({ force }) => {
       const result = await loginTool(force ?? false);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return jsonResult(result);
     }
   );
 
@@ -63,7 +86,7 @@ export function createServer(): McpServer {
     },
     async ({ section }) => {
       const result = await readCvlacTool(section as CvLACSectionName | 'all');
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return jsonResult(result);
     }
   );
 
@@ -83,7 +106,7 @@ export function createServer(): McpServer {
     },
     async ({ section, label }) => {
       const result = await readCvlacDetailTool(section as CvLACSectionName, label);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return jsonResult(result);
     }
   );
 
@@ -96,7 +119,7 @@ export function createServer(): McpServer {
     },
     async () => {
       const result = await readPortfolioTool();
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return jsonResult(result);
     }
   );
 
@@ -114,7 +137,7 @@ export function createServer(): McpServer {
     },
     async ({ section }) => {
       const result = await diffTool(section as CvLACSectionName | 'all');
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return jsonResult(result);
     }
   );
 
@@ -153,22 +176,11 @@ export function createServer(): McpServer {
         const parsed = SECTION_SCHEMAS[section as CvLACSectionName].safeParse(data);
         if (!parsed.success) {
           log.warn('update_section rejected invalid data', { section, action });
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(
-                  {
-                    success: false,
-                    status: 'failed',
-                    message: `Invalid data for section "${section}" — ${formatIssues(parsed.error)}`,
-                  },
-                  null,
-                  2
-                ),
-              },
-            ],
-          };
+          return jsonResult({
+            success: false,
+            status: 'failed',
+            message: `Invalid data for section "${section}" — ${formatIssues(parsed.error)}`,
+          });
         }
       }
 
@@ -179,7 +191,7 @@ export function createServer(): McpServer {
         confirmDuplicate: confirm_duplicate,
         confirmDelete: confirm_delete,
       });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return jsonResult(result);
     }
   );
 
@@ -195,7 +207,7 @@ export function createServer(): McpServer {
     },
     async () => {
       const result = await readProfileTool();
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return jsonResult(result);
     }
   );
 
@@ -253,7 +265,7 @@ export function createServer(): McpServer {
         areas,
         confirmDelete: confirm_delete,
       });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return jsonResult(result);
     }
   );
 
@@ -277,20 +289,34 @@ export function createServer(): McpServer {
     },
     async ({ dry_run, sections }) => {
       const result = await syncTool({ dryRun: dry_run, sections });
-      return { content: [{ type: 'text', text: result.report }] };
+      const content = [{ type: 'text' as const, text: result.report }];
+      // Partial success is still success; only a run that wrote nothing it tried to is an error.
+      return result.errors.length > 0 && result.applied === 0 ? { content, isError: true } : { content };
     }
   );
 
   server.registerTool(
     'screenshot',
     {
-      description: 'Take a screenshot of the current browser state for debugging.',
-      inputSchema: {},
+      description:
+        'Capture a CvLAC page for debugging: the given url, or else the last list, record or ' +
+        'form page a tool visited, reloaded as it is now. Action links (delete, save) are refused, ' +
+        'because in CvLAC opening one performs it.',
+      inputSchema: {
+        url: z
+          .string()
+          .optional()
+          .describe('A CvLAC list, record or form page. Defaults to the last one visited.'),
+      },
     },
-    async () => {
-      const result = await screenshotTool();
+    async ({ url }) => {
+      const result = await screenshotTool(url);
+      if (result.kind === 'empty') return { content: [{ type: 'text', text: result.message }] };
       return {
-        content: [{ type: 'image', data: result.base64, mimeType: 'image/png' }],
+        content: [
+          { type: 'text', text: result.url },
+          { type: 'image', data: result.base64, mimeType: 'image/png' },
+        ],
       };
     }
   );
@@ -339,6 +365,7 @@ export function createServer(): McpServer {
         log.error('inspect_form failed', { url, error: msg });
         const screenshot = await session.takeScreenshot(page).catch(() => null);
         return {
+          isError: true,
           content: [
             { type: 'text', text: `inspect_form failed for ${url}: ${msg}` },
             ...(screenshot

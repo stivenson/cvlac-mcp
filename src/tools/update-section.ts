@@ -1618,7 +1618,7 @@ async function addItem(
         status: 'needs_confirmation',
         message:
           `CvLAC ya tiene ${similar.length} ítem(s) igual(es) o parecido(s) a "${label}". ` +
-          'Usa action:"update" para modificar el existente, o repite el add con confirmDuplicate:true para crearlo igualmente.',
+          'Usa action:"update" para modificar el existente, o repite el add con confirm_duplicate:true para crearlo igualmente.',
         similar,
       };
     }

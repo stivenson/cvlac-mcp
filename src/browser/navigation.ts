@@ -72,3 +72,21 @@ export const SECTION_LIST: Record<
   lineas:          { listUrl: URLS.lineas,           matchCellIndex: 1 },
   demasTrabajos:   { listUrl: URLS.demasTrabajos,    matchCellIndex: 1 },
 };
+
+/**
+ * True for a page that only shows something, so loading it again is harmless.
+ *
+ * CvLAC performs its writes as plain GETs — a delete is a link to
+ * `delete*.do` — so reopening "the last page visited" can repeat a write. Only
+ * list, record and form views qualify; anything else is refused, not guessed.
+ */
+export function isSafeToReload(url: string): boolean {
+  let path: string;
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    return false;
+  }
+  if (/(delete|remove|borrar|eliminar|insert|update|save|guardar)\w*\.do$/i.test(path)) return false;
+  return /\/(all\w*|detail|detalle|inicio|create\w*|edit\w*|enPerfilInvestigador|areaAll)\.do$/.test(path);
+}

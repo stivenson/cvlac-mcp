@@ -2,7 +2,10 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { createServer } from '../src/server.js';
+import { createServer, isFailure } from '../src/server.js';
+import { readFileSync, readdirSync } from 'fs';
+import { join } from 'path';
+import { createRequire } from 'module';
 import { assertAvailable } from '../src/browser/availability.js';
 
 /**
@@ -82,6 +85,7 @@ describe('argument validation, before anything reaches CvLAC', () => {
       arguments: { section: 'cursos', action: 'add', data: { year: '2026' } },
     });
     const body = JSON.parse(res.content[0].text);
+    expect(res.isError).toBe(true);
     expect(body.success).toBe(false);
     expect(body.status).toBe('failed');
     expect(body.message).toContain('cursos');
@@ -152,5 +156,44 @@ describe('a tool that fails because CvLAC is down', () => {
     expect(text).toMatch(/nothing was read or written/i);
 
     await probe.close();
+  });
+});
+
+describe('isFailure', () => {
+  // Regression: no tool set isError, so a failed login reached the client as a
+  // successful call with "success": false buried in its text.
+  it('flags a failed write and a failed login', () => {
+    expect(isFailure({ success: false, status: 'failed', message: 'x' })).toBe(true);
+    expect(isFailure({ success: false, message: 'Login rechazado' })).toBe(true);
+  });
+
+  it('does not flag what asks a person to decide or to look', () => {
+    expect(isFailure({ success: false, status: 'needs_confirmation', message: 'x' })).toBe(false);
+    expect(isFailure({ success: false, status: 'unverified', message: 'x' })).toBe(false);
+    expect(isFailure({ success: true, status: 'ok', message: 'x' })).toBe(false);
+    expect(isFailure([{ section: 'cursos' }])).toBe(false);
+  });
+});
+
+describe('what the server tells a client and a model', () => {
+  it('reports the version of the package, not a hard-coded one', () => {
+    const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
+    expect(client.getServerVersion()?.version).toBe(version);
+  });
+
+  // Regression: the sync report told the model to repeat an add with
+  // confirmDuplicate:true, a name the tool does not take, so the retry came back
+  // needs_confirmation again with no explanation.
+  it('names only real parameters when a message says to repeat a call with one', async () => {
+    const { tools } = await client.listTools();
+    const params = new Set(tools.flatMap((t) => Object.keys((t.inputSchema as any).properties ?? {})));
+    const src = join(__dirname, '..', 'src');
+    const files = readdirSync(src, { recursive: true }).map(String).filter((f) => f.endsWith('.ts'));
+    for (const file of files) {
+      const text = readFileSync(join(src, file), 'utf-8');
+      for (const [, name] of text.matchAll(/\b(\w+):(?:true|false)\b/g)) {
+        expect(params.has(name), `${file}: ${name}`).toBe(true);
+      }
+    }
   });
 });

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './server.js';
-import { resolveEnvFile } from './env.js';
+import { resolveEnvFile, loadEnvFile, describeEnvFile } from './env.js';
 import { parseArgv, installBrowser, HELP } from './cli.js';
-import * as dotenv from 'dotenv';
+import { createLogger } from './logger.js';
 import { spawnSync } from 'child_process';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
@@ -39,9 +39,11 @@ if (command.kind === 'unknown') {
 
 // CVLAC_ENV_FILE if set, otherwise the .env at the project root.
 // Only sets vars not already in process.env, so the editor's config still wins.
-// `quiet` matters: dotenv writes its banner to stdout, which here is the MCP
-// JSON-RPC channel — an unsilenced tip is malformed protocol traffic.
-dotenv.config({ path: resolveEnvFile(join(__dirname, '..')), override: false, quiet: true });
+// Logged after loading, so CVLAC_LOG_LEVEL and CVLAC_LOG_FILE from the file apply.
+const envFile = loadEnvFile(resolveEnvFile(join(__dirname, '..')));
+const log = createLogger('env');
+if (envFile.found && envFile.encoding === 'utf8') log.info(describeEnvFile(envFile));
+else log.warn(describeEnvFile(envFile));
 
 const server = createServer();
 const transport = new StdioServerTransport();
