@@ -7,6 +7,8 @@
 
 <h1 align="center">cvlac-mcp</h1>
 
+[![npm](https://img.shields.io/npm/v/cvlac-mcp?style=flat&logo=npm&logoColor=white&label=npm&color=CB3837)](https://www.npmjs.com/package/cvlac-mcp)
+[![instalación](https://img.shields.io/badge/instalar-npx%20cvlac--mcp-CB3837?style=flat&logo=npm&logoColor=white)](#instalación-rápida-npx--5-minutos)
 ![Node](https://img.shields.io/badge/node-%3E%3D20-339933?style=flat&logo=node.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/typescript-ESM%20strict-3178C6?style=flat&logo=typescript&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-Server-7A3EFF?style=flat)
