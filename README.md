@@ -17,9 +17,16 @@
 ![CvLAC](https://img.shields.io/badge/CvLAC-MinCiencias-00573F?style=flat)
 ![No oficial](https://img.shields.io/badge/proyecto-no%20oficial-9E9E9E?style=flat)
 
-Servidor MCP (stdio) para sincronizar tu perfil de **CvLAC** (MinCiencias) con tu portafolio web, usando **TypeScript + Playwright**.
+**Actualiza tu hoja de vida de CvLAC (MinCiencias) desde el chat de tu editor, sin llenar formularios a mano.**
 
-No trae datos de nadie: tus credenciales, tus valores por defecto y tus proyectos curados viven en archivos locales que el repo ignora. Sirve para cualquier persona con una hoja de vida en CvLAC.
+Servidor MCP (stdio) escrito en **TypeScript + Playwright**. Le dices qué agregar o corregir; él abre CvLAC
+con tu cuenta, llena el formulario, lo guarda y verifica que quedó guardado. Los datos pueden salir de tu
+portafolio web, de un JSON curado o de lo que le dictes en el chat.
+
+Sirve para cualquier persona con hoja de vida en CvLAC. No trae datos de nadie: tus credenciales, tus valores
+por defecto y tus proyectos curados viven en archivos locales que el repo ignora.
+
+**Instalación en un comando:** no hay que clonar ni compilar — [empieza aquí](#instalación-rápida-npx--5-minutos).
 
 Permite:
 - leer datos en vivo del CvLAC (`read_cvlac`, `read_cvlac_detail`)
@@ -30,7 +37,9 @@ Permite:
 
 Dos garantías al escribir: **nunca crea un duplicado sin preguntar** (si ya hay algo igual o parecido devuelve `needs_confirmation` en vez de escribir) y **siempre dice qué campo falló** cuando CvLAC rechaza un formulario.
 
-> **Uso responsable.** Esto automatiza un sitio gubernamental con tu propia cuenta. Úsalo con supervisión humana, revisa cada `dry_run` antes de aplicar y no lo dejes corriendo sin mirar.
+> **Uso responsable.** Esto automatiza un sitio gubernamental con tu propia cuenta. Úsalo con supervisión
+> humana, revisa cada `dry_run` antes de aplicar y no lo dejes corriendo sin mirar.
+> Tus credenciales no salen de tu máquina: [Seguridad y privacidad](#seguridad-y-privacidad).
 
 > **Proyecto independiente.** No está afiliado a MinCiencias ni respaldado por esa entidad. No
 > reproduce su logotipo ni su identidad visual: el símbolo de arriba es original —unas llaves
@@ -43,9 +52,9 @@ Qué está verificado, qué falta y las limitaciones conocidas: **[ROADMAP.md](R
 
 ## Tabla de contenido
 
-- [Inicio rápido: instalar y configurar el MCP (Linux, Windows, macOS)](#inicio-rápido-instalar-y-configurar-el-mcp-linux-windows-macos)
+- [Instalación rápida (npx) — 5 minutos](#instalación-rápida-npx--5-minutos) ← empieza aquí
+- [Instalación desde el código fuente (clonar)](#instalación-desde-el-código-fuente-clonar) — para desarrollar o contribuir
   - [Registrar el MCP en tu editor](#paso-5---registrar-el-mcp-en-tu-editor) — Cursor · Claude Code · Claude Desktop · VS Code · Windsurf · Zed · JetBrains
-  - [Alternativa: instalar desde npm](#paso-5b---alternativa-instalar-desde-npm-sin-clonar)
 - [Arquitectura](#arquitectura)
 - [Tools MCP disponibles](#tools-mcp-disponibles)
 - [Variables de entorno](#variables-de-entorno)
@@ -53,14 +62,107 @@ Qué está verificado, qué falta y las limitaciones conocidas: **[ROADMAP.md](R
 - [Flujo recomendado](#flujo-recomendado)
 - [Pruebas y build](#pruebas-y-build)
 - [Troubleshooting](#troubleshooting)
-- [Seguridad y buenas prácticas](#seguridad-y-buenas-prácticas)
+- [Seguridad y privacidad](#seguridad-y-privacidad) — [credenciales](#credenciales-y-privacidad) · [uso responsable](#uso-responsable-y-términos)
 - [Estado y roadmap](#estado-y-roadmap)
 
 ---
 
-## Inicio rápido: instalar y configurar el MCP (Linux, Windows, macOS)
+## Instalación rápida (npx) — 5 minutos
 
-Esta es la guía oficial de instalación y configuración. Sigue los pasos en orden; cada uno incluye una verificación para no avanzar con un entorno roto.
+La vía recomendada si solo quieres **usar** el servidor. No clonas ni compilas: `npx` descarga el paquete y lo
+ejecuta. Si vas a modificar el código, salta a
+[instalación desde el código fuente](#instalación-desde-el-código-fuente-clonar).
+
+### 1. Node 20+ y el navegador
+
+```bash
+node --version                     # debe mostrar v20 o superior
+npx playwright install chromium    # el navegador que maneja CvLAC (~150 MB, una sola vez)
+```
+
+¿No tienes Node 20? [nvm](https://github.com/nvm-sh/nvm) (`nvm install 20`) en Linux/macOS,
+`brew install node@20` con Homebrew, o `winget install OpenJS.NodeJS.LTS` en Windows.
+En algunas distros de Linux hace falta además `npx playwright install-deps chromium`.
+
+### 2. Guarda tus credenciales en un archivo aparte
+
+Son las mismas con las que entras a CvLAC. Se quedan en tu máquina; ver
+[Credenciales y privacidad](#credenciales-y-privacidad).
+
+**Linux / macOS:**
+
+```bash
+mkdir -p ~/.config/cvlac-mcp
+cat > ~/.config/cvlac-mcp/.env <<EOF
+CVLAC_NOMBRE=tu_primer_nombre
+CVLAC_CEDULA=tu_numero_de_cedula
+CVLAC_PASSWORD=tu_clave
+CVLAC_SESSION_PATH=$HOME/.cvlac-session.json
+EOF
+chmod 600 ~/.config/cvlac-mcp/.env
+```
+
+**Windows (PowerShell):**
+
+```powershell
+mkdir "$HOME\.config\cvlac-mcp" -Force
+@"
+CVLAC_NOMBRE=tu_primer_nombre
+CVLAC_CEDULA=tu_numero_de_cedula
+CVLAC_PASSWORD=tu_clave
+CVLAC_SESSION_PATH=$HOME\.cvlac-session.json
+"@ | Set-Content "$HOME\.config\cvlac-mcp\.env"
+```
+
+### 3. Registra el MCP en tu editor
+
+```json
+{
+  "mcpServers": {
+    "cvlac-mcp": {
+      "command": "npx",
+      "args": ["-y", "cvlac-mcp"],
+      "env": {
+        "CVLAC_ENV_FILE": "/home/TU_USUARIO/.config/cvlac-mcp/.env"
+      }
+    }
+  }
+}
+```
+
+Cambia `TU_USUARIO` por tu usuario: la ruta debe ser **absoluta**. `CVLAC_ENV_FILE` es obligatorio en esta
+vía — instalado desde npm el servidor vive en la caché de `npx`, un directorio que tú no editas, así que no
+encontraría el `.env` por su cuenta.
+
+Dónde va ese JSON en cada editor (Cursor, Claude Code, Claude Desktop, VS Code, Windsurf, Zed, JetBrains):
+[Paso 5](#paso-5---registrar-el-mcp-en-tu-editor).
+
+### 4. Verifica
+
+Reinicia el editor (Claude Desktop hay que cerrarlo del todo) y en el chat pide, en este orden:
+
+1. `login` — debe autenticar y dejar la sesión guardada.
+2. `read_cvlac` de la sección `formacion` — debe devolver lo que ya tienes en CvLAC.
+
+Si ambas responden sin error, quedó listo. ¿Falla algo? → [Troubleshooting](#troubleshooting).
+
+### Archivos opcionales
+
+Nada de esto hace falta para arrancar. Cuando los quieras, apúntalos con variables en el mismo bloque `env`:
+
+| Variable | Qué apunta | Para qué |
+|---|---|---|
+| `CVLAC_CONFIG_PATH` | Tu `cvlac.config.json` | Valores por defecto: institución, país, URL del portafolio ([Paso 4b](#paso-4b---configurar-tus-valores-por-defecto-cvlacconfigjson)) |
+| `CVLAC_PORTFOLIO_EXTRA_PATH` | Tu `data/portfolio-extra.json` | Proyectos, software y eventos curados a mano ([Paso 4c](#paso-4c---curar-proyectos-software-y-eventos-dataportfolio-extrajson)) |
+
+Sugerido: guárdalos junto al `.env`, en `~/.config/cvlac-mcp/`.
+
+---
+
+## Instalación desde el código fuente (clonar)
+
+Para **desarrollar, contribuir o auditar** el código. Si solo quieres usar el servidor, la vía de arriba es
+más corta. Sigue los pasos en orden; cada uno incluye una verificación para no avanzar con un entorno roto.
 
 ### Paso 0 - Prerrequisitos (todas las plataformas)
 
@@ -328,38 +430,10 @@ ejecutable `node`, argumento la ruta absoluta a `dist/index.js`, sin argumentos 
 
 ---
 
-### Paso 5b - Alternativa: instalar desde npm (sin clonar)
+### Paso 5b - ¿No quieres clonar?
 
-> Disponible una vez el paquete esté publicado en npm. Mientras tanto, usa la vía de los pasos 1-5.
-
-`npx` descarga y ejecuta el servidor sin clonar ni compilar:
-
-```json
-{
-  "mcpServers": {
-    "cvlac-mcp": {
-      "command": "npx",
-      "args": ["-y", "cvlac-mcp"],
-      "env": {
-        "CVLAC_ENV_FILE": "/home/TU_USUARIO/.config/cvlac-mcp/.env"
-      }
-    }
-  }
-}
-```
-
-**Diferencia importante frente a clonar:** instalado desde npm, el servidor vive en la caché de
-`npx`, un directorio que tú no editas — ahí no hay `.env`, `cvlac.config.json` ni
-`data/portfolio-extra.json` que valgan. Por eso se apunta a los tuyos con variables:
-
-| Variable | Qué apunta |
-|---|---|
-| `CVLAC_ENV_FILE` | Tu `.env` (credenciales). Sin esto habría que ponerlas en el JSON del editor |
-| `CVLAC_CONFIG_PATH` | Tu `cvlac.config.json` |
-| `CVLAC_PORTFOLIO_EXTRA_PATH` | Tu `data/portfolio-extra.json` |
-
-Sugerido: `mkdir -p ~/.config/cvlac-mcp` y guarda los tres ahí con `chmod 600` en el `.env`.
-El navegador de Playwright sigue haciendo falta: `npx playwright install chromium` (Paso 3).
+Existe la vía corta con `npx`, sin clonar ni compilar:
+**[Instalación rápida (npx)](#instalación-rápida-npx--5-minutos)**.
 
 ### Paso 6 - Verificar la instalación
 
@@ -611,12 +685,45 @@ npm start
 
 ---
 
-## Seguridad y buenas prácticas
+## Seguridad y privacidad
 
-- No hardcodear credenciales.
-- No commitear `.env` ni archivos de sesión/screenshot.
-- Correr primero `sync` en `dry_run`.
-- Para pruebas de escritura real en CvLAC, usar ítems dummy y luego eliminar.
+### Credenciales y privacidad
+
+Este servidor pide las credenciales con las que entras a CvLAC. Qué pasa con ellas, en concreto:
+
+- **No salen de tu máquina.** Viven en tu `.env` local. El proceso las lee al arrancar y las escribe
+  únicamente en el formulario de login de `scienti.minciencias.gov.co`.
+- **No hay servidor intermedio, ni cuenta, ni telemetría, ni analítica.** El MCP corre como proceso local
+  y habla por stdio con tu editor. Las únicas conexiones de red que abre son a **CvLAC** y, si usas
+  `read_portfolio`, a **la URL de portafolio que tú configuras**.
+- **La sesión es una credencial.** Las cookies del login se cachean en `CVLAC_SESSION_PATH`. Quien tenga
+  ese archivo entra a tu CvLAC sin tu clave. Guárdalo fuera del repo y con permisos restringidos:
+  `chmod 600 ~/.config/cvlac-mcp/.env ~/.cvlac-session.json`.
+- **Tu modelo de IA sí ve los datos.** No las credenciales —el servidor nunca las devuelve como
+  resultado— pero sí lo que las tools leen de tu CvLAC y de tu portafolio, porque eso viaja al chat de tu
+  editor. Si tu hoja de vida tiene datos sensibles, tenlo en cuenta al elegir el proveedor del modelo.
+- **Los screenshots pueden tener datos personales.** La tool `screenshot` guarda la pantalla tal cual,
+  sesión iniciada incluida. No los adjuntes a un issue sin revisarlos.
+- **Nunca pongas las credenciales en el JSON del editor** ni en el repo. Usa `CVLAC_ENV_FILE` apuntando a
+  un archivo fuera del proyecto. El `.gitignore` ya excluye `.env`, sesiones, screenshots y logs, pero esa
+  red de seguridad solo cubre este repo.
+- Si sospechas que se filtró algo, cambia la clave en CvLAC y borra el archivo de sesión.
+
+### Uso responsable y términos
+
+- Esto automatiza un sitio del Estado colombiano **con tu propia cuenta y tus propios datos**. No evade
+  autenticación, no accede a hojas de vida ajenas y no expone ninguna API no pública: hace lo mismo que
+  harías tú con el navegador, más rápido.
+- **Revisa los términos de uso de ScienTI/MinCiencias** y las políticas de tu institución antes de usarlo.
+  Este proyecto es independiente y no está avalado por MinCiencias.
+- **Supervisión humana siempre.** Corre `sync` con `dry_run` primero, lee lo que va a escribir y solo
+  entonces aplícalo. No lo dejes corriendo sin mirar ni lo agendes.
+- El servidor espacia sus peticiones a propósito para no golpear el servidor de CvLAC
+  ([Ritmo de las peticiones](#ritmo-de-las-peticiones)). No subas ese ritmo ni lo corras en paralelo
+  sobre varias cuentas.
+- **La responsabilidad de lo que quede en tu hoja de vida es tuya.** Es una declaración con efectos ante
+  convocatorias y procesos de evaluación: verifica en CvLAC lo que el servidor haya escrito.
+- Para probar escrituras reales, usa ítems dummy y bórralos después.
 
 ---
 

@@ -1,7 +1,7 @@
 {
   "name": "cvlac-mcp",
   "version": "1.0.0",
-  "description": "MCP server for automating CvLAC profile updates via Playwright",
+  "description": "Actualiza tu hoja de vida de CvLAC (MinCiencias) desde el chat de tu editor, sin llenar formularios a mano. Servidor MCP con Playwright.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -41,7 +41,12 @@
     "colciencias",
     "playwright",
     "curriculum",
-    "colombia"
+    "colombia",
+    "hoja-de-vida",
+    "scienti",
+    "gruplac",
+    "investigacion",
+    "playwright-automation"
   ],
   "author": "Stivenson Rincón Mora",
   "license": "ISC",
