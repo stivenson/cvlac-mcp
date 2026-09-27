@@ -1,0 +1,117 @@
+# Does this run on the machines our readers actually have?
+#
+# The unit suite proves the logic; this proves the install. Windows is the one
+# that matters most — the audience is researchers, and most of them are on it —
+# and it is the one nobody here develops on.
+name: smoke
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - run: npm test
+
+      # The pinned Chromium, through the packaged CLI — the same command the
+      # README gives a first-time user.
+      - name: install the browser
+        run: node dist/index.js install-browser
+
+      - name: smoke
+        run: node scripts/smoke.mjs --browser
+
+  windows-env-file:
+    name: .env written by PowerShell
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 5.1 ships with Windows and is what most people have open; 7 is what
+        # they get if they installed it themselves. They differ in the encoding
+        # their file-writing cmdlets default to, which is the whole point here.
+        shell: [powershell, pwsh]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: write the .env exactly as the README says to
+        shell: ${{ matrix.shell }}
+        run: |
+          $contenido = @"
+          CVLAC_NOMBRE=José
+          CVLAC_CEDULA=1090123456
+          CVLAC_PASSWORD=clavé con acentó
+          "@
+          [IO.File]::WriteAllText("$env:RUNNER_TEMP\cvlac.env", $contenido)
+
+      # Out-File would leave this file in UTF-16, where the reader finds no
+      # variables at all and the server reports credentials the user did write
+      # as missing. Accents catch the other half: an ANSI file parses but
+      # corrupts the name.
+      - name: the reader sees every value, accents intact
+        shell: ${{ matrix.shell }}
+        run: |
+          node -e "const p=process.env.RUNNER_TEMP+'\\cvlac.env';require('dotenv').config({path:p,quiet:true});const n=process.env.CVLAC_NOMBRE,c=process.env.CVLAC_CEDULA;if(n!=='José'){console.error('CVLAC_NOMBRE llegó como '+JSON.stringify(n));process.exit(1)}if(c!=='1090123456'){console.error('CVLAC_CEDULA llegó como '+JSON.stringify(c));process.exit(1)}console.log('ok: '+n)"
+
+  published:
+    name: published package on ${{ matrix.os }}
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # What a user gets, not what this tree builds: installed from the
+      # registry, into an empty directory, with nothing else around it.
+      - name: install cvlac-mcp from npm
+        run: |
+          mkdir fresh
+          cd fresh
+          npm init -y
+          npm install cvlac-mcp
+
+      - name: install the browser
+        run: node fresh/node_modules/cvlac-mcp/dist/index.js install-browser
+
+      # Runs from inside the install: the script imports the MCP SDK, and there
+      # is no node_modules at the root of this sparse checkout.
+      - name: smoke
+        run: |
+          cp scripts/smoke.mjs fresh/smoke.mjs
+          node fresh/smoke.mjs --entry=fresh/node_modules/cvlac-mcp/dist/index.js --browser
