@@ -100,6 +100,11 @@ export async function visitListPages<T>(
   log.debug('list spans several pages', { listUrl, total: status.total });
   const cap = Math.ceil(status.total / MAX_ROWS) + 2;
   let last = status;
+  // Contiguity is only required between paged pages themselves: the first
+  // paged fetch (p=1) commonly re-reads rows the unpaged first fetch already
+  // showed at a smaller page size, so it is compared against `last.to` for
+  // "did it advance at all" but not against `pagedLast.to + 1`.
+  let pagedLast: ListPageStatus | null = null;
   for (let p = 1; p <= cap; p++) {
     const current = await go(pagedListUrl(listUrl, tableId, p));
     const state = await readListState(current);
@@ -114,7 +119,13 @@ export async function visitListPages<T>(
       // further would only repeat rows already seen (or loop forever).
       throw incomplete(listUrl, state.status);
     }
+    if (pagedLast && state.status.from !== pagedLast.to + 1) {
+      // A gap or overlap between consecutive pages means some rows were skipped
+      // or repeated — the walk cannot be trusted to have covered every row.
+      throw incomplete(listUrl, state.status);
+    }
     last = state.status;
+    pagedLast = state.status;
   }
   throw incomplete(listUrl, last);
 }

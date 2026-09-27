@@ -70,6 +70,15 @@ function noTableHtml(to: number, total: number): string {
 /** The empty-list markup JMesa renders instead of a table and a status bar. */
 const EMPTY_LIST_HTML = '<div>Ningún dato disponible en esta tabla</div>';
 
+/** A page with a table and data rows, but no `tr.statusBar` at all — dropped mid-walk. */
+function tableWithoutStatusBar(from: number, to: number): string {
+  const rows = [];
+  for (let n = from; n <= to; n++) {
+    rows.push(`<tr class="${n % 2 ? 'odd' : 'even'}"><td>${n}</td><td>Item ${n}</td></tr>`);
+  }
+  return `<table class="table" id="fake_all"><tbody>${rows.join('')}</tbody></table>`;
+}
+
 describe('collectListPages / visitListPages', () => {
   let browser: Browser;
   let page: Page;
@@ -88,9 +97,10 @@ describe('collectListPages / visitListPages', () => {
       const to = Math.min(p * mr, TOTAL);
       return route.fulfill({ contentType: 'text/html', body: listHtml(from, to, TOTAL) });
     });
-    await page.route('https://scienti.minciencias.gov.co/cvlac/EnSmall/**', (route) =>
-      route.fulfill({ contentType: 'text/html', body: listHtml(1, 3, 3) })
-    );
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnSmall/**', (route) => {
+      visited.push(new URL(route.request().url()).search);
+      return route.fulfill({ contentType: 'text/html', body: listHtml(1, 3, 3) });
+    });
     await page.route('https://scienti.minciencias.gov.co/cvlac/EnEmpty/**', (route) => {
       visited.push(new URL(route.request().url()).search);
       return route.fulfill({ contentType: 'text/html', body: EMPTY_LIST_HTML });
@@ -101,6 +111,43 @@ describe('collectListPages / visitListPages', () => {
     await page.route('https://scienti.minciencias.gov.co/cvlac/EnCapped/**', (route) => {
       // Ignores both `_mr_` and `_p_`: always the same first 15 rows of 212.
       return route.fulfill({ contentType: 'text/html', body: listHtml(1, 15, 212) });
+    });
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnNoStatus/**', (route) => {
+      const url = new URL(route.request().url());
+      // The unpaged first fetch behaves normally (15 of 212, triggers paging);
+      // every paged fetch after that comes back as a table with data rows but
+      // no status bar at all — broken markup discovered only once paging starts.
+      if (!url.searchParams.has('fake_all_p_')) {
+        return route.fulfill({ contentType: 'text/html', body: listHtml(1, 15, 212) });
+      }
+      return route.fulfill({ contentType: 'text/html', body: tableWithoutStatusBar(1, 100) });
+    });
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnGap/**', (route) => {
+      const url = new URL(route.request().url());
+      const total = 250;
+      const hasP = url.searchParams.has('fake_all_p_');
+      const p = hasP ? Number(url.searchParams.get('fake_all_p_')) : 1;
+      if (!hasP) return route.fulfill({ contentType: 'text/html', body: listHtml(1, 15, total) });
+      // Page 1 is a normal 100-row page; page 2 jumps ahead and skips rows
+      // 101-120 — advancing (so it is not the "didn't advance" case) but not
+      // contiguous with the page before it.
+      if (p === 1) return route.fulfill({ contentType: 'text/html', body: listHtml(1, 100, total) });
+      return route.fulfill({ contentType: 'text/html', body: listHtml(121, 220, total) });
+    });
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnCap50/**', (route) => {
+      const url = new URL(route.request().url());
+      const total = 350;
+      // Server caps every *paged* page at 50 rows, ignoring the `_mr_=100` this
+      // code always asks for; the unpaged first fetch behaves like a normal
+      // 15-row default. Pages stay contiguous — this is not the "didn't
+      // advance" case, it is the safety cap (`cap = ceil(total/MAX_ROWS)+2`)
+      // running out before 50-row pages can cover 350 rows.
+      const hasP = url.searchParams.has('fake_all_p_');
+      const p = hasP ? Number(url.searchParams.get('fake_all_p_')) : 1;
+      const size = hasP ? 50 : 15;
+      const from = (p - 1) * size + 1;
+      const to = Math.min(from + size - 1, total);
+      return route.fulfill({ contentType: 'text/html', body: listHtml(from, to, total) });
     });
   }, 60000);
 
@@ -157,8 +204,12 @@ describe('collectListPages / visitListPages', () => {
   });
 
   it('reads a one-page list once', async () => {
+    visited.length = 0;
     const all = await collectListPages('https://scienti.minciencias.gov.co/cvlac/EnSmall/all.do', go, titles);
     expect(all).toEqual(['Item 1', 'Item 2', 'Item 3']);
+    // Its status bar already says every row fits (to >= total): no paged
+    // fetch should follow the plain one.
+    expect(visited).toEqual(['']);
   });
 
   it('reads an empty list once and finds nothing', async () => {
@@ -177,6 +228,27 @@ describe('collectListPages / visitListPages', () => {
   it('throws when the server ignores paging and the page never advances', async () => {
     await expect(
       collectListPages('https://scienti.minciencias.gov.co/cvlac/EnCapped/all.do', go, titles)
+    ).rejects.toThrow(IncompleteListError);
+  });
+
+  it('throws when a paged page comes back with rows but no status bar', async () => {
+    await expect(
+      collectListPages('https://scienti.minciencias.gov.co/cvlac/EnNoStatus/all.do', go, titles)
+    ).rejects.toThrow(IncompleteListError);
+  });
+
+  it('throws when consecutive paged pages skip rows instead of continuing where the last one stopped', async () => {
+    await expect(
+      collectListPages('https://scienti.minciencias.gov.co/cvlac/EnGap/all.do', go, titles)
+    ).rejects.toThrow(IncompleteListError);
+  });
+
+  it('throws when pages keep advancing but never reach the total within the safety cap', async () => {
+    // A server that only ever serves 50-row pages (ignoring the `_mr_=100` this
+    // code requests) needs 7 contiguous pages to cover 350 rows, but the cap —
+    // sized for MAX_ROWS-sized pages plus slack — only allows 6.
+    await expect(
+      collectListPages('https://scienti.minciencias.gov.co/cvlac/EnCap50/all.do', go, titles)
     ).rejects.toThrow(IncompleteListError);
   });
 });
