@@ -62,15 +62,27 @@ El portafolio no publica sus datos, solo su interfaz, así que hay que renderiza
 
 `read_cvlac_detail` ya lee la ficha de un ítem; falta que `diff.ts` la use. Entrar al detalle de cada ítem permitiría comparar fechas y tipo, y con eso detectar `update` en esas tres secciones. Cuesta una navegación por ítem; vale la pena solo si esas secciones empiezan a cambiar seguido.
 
-### 6. Publicar en npm (sin fecha, y a propósito)
+### 6. Sostener el paquete de npm
 
-**El repo ya es público; el paquete no, y esa es la decisión.** El empaquetado está listo —`files` acotado a `dist` y los tres `.example`, `engines`, `prepublishOnly` con build y tests— así que publicar es `npm login && npm publish`, no un proyecto.
+**Publicado el 2026-09-27**: [`cvlac-mcp@1.0.0`](https://www.npmjs.com/package/cvlac-mcp). Verificado
+contra el registro real: `npx -y cvlac-mcp` arranca y responde `tools/list` sin ruido en stderr.
 
-Se publica **cuando alguien reporte que le costó instalarlo clonando**, no antes. Hoy la vía de los pasos 1-5 del README funciona y el nombre en npm es irreversible: `npm unpublish` solo aplica dentro de las primeras 72 horas y no libera el nombre. Sin un caso real de fricción, publicar compra mantenimiento (versionado, issues de instalación) sin comprar usuarios.
+La decisión anterior era esperar a que alguien reportara fricción clonando. Se adelantó porque el
+proyecto pasó de uso propio a difusión: el público al que se quiere llegar —investigadores, no
+desarrolladores— no clona ni compila, y sin `npx` el README pedía algo que ese lector no iba a hacer.
 
-El README ya marca el Paso 5b como *"disponible una vez el paquete esté publicado"*, así que nadie se topa con una promesa rota. El día que se publique: quitar esa línea y verificar `npx -y cvlac-mcp` contra el registro real.
+Lo que compró la publicación, y ahora hay que sostener:
 
-Lo que se ganó preparándolo vale igual sin publicar nunca: `CVLAC_ENV_FILE` permite sacar las credenciales del directorio del repo clonando también, y el `quiet: true` de dotenv arregló un bug real —su banner iba a **stdout**, que en un MCP stdio es el canal JSON-RPC.
+- **Versionado.** `dist` sale del `tsc` local, así que una publicación con el árbol sucio sube código
+  que no está en git. Publicar solo desde `master` limpio, con tag.
+- **Issues de instalación.** Chromium de Playwright y `CVLAC_ENV_FILE` son las dos fuentes probables.
+  El Troubleshooting del README ya cubre ambas.
+- **El nombre es irreversible.** `npm unpublish` solo aplica dentro de las primeras 72 horas y no
+  libera el nombre.
+
+Pendiente: automatizar la publicación desde CI queda descartado por ahora — npm está restringiendo los
+tokens que se saltan el 2FA ([aviso](https://gh.io/npm-gat-bypass2fa-deprecation)), y la cuenta usa
+passkey. Se publica a mano.
 
 ## Ideas sin compromiso
 
@@ -94,6 +106,14 @@ El repo **ya está público**. Queda lo que sigue pendiente de todos modos.
 - [x] Cambiar el repo a público.
 
 ## Historial
+
+- **2026-09-27** — Publicado en npm como `cvlac-mcp@1.0.0`, y el README reposicionado alrededor de esa
+  vía: abre diciendo qué hace el servidor —actualizar la hoja de vida sin llenar formularios— en vez de
+  cómo nació —sincronizar un CvLAC con un portafolio—, y la instalación con `npx` pasó de nota al pie a
+  primer camino, con el clonado reservado para desarrollar o auditar. La sección de seguridad creció a
+  dos bloques: dónde quedan las credenciales y qué hosts se tocan de verdad (CvLAC y la URL de
+  portafolio que configure el usuario, nada más), y que el modelo de IA del editor sí ve lo que las
+  tools devuelven. Publicar exigió 2FA: npm ya no acepta TOTP nuevo, solo passkey.
 
 - **2026-09-18** — Todas las secciones con datos quedaron gestionadas: formación complementaria, idiomas, líneas de investigación y demás trabajos, más el perfil del investigador y las redes académicas. Tres reglas nuevas, cada una nacida de una escritura que mintió: un `delete` no se ejecuta a la primera, un formulario sin cambios o sin un campo obligatorio no se envía (enviarlo devolvía un 500 del validador de CvLAC que se leía como validación fallida), y un combobox ambiguo lo resuelve una persona — el catálogo tiene seis "Universidad de los Andes" y antes se tomaba la primera. `read_portfolio` pasó de parsear el bundle a renderizar el sitio, que llevaba devolviendo todo vacío desde que el portafolio se reescribió. El diff dejó de reportar como faltante lo que CvLAC guarda en otra sección o con otra redacción: `sync` habría duplicado dos registros. Áreas de actuación cerró la lista: su catálogo de 267 áreas viaja entero dentro de la página del popup, y el `select multiple` que las guarda solo envía lo seleccionado, así que se escriben seleccionadas en vez de confiar en el handler de la página. Tests de 291 a 421.
 
