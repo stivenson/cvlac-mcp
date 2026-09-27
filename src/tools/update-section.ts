@@ -1,4 +1,6 @@
 import type { Page } from 'playwright';
+import { PRODUCT_SECTIONS } from './products/index.js';
+import { TECNICA_SECTIONS } from './products/tecnica.js';
 import { session, isLoginPage } from '../browser/session.js';
 import type {
   UpdateRequest,
@@ -54,221 +56,36 @@ import {
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logger.js';
 import { classifyMatch } from '../diff.js';
+import { collectListPages, visitListPages, type ListNavigator } from '../browser/jmesa.js';
+import { pickRow, exactLabelCount } from './row-match.js';
+import {
+  FIELD_TIMEOUT_MS,
+  humanDelay,
+  missingValue,
+  normStr,
+  relaxHiddenRequired,
+  setInstitucionFields,
+  setMunicipio,
+  setReadonlyField,
+  tryField,
+  type FillReport,
+  type SectionConfig,
+} from './form-kit.js';
+
+export {
+  FIELD_TIMEOUT_MS,
+  humanDelay,
+  missingValue,
+  normStr,
+  relaxHiddenRequired,
+  setInstitucionFields,
+  setMunicipio,
+  setReadonlyField,
+  tryField,
+} from './form-kit.js';
+export type { FillReport, SectionConfig } from './form-kit.js';
 
 const log = createLogger('update-section');
-
-/**
- * How long to wait for one field. Playwright's default is 30s, which a form
- * that hides a section turns into half a minute of waiting per hidden input.
- */
-const FIELD_TIMEOUT_MS = 5000;
-
-/**
- * Fields that could not be filled during one form submission.
- *
- * CvLAC rejects a form without saying which control was at fault, so every
- * skipped field is recorded here and returned to the caller alongside whatever
- * the server itself complained about.
- */
-interface FillReport {
-  warnings: string[];
-  /**
-   * Fields CvLAC requires that could not be filled. A form carrying one is not
-   * submitted: doing so crashed CvLAC's own validator rather than coming back
-   * with a message.
-   */
-  blockers?: string[];
-  /** Pickers that matched several rows and need a person to choose. */
-  choices?: AmbiguousChoice[];
-}
-
-/**
- * Runs one field interaction, recording a warning instead of aborting.
- *
- * Fillers touch fields that only exist on some CvLAC forms, so a missing control
- * is normal — but it must never be invisible, which is what the old
- * `.catch(() => {})` made it.
- */
-async function tryField(report: FillReport, field: string, fn: () => Promise<unknown>): Promise<boolean> {
-  try {
-    await fn();
-    return true;
-  } catch (err) {
-    const detail = err instanceof Error ? err.message.split('\n')[0] : String(err);
-    report.warnings.push(`${field}: ${detail}`);
-    log.debug('field not filled', { field, detail });
-    return false;
-  }
-}
-
-/** Records that a value was unavailable, without touching the page. */
-function missingValue(report: FillReport, field: string, hint: string): void {
-  report.warnings.push(`${field}: sin valor (${hint})`);
-  log.debug('field left empty', { field, hint });
-}
-
-/** Normalize string for fuzzy comparison: lowercase, no accents, no punctuation */
-function normStr(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/[^a-z0-9\s]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-/**
- * Search the CvLAC institution catalogue.
- *
- * Returns null when nothing matches: writing id 0 would save an entry pointing at
- * a non-existent institution, which is worse than letting the form reject it.
- */
-async function findInstitucionId(
-  page: Page,
-  name: string
-): Promise<CatalogueResolution<{ id: number; nmeInst: string }>> {
-  // Try progressively shorter search terms: full name, then each word (longest first)
-  const searchTerms = [name, ...name.split(/\s+/).filter((w) => w.length > 4).sort((a, b) => b.length - a.length)];
-
-  for (const term of searchTerms) {
-    const url = `${BASE_URL}/cvlac/json/EnInstitucion/buscar.do?txt_nombre=${encodeURIComponent(catalogueQuery(term))}`;
-
-    const response = await page.evaluate(async (fetchUrl: string) => {
-      const res = await fetch(fetchUrl, { credentials: 'include' });
-      if (!res.ok) return { ok: false, items: [] as unknown[] };
-      const buf = await res.arrayBuffer();
-      const text = new TextDecoder('latin1').decode(buf);
-      try {
-        return { ok: true, items: JSON.parse(text) };
-      } catch {
-        return { ok: true, items: [] };
-      }
-    }, url);
-
-    if (!response.ok) return { kind: 'none' };
-
-    const items = response.items as Array<{ id: number; nmeInst: string }>;
-    if (!Array.isArray(items) || items.length === 0) continue;
-
-    // A shorter term can only be vaguer, so whatever this one says is the answer.
-    const resolved = resolveChoice(items, name, (r) => r.nmeInst);
-    if (resolved.kind !== 'none') return resolved;
-  }
-
-  return { kind: 'none' };
-}
-
-/** Set a readonly institution picker (hidden id + visible readonly name) using the search API */
-async function setInstitucionFields(
-  page: Page,
-  report: FillReport,
-  name: string,
-  idField: string,
-  nmeField: string,
-  /** CvLAC's own id, when a person has already chosen among the candidates. */
-  explicitId?: string
-): Promise<void> {
-  let found: { id: number; nmeInst: string };
-
-  if (explicitId) {
-    found = { id: Number(explicitId), nmeInst: name };
-  } else {
-    const resolved = await findInstitucionId(page, name);
-    if (resolved.kind === 'none') {
-      report.warnings.push(
-        `institución "${name}": no existe en el catálogo de CvLAC; el campo queda vacío`
-      );
-      log.warn('institution not found in CvLAC catalogue', { name });
-      return;
-    }
-    if (resolved.kind === 'ambiguous') {
-      log.info('institution name matched several rows; asking', { name, options: resolved.options.length });
-      (report.choices ??= []).push({
-        field: 'institución',
-        value: name,
-        options: resolved.options.map((o) => ({ id: String(o.id), label: o.nmeInst })),
-      });
-      return;
-    }
-    found = resolved.item;
-  }
-  await page.evaluate(
-    ({ instId, instNme, idF, nmeF }) => {
-      const idEl = document.getElementById(idF) as HTMLInputElement | null;
-      const nmeEl = document.getElementById(nmeF) as HTMLInputElement | null;
-      if (idEl) idEl.value = String(instId);
-      if (nmeEl) {
-        nmeEl.removeAttribute('readonly');
-        nmeEl.value = instNme;
-        nmeEl.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-    },
-    { instId: found.id, instNme: found.nmeInst, idF: idField, nmeF: nmeField }
-  );
-}
-
-/**
- * Resolves a municipality the way the picker popup does.
- *
- * Three numberings exist and only one is the code the form stores: the DANE
- * code wrote Sketty (Wales), the id from the JSON search wrote Neiva, and this
- * cascade — country, department, municipality — writes the right one. The JSON search
- * is still the cheapest way to learn which department a town belongs to, so it
- * is used for that and nothing else.
- */
-async function resolveMunicipio(
-  page: Page,
-  name: string
-): Promise<{ codMunicipio: string; codRh: string; text: string; sglPais: string } | null> {
-  const get = (url: string): Promise<string> =>
-    page.evaluate(async (fetchUrl: string) => {
-      const res = await fetch(fetchUrl, { credentials: 'include' });
-      if (!res.ok) return '';
-      return new TextDecoder('latin1').decode(await res.arrayBuffer());
-    }, url);
-
-  const raw = await get(
-    `${BASE_URL}/cvlac/json/EnMunicipio/buscar.do?txt_nombre=${encodeURIComponent(catalogueQuery(name))}`
-  );
-  let hit: { txtNmeMunicipio: string; departamento?: { txtNmeDepartamento?: string; pais?: { txtNmePais?: string } } } | null =
-    null;
-  try {
-    const rows = JSON.parse(raw);
-    hit = Array.isArray(rows) ? pickMunicipio(rows as MunicipioRow[], name) : null;
-  } catch {
-    hit = null;
-  }
-  if (!hit) return null;
-
-  const paisNombre = hit.departamento?.pais?.txtNmePais ?? 'Colombia';
-  const deptoNombre = hit.departamento?.txtNmeDepartamento ?? null;
-  // The cascade speaks three-letter country codes; the JSON returns two.
-  const sglPais = paisNombre.toLowerCase() === 'colombia' ? 'COL' : '';
-  if (!sglPais) return null;
-
-  const deptos = parseDepartamentosXml(
-    await get(`${BASE_URL}/cvlac/binary/ubicacion.xml?methodToCall=getDepartamentosAsXML&sglPais=${sglPais}`)
-  );
-  const depto = deptoNombre ? pickByName(deptos, deptoNombre) : null;
-  if (!depto) return null;
-
-  const municipios = parseMunicipiosXml(
-    await get(
-      `${BASE_URL}/cvlac/binary/ubicacion.xml?methodToCall=getMunicipiosAsXML` +
-        `&sglDepartamento=${encodeURIComponent(depto.id)}&sglPais=${sglPais}`
-    )
-  );
-  const municipio = pickByName(municipios, name);
-  if (!municipio) return null;
-
-  return {
-    codMunicipio: municipio.id,
-    codRh: municipio.codRh,
-    text: municipioDisplayName(paisNombre, depto.name, municipio.name),
-    sglPais,
-  };
-}
 
 /**
  * Finds the programme among those the institution registered at that level.
@@ -359,123 +176,6 @@ async function setInstitucion(
   explicitId?: string
 ): Promise<void> {
   await setInstitucionFields(page, report, name, 'id_institucion', 'txt_nme_institucion', explicitId);
-}
-
-/**
- * Fills the municipality picker: a readonly text input plus a hidden code whose
- * id carries a per-render suffix (_loc_NNNNN / _locValue_NNNNN).
- */
-async function setMunicipio(
-  page: Page,
-  report: FillReport,
-  nombre: string | undefined,
-  codigoDane: string | undefined
-): Promise<void> {
-  if (!nombre) {
-    missingValue(report, 'municipio', 'define defaults.municipio.nombre en cvlac.config.json');
-    return;
-  }
-
-  const found = await resolveMunicipio(page, nombre);
-  if (!found) {
-    report.warnings.push(
-      `municipio "${nombre}": no se pudo resolver en el catálogo de CvLAC; el campo queda vacío`
-    );
-    log.warn('municipality not resolved', { nombre });
-    return;
-  }
-  if (codigoDane && codigoDane !== found.codMunicipio) {
-    report.warnings.push(
-      `municipio: se ignoró el código ${codigoDane} porque CvLAC numera sus municipios aparte del DANE ` +
-        `(${found.text} es ${found.codMunicipio} para el formulario)`
-    );
-  }
-
-  // The picker writes four fields, not one: the readable path, the code, the
-  // 10-character prefix beside it and the country.
-  const applied = await page.evaluate(
-    ({ text, code, codRh, sglPais }) => {
-      const textEl = document.querySelector('input[name="cod_municipio_text"]') as HTMLInputElement | null;
-      if (!textEl) return false;
-      textEl.removeAttribute('readonly');
-      textEl.value = text;
-
-      const suffix = textEl.id.replace('_loc_', '');
-      const setById = (id: string, value: string): void => {
-        const el = document.getElementById(id) as HTMLInputElement | null;
-        if (el) el.value = value;
-      };
-      setById('_locValue_' + suffix, code);
-      setById('_locRHValue_' + suffix, codRh);
-      setById('_locPaisValue_' + suffix, sglPais);
-
-      for (const el of Array.from(
-        document.querySelectorAll('input[name="cod_municipio"]')
-      ) as HTMLInputElement[]) {
-        el.value = code;
-      }
-      for (const el of Array.from(
-        document.querySelectorAll('input[name="cod_rh_municipio"]')
-      ) as HTMLInputElement[]) {
-        el.value = codRh;
-      }
-      return true;
-    },
-    { text: found.text, code: found.codMunicipio, codRh: found.codRh, sglPais: found.sglPais }
-  );
-  if (!applied) report.warnings.push('municipio: el formulario no tiene cod_municipio_text');
-}
-
-/** Remove readonly from any field and set its value via JS. False when the field is absent. */
-async function forceSetReadonly(page: Page, fieldId: string, value: string): Promise<boolean> {
-  return page.evaluate(
-    ({ id, val }) => {
-      const el = document.getElementById(id) as HTMLInputElement | null;
-      if (!el) return false;
-      el.removeAttribute('readonly');
-      el.value = val;
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      return true;
-    },
-    { id: fieldId, val: value }
-  );
-}
-
-/** Set a readonly field selected by name attribute (some forms have no id) */
-async function forceSetReadonlyByName(page: Page, fieldName: string, value: string): Promise<boolean> {
-  return page.evaluate(
-    ({ name, val }) => {
-      const el = document.querySelector(`[name="${name}"]`) as HTMLInputElement | null;
-      if (!el) return false;
-      el.removeAttribute('readonly');
-      el.value = val;
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      return true;
-    },
-    { name: fieldName, val: value }
-  );
-}
-
-/** forceSetReadonly + warning when the field is not on this form. */
-async function setReadonlyField(
-  page: Page,
-  report: FillReport,
-  fieldName: string,
-  value: string,
-  byId = false
-): Promise<void> {
-  const ok = byId
-    ? await forceSetReadonly(page, fieldName, value)
-    : await forceSetReadonlyByName(page, fieldName, value);
-  if (!ok) report.warnings.push(`${fieldName}: el formulario no tiene ese campo`);
-}
-
-/** Random delay to simulate human behaviour */
-async function humanDelay(min = 300, max = 800): Promise<void> {
-  const ms = min + Math.random() * (max - min);
-  await new Promise((r) => setTimeout(r, ms));
 }
 
 /** Navigate to a URL; throws SessionExpiredError if redirected to login (caller must reopen page) */
@@ -1200,20 +900,6 @@ async function fillEvento(page: Page, ev: EventoCientificoItem, report: FillRepo
 
 // ── Section registry ─────────────────────────────────────────────────────────
 
-interface SectionConfig {
-  /** List page (all.do) used to find existing rows for update/delete. */
-  listUrl: string;
-  /** Create form (create.do). */
-  createUrl: string;
-  /** Index of the <td> in a list row that holds the matchable label. */
-  matchCellIndex: number;
-  /** Extract the matchable label from the item data. */
-  labelOf: (data: any) => string;
-  /** Fill the create/edit form with the item data (no navigation, no submit). */
-  fill: (page: Page, data: any, report: FillReport) => Promise<void>;
-}
-
-
 /**
  * A language and the four skills CvLAC grades separately.
  *
@@ -1357,6 +1043,12 @@ async function fillDemasTrabajo(page: Page, item: OtherWorkInput, report: FillRe
 }
 
 const SECTIONS: Record<CvLACSectionName, SectionConfig> = {
+  ...PRODUCT_SECTIONS,
+  informesTecnicos: TECNICA_SECTIONS.informesTecnicos,
+  innovacionesProceso: TECNICA_SECTIONS.innovacionesProceso,
+  productosTecnologicos: TECNICA_SECTIONS.productosTecnologicos,
+  consultorias: TECNICA_SECTIONS.consultorias,
+  prototipos: TECNICA_SECTIONS.prototipos,
   demasTrabajos: {
     ...SECTION_LIST.demasTrabajos,
     createUrl: URLS.demasTrabajosCreate,
@@ -1460,6 +1152,155 @@ export async function findRowActionHref(
     },
     { idx: matchCellIndex, target: label, link: linkText }
   );
+}
+
+/** The action link (Detalles/Editar/Eliminar) of the `index`-th data row on the page. */
+export async function rowActionHrefAt(page: Page, index: number, linkText: string): Promise<string | null> {
+  return page.evaluate(
+    ({ i, link }) => {
+      const norm = (s: string | null | undefined): string =>
+        (s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+      const row = Array.from(document.querySelectorAll('tr.odd, tr.even'))[i];
+      if (!row) return null;
+      const a = Array.from(row.querySelectorAll('a')).find((el) => norm(el.textContent).includes(norm(link)));
+      return a ? a.getAttribute('href') : null;
+    },
+    { i: index, link: linkText }
+  );
+}
+
+/**
+ * A navigator that keeps re-logging in through the same `pageRef` — the shape
+ * `collectListPages`/`visitListPages` need, shared by every helper here that
+ * walks a section's list.
+ */
+function relLoginGo(pageRef: { page: Page }): ListNavigator {
+  return async (url: string): Promise<Page> => {
+    await gotoFormWithRelogin(pageRef, url);
+    return pageRef.page;
+  };
+}
+
+/** What looking a row up by label across every page of a list found. */
+export type RowLookup =
+  | { kind: 'found'; href: string | null; label: string }
+  | { kind: 'many'; labels: string[] }
+  | { kind: 'none' };
+
+/**
+ * Finds the one row `label` means across every page of the section's list, and
+ * the href of its `linkText` action. `found` with a null href means the row is
+ * there but has no such link — CvLAC drops Eliminar on records it locks.
+ *
+ * Reads the whole list twice (once to pick the row among every label, once
+ * more to land on the page that holds it) rather than remembering a page
+ * number from the first pass: `visitListPages` reopens each page from a fresh
+ * `go()` call, and a row's position can only be trusted against a page it is
+ * being read from right then — not one fetched moments earlier under a
+ * possibly different `_mr_`/`_p_`.
+ */
+export async function lookupRow(
+  pageRef: { page: Page },
+  cfg: { listUrl: string; matchCellIndex: number },
+  label: string,
+  linkText: string
+): Promise<RowLookup> {
+  const go = relLoginGo(pageRef);
+  const labels = await collectListPages(cfg.listUrl, go, (p) => listRowLabels(p, cfg.matchCellIndex));
+  const pick = pickRow(labels, label);
+  if (pick.kind !== 'one') return pick;
+
+  const wanted = labels[pick.index];
+  const href = await visitListPages(cfg.listUrl, go, async (p) => {
+    const onPage = await listRowLabels(p, cfg.matchCellIndex);
+    const i = onPage.indexOf(wanted);
+    return i < 0 ? undefined : { href: await rowActionHrefAt(p, i, linkText) };
+  });
+  return { kind: 'found', href: href?.href ?? null, label: wanted };
+}
+
+/**
+ * Normalizes an action href for identity comparison — resolved against
+ * BASE_URL (so a relative and an absolute form of the same link compare
+ * equal) with its query parameters sorted (CvLAC does not promise an order).
+ * CvLAC embeds the record's own id in these hrefs (`id=`, `cod_producto=`,
+ * `cod_linea=`, `sgl_idioma=`…), so two hrefs that normalize the same name
+ * the same record — unlike two labels, which can merely look alike.
+ */
+export function normalizeActionHref(href: string): string {
+  const url = new URL(href, BASE_URL);
+  const params = [...url.searchParams.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return `${url.pathname}?${params.map(([k, v]) => `${k}=${v}`).join('&')}`;
+}
+
+/** Whether an action href carries anything this server can key a record by. */
+function hasStableId(href: string): boolean {
+  return new URL(href, BASE_URL).searchParams.size > 0;
+}
+
+/** The `linkText` action href of every data row on the page, aligned by position. */
+async function rowActionHrefsOnPage(page: Page, linkText: string): Promise<Array<string | null>> {
+  return page.evaluate((link) => {
+    const norm = (s: string | null | undefined): string =>
+      (s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+    const linkN = norm(link);
+    return Array.from(document.querySelectorAll('tr.odd, tr.even')).map((row) => {
+      const a = Array.from(row.querySelectorAll('a')).find((el) => norm(el.textContent).includes(linkN));
+      return a ? a.getAttribute('href') : null;
+    });
+  }, linkText);
+}
+
+/**
+ * Whether the exact record `wantedHref` names is still in the section's list,
+ * decided by comparing every row's `linkText` action href — never by label.
+ *
+ * A label match is not identity: deleting "Deep learning for crop yield"
+ * leaves "Deep learning for crop yield in Colombia" behind, whose label
+ * partially matches the one just deleted but is a different record with its
+ * own id. Only the href — which carries that id — can tell them apart.
+ */
+export async function recordStillListed(
+  pageRef: { page: Page },
+  cfg: { listUrl: string; matchCellIndex: number },
+  wantedHref: string,
+  linkText: string
+): Promise<boolean> {
+  const go = relLoginGo(pageRef);
+  const wanted = normalizeActionHref(wantedHref);
+  const hrefs = await collectListPages(cfg.listUrl, go, (p) => rowActionHrefsOnPage(p, linkText));
+  return hrefs.some((h) => h !== null && normalizeActionHref(h) === wanted);
+}
+
+/**
+ * How many rows across every page of the section's list have exactly `label`.
+ *
+ * The fallback identity check for add/delete: used directly when a section's
+ * action hrefs carry no id `recordStillListed` could compare by, and to tell a
+ * genuine save on an outage page apart from a mere neighbour in `addItem`
+ * (`exactLabelCount`, never a partial match, since a partial one is exactly
+ * what let a neighbour masquerade as the record just added).
+ */
+export async function labelExactCount(
+  pageRef: { page: Page },
+  cfg: { listUrl: string; matchCellIndex: number },
+  label: string
+): Promise<number> {
+  const go = relLoginGo(pageRef);
+  const labels = await collectListPages(cfg.listUrl, go, (p) => listRowLabels(p, cfg.matchCellIndex));
+  return exactLabelCount(labels, label);
+}
+
+/** The answer when a label matches more than one row: nothing is touched. */
+function manyRows(label: string, labels: string[]): UpdateResult {
+  return {
+    success: false,
+    status: 'needs_confirmation',
+    message:
+      `${labels.length} filas coinciden con "${label}" y no se tocó ninguna. ` +
+      'Repite con el título exacto de la fila que quieres.',
+    similar: labels.map((l) => ({ label: l, matchType: 'similar' as const })),
+  };
 }
 
 /**
@@ -1583,12 +1424,17 @@ async function describeRejection(page: Page, action: string, label: string): Pro
  * Existing CvLAC rows close enough to `label` that adding would risk a duplicate.
  * Assumes the page is already on the section's list.
  */
-async function findSimilarRows(
-  page: Page,
+/**
+ * Exported so its one job — never mistaking a partial list read for "no
+ * similar rows" — can be tested directly against a mocked, paginating list.
+ */
+export async function findSimilarRows(
+  pageRef: { page: Page },
   cfg: SectionConfig,
   label: string
 ): Promise<SimilarCandidate[]> {
-  const rows = await listRowLabels(page, cfg.matchCellIndex);
+  const go = relLoginGo(pageRef);
+  const rows = await collectListPages(cfg.listUrl, go, (p) => listRowLabels(p, cfg.matchCellIndex));
   const out: SimilarCandidate[] = [];
   for (const row of rows) {
     const match = classifyMatch(label, row);
@@ -1597,7 +1443,7 @@ async function findSimilarRows(
   return out;
 }
 
-async function addItem(
+export async function addItem(
   pageRef: { page: Page },
   cfg: SectionConfig,
   data: unknown,
@@ -1606,11 +1452,17 @@ async function addItem(
 ): Promise<UpdateResult> {
   const report: FillReport = { warnings: [] };
 
+  // How many rows have exactly `label` before anything is submitted — needed
+  // later to tell a genuine save on an outage page apart from a mere
+  // neighbour. Established once, up front, so the duplicate guard (when it
+  // runs) and the outage recovery agree on the same number instead of two
+  // different reads of the list disagreeing under load.
+  let beforeCount: number;
+
   // Duplicate guard: CvLAC has no unique constraints and removing a duplicate by
   // hand is tedious, so an ambiguous add stops here and asks.
   if (!confirmDuplicate) {
-    await gotoFormWithRelogin(pageRef, cfg.listUrl);
-    const similar = await findSimilarRows(pageRef.page, cfg, label);
+    const similar = await findSimilarRows(pageRef, cfg, label);
     if (similar.length > 0) {
       log.info('add blocked by existing similar items', { label, count: similar.length });
       return {
@@ -1622,6 +1474,13 @@ async function addItem(
         similar,
       };
     }
+    // No similar rows at all (not even 'similar'/'same') rules out an exact
+    // match too — no need for a second walk of the list just to count zero.
+    beforeCount = 0;
+  } else {
+    // The guard was skipped by request, so nothing above already read the
+    // list — read it now, before the create form changes anything.
+    beforeCount = await labelExactCount(pageRef, cfg, label);
   }
 
   await gotoFormWithRelogin(pageRef, cfg.createUrl);
@@ -1635,6 +1494,8 @@ async function addItem(
     return blockedRefusal(label, report.blockers, report.warnings);
   }
   await syncHiddenDuplicates(pageRef.page);
+  const relaxed = await relaxHiddenRequired(pageRef.page);
+  if (relaxed.length) log.debug('required dropped from hidden controls', { relaxed });
   await humanDelay(400, 800);
   await clickGuardar(pageRef.page);
   const screenshotBase64 = await shot(pageRef.page);
@@ -1651,11 +1512,14 @@ async function addItem(
   }
 
   // An outage page is not the redirect that follows a save. The list is the only
-  // thing that can say whether the row exists, so ask it.
+  // thing that can say whether the row exists, so ask it — by an exact count,
+  // never a partial match: a pre-existing neighbour ("Deep learning for crop
+  // yield in Colombia") must not make a failed add of "Deep learning for crop
+  // yield" read as created just because something similar is listed.
   if (await landedOnOutage(pageRef.page)) {
     log.warn('add landed on the outage page; checking the list', { label });
-    await gotoFormWithRelogin(pageRef, cfg.listUrl);
-    const created = await findRowActionHref(pageRef.page, cfg.matchCellIndex, label, 'Eliminar');
+    const afterCount = await labelExactCount(pageRef, cfg, label);
+    const created = afterCount > beforeCount;
     if (!created) {
       return failed(
         `CvLAC respondió con su página de "Server Unavailable" al guardar "${label}", y la fila no aparece en la lista: no se creó.`,
@@ -1679,8 +1543,9 @@ async function updateItem(
   label: string
 ): Promise<UpdateResult> {
   const report: FillReport = { warnings: [] };
-  await gotoFormWithRelogin(pageRef, cfg.listUrl);
-  const editHref = await findRowActionHref(pageRef.page, cfg.matchCellIndex, label, 'Editar');
+  const row = await lookupRow(pageRef, cfg, label, 'Editar');
+  if (row.kind === 'many') return manyRows(label, row.labels);
+  const editHref = row.kind === 'found' ? row.href : null;
   if (!editHref) {
     return failed(`No existing item matching "${label}" to update`, report);
   }
@@ -1701,6 +1566,8 @@ async function updateItem(
   if (report.blockers?.length) {
     return blockedRefusal(label, report.blockers, report.warnings);
   }
+  const relaxed = await relaxHiddenRequired(pageRef.page);
+  if (relaxed.length) log.debug('required dropped from hidden controls', { relaxed });
   const edits = verifiableFields(changedFields(beforeFill, await readFormValues(pageRef.page)));
   // Submitting an untouched form is indistinguishable from a successful save,
   // so it does not get submitted.
@@ -1779,16 +1646,15 @@ async function updateItem(
   return ok(`Updated: ${label}`, report, screenshotBase64);
 }
 
-async function deleteItem(pageRef: { page: Page }, cfg: SectionConfig, label: string): Promise<UpdateResult> {
+export async function deleteItem(pageRef: { page: Page }, cfg: SectionConfig, label: string): Promise<UpdateResult> {
   const report: FillReport = { warnings: [] };
-  await gotoFormWithRelogin(pageRef, cfg.listUrl);
-  const confirmHref = await findRowActionHref(pageRef.page, cfg.matchCellIndex, label, 'Eliminar');
-  if (!confirmHref) {
-    // The row may be there and simply locked: CvLAC drops the Eliminar link on
-    // records it will not let go of, and "not found" would be a lie.
-    const exists = await findRowActionHref(pageRef.page, cfg.matchCellIndex, label, 'Detalles');
-    return exists ? undeletableRefusal(label) : failed(`No item matching "${label}" to delete`, report);
-  }
+  const row = await lookupRow(pageRef, cfg, label, 'Eliminar');
+  if (row.kind === 'many') return manyRows(label, row.labels);
+  if (row.kind === 'none') return failed(`No item matching "${label}" to delete`, report);
+  // The row may be there and simply locked: CvLAC drops the Eliminar link on
+  // records it will not let go of, and "not found" would be a lie.
+  if (!row.href) return undeletableRefusal(label);
+  const confirmHref = row.href;
   await gotoFormWithRelogin(pageRef, BASE_URL + confirmHref);
   const deleteHref = await pageRef.page.evaluate(() => {
     const a = Array.from(document.querySelectorAll('a')).find(
@@ -1805,8 +1671,16 @@ async function deleteItem(pageRef: { page: Page }, cfg: SectionConfig, label: st
   const deleteStatus = await gotoFormWithRelogin(pageRef, BASE_URL + deleteHref, {
     tolerateUnavailable: true,
   });
-  await gotoFormWithRelogin(pageRef, cfg.listUrl);
-  const still = await findRowActionHref(pageRef.page, cfg.matchCellIndex, label, 'Eliminar');
+  // Identity, not label: a surviving near-namesake ("Deep learning for crop
+  // yield in Colombia" once "Deep learning for crop yield" is gone) must never
+  // read as "still present" — lookupRow's own pickRow would partially match it
+  // and say so. `confirmHref` is this exact record's Eliminar link, captured
+  // before it was deleted, so compare by that instead. Most CvLAC action hrefs
+  // carry the record's own id (`id=`, `cod_producto=`…); the rare one that
+  // does not falls back to an exact (never partial) count of the label.
+  const still = hasStableId(confirmHref)
+    ? await recordStillListed(pageRef, cfg, confirmHref, 'Eliminar')
+    : (await labelExactCount(pageRef, cfg, row.label)) > 0;
   const screenshotBase64 = await shot(pageRef.page);
   if (still) {
     const why =

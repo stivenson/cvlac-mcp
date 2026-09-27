@@ -11,7 +11,7 @@ import { extractReconocimientosFromPage } from '../src/extractors/cvlac/reconoci
 import { extractProyectosFromPage } from '../src/extractors/cvlac/proyectos.js';
 import { extractSoftwareFromPage } from '../src/extractors/cvlac/software.js';
 import { extractEventosFromPage } from '../src/extractors/cvlac/eventos.js';
-import { readRows } from '../src/extractors/cvlac/rows.js';
+import { readRows, extractList } from '../src/extractors/cvlac/rows.js';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'cvlac');
 
@@ -156,5 +156,38 @@ describe('degenerate pages', () => {
     );
     const items = await extractCursosFromPage(page);
     expect(items).toEqual([{ name: 'Curso real', date: '2023' }]);
+  });
+});
+
+describe('extractList across pages', () => {
+  // No gap between navigations here: real pacing is irrelevant to whether
+  // paging is read correctly, and would only slow the suite down.
+  process.env.CVLAC_MIN_REQUEST_GAP_MS = '0';
+  process.env.CVLAC_REQUEST_JITTER_MS = '0';
+
+  it('returns rows beyond the first 15', async () => {
+    const TOTAL = 40;
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnPaged/**', (route) => {
+      const url = new URL(route.request().url());
+      const mr = Number(url.searchParams.get('paged_all_mr_') ?? 15);
+      const p = Number(url.searchParams.get('paged_all_p_') ?? 1);
+      const from = (p - 1) * mr + 1;
+      const to = Math.min(p * mr, TOTAL);
+      let rows = '';
+      for (let n = from; n <= to; n++) rows += `<tr class="odd"><td>${n}</td><td>Obra ${n}</td><td>2020</td></tr>`;
+      return route.fulfill({
+        contentType: 'text/html',
+        body: `<table class="table" id="paged_all">${rows}<tr class="statusBar"><td>Resultados ${from} - ${to} de ${TOTAL}.</td></tr></table>`,
+      });
+    });
+    const items = await extractList(
+      page,
+      'test',
+      'https://scienti.minciencias.gov.co/cvlac/EnPaged/all.do',
+      3,
+      (cells) => ({ name: cells[1] })
+    );
+    expect(items).toHaveLength(40);
+    expect(items[39]).toEqual({ name: 'Obra 40' });
   });
 });

@@ -1,6 +1,7 @@
 import type { Page } from 'playwright';
 import { createLogger } from '../../logger.js';
 import { navigate } from '../../browser/navigate.js';
+import { collectListPages, type ListNavigator } from '../../browser/jmesa.js';
 
 const log = createLogger('extract');
 
@@ -50,16 +51,19 @@ export async function mapRows<T>(
   return items;
 }
 
-/** Navigates to a list page and maps its rows. */
+/** Navigates to a list page and maps the rows of every page it has. */
 export async function extractList<T>(
   page: Page,
   section: string,
   url: string,
   minCells: number,
-  map: (cells: string[]) => T | null
+  map: (cells: string[]) => T | null,
+  // Paced and retried by default: a 503 body has no rows, which would pass for
+  // an empty section, and CvLAC answers 5xx when requests arrive too close together.
+  go: ListNavigator = async (target) => {
+    await navigate(page, target);
+    return page;
+  }
 ): Promise<T[]> {
-  // Paced and retried: a 503 body has no rows, which would pass for an empty
-  // section, and CvLAC answers 5xx when requests arrive too close together.
-  await navigate(page, url);
-  return mapRows(page, section, minCells, map);
+  return collectListPages(url, go, (current) => mapRows(current, section, minCells, map));
 }

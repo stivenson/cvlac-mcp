@@ -103,6 +103,9 @@ const DISPLAY_ONLY_FIELDS = new Set([
   'txt_nme_institucion_fin',
   'txt_nme_programa_acad',
   'nme_inst',
+  // Revista type is derived from the selected catalogue branch and is not
+  // stable on edit.do even when the hidden revista code is preserved.
+  'tpo_revista',
 ]);
 
 export function verifiableFields(fields: Record<string, string>): Record<string, string> {

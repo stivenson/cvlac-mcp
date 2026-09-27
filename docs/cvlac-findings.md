@@ -356,3 +356,71 @@ No son universidades distintas de países distintos: son duplicados del propio c
 Antes de `resolveChoice` se tomaba la primera y salía bien por casualidad. Ahora devuelve `needs_confirmation` con las seis, que es lo correcto: qué fila se elige determina bajo qué organización queda el registro, y no hay deshacer.
 
 Para la suite e2e esto significa que un candidato puede ser `{ label, institucionId }` en vez de solo un nombre. La que usa: **Universidad de los Andes 663**.
+
+## Producción bibliográfica, tesis, jurados y producción técnica (2026-09-27)
+
+Reconocimiento del menú de producción bibliográfica, tesis dirigidas, jurados y producción técnica, obtenido **solo leyendo**: GET al menú, a las listas `all*.do` y a los formularios `create*.do`, y POST a los buscadores de catálogo (que no escriben). No se envió ningún formulario.
+
+### URLs
+
+| Sección (nombre en el MCP) | Lista | Crear → enviar |
+|---|---|---|
+| `articulos` | `EnProdArticulo/all.do` | `EnProdArticulo/create.do` → `insert.do?null` |
+| `libros` | `EnLibro/all.do` | `EnLibro/create.do` → `insert.do` |
+| `capitulos` | `EnProdCapituloLibro/all.do` | `EnProdCapituloLibro/create.do` → `insert.do` |
+| `tesis` | `EnTesisOrientada/all.do` | `EnTesisOrientada/create.do` → `insert.do` |
+| `jurados` | `EnTesisOrientada/all_jurado.do?__tipo=A1` | `EnTesisOrientada/create_jurado.do` → `insert_jurado.do` |
+| `informesTecnicos` | `EnProdTecnologico/all_trabajo_tecnico.do` | `create_trabajo_tecnico.do` → `insert_trabajo_tecnico.do` |
+| `innovacionesProceso` | `EnProdTecnologico/all_proceso.do?__tipo=23` | `create_proceso.do` → `insert_proceso.do` |
+| `productosTecnologicos` | `EnProdTecnologico/all_producto_tecnologico.do?__tipo=22` | `create_producto_tecnologico.do` → `insert_producto_tecnologico.do` |
+| `consultorias` | `EnProdConsultoria/all_consultoria.do` | `create_consultoria.do` → `insert_consultoria.do` |
+| `prototipos` | `EnProdPrototipo/all.do` | `EnProdPrototipo/create.do` → `insert.do` |
+
+Fuera de este reconocimiento (existen en el menú, menos peso o formularios muy distintos): otro artículo publicado (`all_textos.do?__tipo=14`), otros tipos de libro (`EnLibro/all.do?tipo=…`), concepto técnico (exige adjuntar documentos), norma, reglamento, empresa de base tecnológica, diseño industrial y el resto de las ~20 entradas de producción técnica.
+
+### Las listas paginan (afecta también a las secciones ya soportadas)
+
+Las tablas son **JMesa**: `<table class="table" id="<tableId>">`, 15 filas por página por defecto (opciones 15/50/100), y una barra `tr.statusBar` con `Resultados 1 - 9 de 9.`.
+
+- La paginación se controla por URL: `<tableId>_mr_=100` (filas por página) y `<tableId>_p_=2` (página). Verificado: `…all.do?__tipo=2B&cursos_dictados_all_mr_=5` → `Resultados 1 - 5 de 9.`; con `_p_=2` → `Resultados 6 - 9 de 9.`
+- **No guarda estado en la sesión**: después de pedir 5 filas, la URL normal vuelve a mostrar 15.
+- Consecuencia: con más de 15 ítems en una sección, `read_cvlac` devolvía solo 15, el **bloqueo de duplicados no veía la fila 16 en adelante** (un `add` repetido se escribía) y `update`/`delete` no encontraban la fila. Una hoja de vida senior tiene decenas de artículos: se resuelve antes que cualquier otra cosa (recorrer todas las páginas de una lista, ver `src/browser/jmesa.ts`).
+
+### Formularios
+
+**Artículo** (`cod_tipo_producto` radio: `111` Completo, `112` Corto, `113` Revisión, `114` Caso clínico). Campos: `txt_nme_prod`, `txt_pagina_inicial`, `txt_pagina_final`, `sgl_idioma`, `nro_ano_presenta`, `nro_mes_presenta` (sin opción vacía: preselecciona Enero), revista (`txt_nme_revista` readonly + ocultos `cod_revista`, `cod_revista_otro`, `tpo_revista`), `txt_volumen_revista`, `txt_fasciculo_revista`, `txt_serie_revista`, picker de municipio, `tpo_medio_divulgacion` (`I` Papel, `H` Electrónico), `txt_web_producto`, `txt_doi`.
+
+**Libro** (`cod_tipo_producto` oculto = `134`). `txt_nme_prod`, `nro_ano_presenta`* y `nro_mes_presenta`*, `txt_isbn` (la etiqueta dice `ISBN(*)`), `sgl_pais` (tres letras), `tpo_medio_divulgacion` (`I`/`H`), `tpo_publicacion` radio (`ED` Editorial nacional, `EI` Editorial internacional, `BC` Book Citation Index), editorial (tres `txt_nme_editorial` readonly, `cod_editorial` y un oculto **llamado literalmente `null`** para el código de "editorial otra"), área (`nombre_area`* readonly + `cod_area_conocimiento` oculto), `cod_reconocimiento`, y dos `file` de certificados (`file_CLCDO`, `file_CLRI`).
+
+**Capítulo** (`cod_tipo_producto` oculto = `132`). `txt_nme_prod`, `txt_pagina_inicial`, `txt_pagina_final`, `nro_paginas`, año* y mes*, libro de referencia (`txt_nme_libro` readonly + `cod_libro_ref` + oculto `null`), `txt_serie`, `txt_edicion`, `sgl_pais`, `tpo_medio_divulgacion`, `txt_doi`, área (`nombre_area`* + `cod_area_conocimiento`). La lista muestra: `#`, Título del capítulo, Año, Título del libro, Tipo producto, Categoría, Detalles, Editar, Eliminar.
+
+**Trabajo dirigido / tesis** (`cod_tipo_producto` radio: `61` Tesis de doctorado, `62` Maestría o especialidad clínica, `64` Pregrado, `63` Monografía de especialización, `65` Iniciación científica, `66` Otro tipo). `txt_nme_prod`, inicio (`nro_ano_presenta`, `nro_mes_presenta`), fin (`nro_ano_fin`, `nro_mes_fin`), `tpo_orientacion` (`O` Tutor/director principal, `C` Cotutor/codirector, `A` Asesor), `nro_paginas`, institución (`id_institucion` + `nme_inst`), programa (`nme_programa_academico` + `cod_rh_programa_academico`), `valoracion_obt_tesis` (`6` Aprobada, `5` Distinción meritoria, `7` Distinción laureada; solo visible si la fecha fin ya pasó — lo decide `loadForm()`), y `txt_personas` (oculto: los estudiantes se **vinculan** con un diálogo que busca personas con CvLAC, `/cvlac/exclude/ReProductoRecursoHumano/all.do`).
+
+**Jurado** (`cod_tipo_producto` select: `A15` Pregrado, `A14` Especialización, `A16` Especialidad médica, `A11` Maestría, `A12` Doctorado). `tpo_trab_pres` (`PG` Proyecto de grado/tesis, `TG` Trabajo de grado/tesis, `ED` Examen de calificación doctoral), `txt_nme_prod`, año y mes, `sgl_idioma`, `sgl_pais`, `tpo_medio_divulgacion` (8 valores: `I` Papel, `H` Internet, `O` Otro, …), `txt_web_producto`, `txt_doi`, `txt_nme_orientados` (**texto libre**), institución* (`id_institucion` + `txt_nme_institucion`) y programa* (`txt_nme_programa_acad` + `cod_rh_programa_academico`).
+
+**Producción técnica** (informe técnico, innovación en procesos, producto tecnológico, consultoría, prototipo) comparte esqueleto: `txt_nme_prod`, año/mes, municipio, `txt_disponibilidad` (`Restringido` / `No restringido`), institución (`id_institucion` + `nme_inst`), y un bloque `tpo_prod_tiene` (`N` ninguno, `REG` registro, `PAT` patente, `SEC` secreto empresarial) que despliega sub-formularios `reg_*`, `pat_*`, `sec_*`. **Los `sec_*` vienen con `required` aunque estén ocultos.** Además:
+- informe técnico (`cod_tipo_producto` oculto `245`): `sgl_idioma`, `nro_paginas`, `txt_contrato_reg`, y un bloque de proyecto (`cod_proyecto` lista los proyectos del investigador).
+- innovación en procesos (oculto `23`): nombre, año y mes obligatorios; `nro_vlr_contrato`.
+- producto tecnológico (radio `225` Gen clonado, `226` Base de datos de referencia, `227` Colección biológica, `229` Otro): `txt_nme_comercial`.
+- consultoría (radio `241`…`249`): fin (`nro_ano_fin`, `nro_mes_fin`), `nro_duracion`, `txt_contrato_reg`, `sgl_idioma`.
+- prototipo (radio `281` Industrial, `282` Servicios): la institución usa **otro** picker (`txt_search` + `sgl_inst`).
+
+### Catálogos (popups)
+
+| Picker | Buscar (POST) | Cuerpo | Opción | Qué escribe |
+|---|---|---|---|---|
+| Revista | `EnRevista/queryRevista.do?__form=enProdArticuloInsertForm&__nme_revista=txt_nme_revista&__cod_revista=cod_revista&__cod_revista_otro=cod_revista_otro&__tipo_revista=tpo_revista&tpo_busqueda=ES` | `nme_revista=…&txt_issn=…` | `value='0000000000' + código`, texto `(ISSN) NOMBRE` | prefijo `0000000000` → `cod_revista`=resto, `tpo_revista=PD`; si no → `cod_revista_otro`=resto, `tpo_revista=CV` |
+| Libro | `EnLibro/queryLibro.do?__form=enProdCapituloLibroInsertForm&__text=txt_nme_libro&__codlibro=cod_libro_ref` | `nme_libro=…&isbn=…` | `value='codRh#codProducto'` | codRh `0000000000` → `cod_libro_ref`; si no → campo `null` |
+| Editorial | `EnEditorial/queryEditorial.do?__form=enLibroInsertForm&__text=txt_nme_editorial1&__value=cod_editorial` | `nme_editorial=…` | `value='ED…'` o `'CV…'` | `ED` → `cod_editorial`; `CV` → campo `null` |
+| Programa por institución | `EnProgramaAcademico/queryPrograma.do?txt_nme_inst=institucion&__form=<form>&__text=<campo texto>&__value=cod_rh_programa_academico&id_institucion=<id>` | `txt_nme_programa_acad=…` | `value='0000000000-21873'` | el valor **entero** en `cod_rh_programa_academico` |
+| Área | `popup/ReProductoAreaCon/areaAll.do?…&crear=T` | — (catálogo en la página) | nivel 2 o 3 | `cod_area_conocimiento` = código, `nombre_area` = `Gran área - Área - Disciplina` |
+
+Observado:
+- ISSN con guion encuentra la revista; **hay homónimas** (tres revistas con el mismo nombre pero ISSN distintos): por nombre se pregunta, por ISSN se resuelve.
+- La revista no se puede crear desde el popup (solo "revistas especializadas" del catálogo). Sin revista no hay artículo: es un bloqueo, no un campo vacío.
+- El programa **sí** existe para instituciones reales: una institución de prueba devolvió 131 programas. Tesis y jurado no tienen el problema de formación complementaria (donde el buscador solo ofrece lo ya registrado).
+- Libro y editorial ofrecen "Crear libro" / "Crear editorial" (`EnLibroOtro/create.do`, `EnEditorialOtro/create.do`): eso **escribe** en el catálogo. Fuera de alcance: si no está, bloqueo con instrucción.
+
+### Dos fases por registro
+
+Todos los formularios dicen: *"Al guardar esta información se desplegarán las opciones para registrar coautores, palabras clave, áreas de conocimiento y reconocimientos"*. Los coautores no están en el formulario de creación; queda como trabajo futuro con escritura supervisada.

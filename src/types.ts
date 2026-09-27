@@ -141,18 +141,32 @@ export interface PortfolioData {
 
 // ── CvLAC types (scraped from the site) ─────────────────────────────────────
 
-export type CvLACSectionName =
-  | 'formacion'
-  | 'experiencia'
-  | 'cursos'
-  | 'reconocimientos'
-  | 'proyectos'
-  | 'software'
-  | 'eventos'
-  | 'formacionComple'
-  | 'idiomas'
-  | 'lineas'
-  | 'demasTrabajos';
+/** Single source of truth for sections exposed by the MCP. */
+export const SECTION_NAMES = [
+  'formacion',
+  'experiencia',
+  'cursos',
+  'reconocimientos',
+  'proyectos',
+  'software',
+  'eventos',
+  'formacionComple',
+  'idiomas',
+  'lineas',
+  'demasTrabajos',
+  'articulos',
+  'jurados',
+  'tesis',
+  'capitulos',
+  'libros',
+  'informesTecnicos',
+  'innovacionesProceso',
+  'productosTecnologicos',
+  'consultorias',
+  'prototipos',
+] as const;
+
+export type CvLACSectionName = (typeof SECTION_NAMES)[number];
 
 export interface CvLACFormacionItem {
   institution: string;
@@ -188,6 +202,18 @@ export interface CvLACEventoItem {
   name: string;
 }
 
+export interface CvLACArticuloItem {
+  title: string;
+  year: string;
+  revista: string;
+}
+
+export interface CvLACJuradoItem { title: string; year: string }
+export interface CvLACTesisItem { title: string; year: string }
+export interface CvLACCapituloItem { title: string; year: string; book: string }
+export interface CvLACLibroItem { title: string; year: string }
+export interface CvLACTecnicaItem { title: string; year: string }
+
 export interface CvLACData {
   formacion: CvLACFormacionItem[];
   experiencia: CvLACExperienciaItem[];
@@ -200,6 +226,16 @@ export interface CvLACData {
   idiomas: CvLACIdiomaItem[];
   lineas: CvLACLineaItem[];
   demasTrabajos: CvLACDemasTrabajoItem[];
+  articulos: CvLACArticuloItem[];
+  jurados: CvLACJuradoItem[];
+  tesis: CvLACTesisItem[];
+  capitulos: CvLACCapituloItem[];
+  libros: CvLACLibroItem[];
+  informesTecnicos: CvLACTecnicaItem[];
+  innovacionesProceso: CvLACTecnicaItem[];
+  productosTecnologicos: CvLACTecnicaItem[];
+  consultorias: CvLACTecnicaItem[];
+  prototipos: CvLACTecnicaItem[];
 }
 
 // ── Diff types ───────────────────────────────────────────────────────────────
@@ -299,6 +335,115 @@ export interface OtherWorkInput {
   finalidad?: string;
   /** Defaults to defaults.municipio. */
   ciudad?: string;
+}
+
+export interface ArticleInput {
+  title: string;
+  year: string;
+  month?: string;
+  tipo?: string;
+  issn?: string;
+  revista?: string;
+  revistaId?: string;
+  volumen?: string;
+  fasciculo?: string;
+  serie?: string;
+  paginaInicial?: string;
+  paginaFinal?: string;
+  idioma?: string;
+  medio?: string;
+  url?: string;
+  doi?: string;
+  ciudad?: string;
+}
+
+export interface JuryInput {
+  title: string;
+  nivel: string;
+  tipoTrabajo?: string;
+  year: string;
+  month?: string;
+  orientado: string;
+  institucion: string;
+  institucionId?: string;
+  programa: string;
+  programaId?: string;
+  idioma?: string;
+  pais?: string;
+  medio?: string;
+  url?: string;
+  doi?: string;
+}
+
+export interface ThesisInput {
+  title: string;
+  tipo: string;
+  rol?: string;
+  year: string;
+  month?: string;
+  yearEnd?: string;
+  monthEnd?: string;
+  paginas?: string;
+  institucion: string;
+  institucionId?: string;
+  programa: string;
+  programaId?: string;
+  valoracion?: string;
+  estudiantes?: string[];
+}
+
+export interface ChapterInput {
+  title: string;
+  bookTitle: string;
+  isbn?: string;
+  libroId?: string;
+  year: string;
+  month?: string;
+  paginaInicial?: string;
+  paginaFinal?: string;
+  paginas?: string;
+  serie?: string;
+  edicion?: string;
+  pais?: string;
+  medio?: string;
+  doi?: string;
+  area: string;
+  areaId?: string;
+}
+
+export interface BookInput {
+  title: string;
+  isbn: string;
+  year: string;
+  month?: string;
+  editorial: string;
+  editorialId?: string;
+  publicacion?: string;
+  pais?: string;
+  medio?: string;
+  area: string;
+  areaId?: string;
+}
+
+export interface TechnicalInput {
+  title: string;
+  tipo?: string;
+  year: string;
+  month?: string;
+  yearEnd?: string;
+  monthEnd?: string;
+  disponibilidad?: string;
+  institucion?: string;
+  institucionId?: string;
+  /** CvLAC project id required by the technical-report form. */
+  proyectoId?: string;
+  ciudad?: string;
+  idioma?: string;
+  paginas?: string;
+  contrato?: string;
+  duracion?: string;
+  valorContrato?: string;
+  nombreComercial?: string;
 }
 
 /** A research line. Its list view carries only the name. */

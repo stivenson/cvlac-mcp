@@ -79,12 +79,20 @@ son ficticios.
 | Idiomas | Con tus niveles de lectura, escritura, habla y escucha |
 | Líneas de investigación | Activas o no, con su objetivo |
 | Demás trabajos | Otros productos |
+| Artículos | Artículos de revista, con ISSN o revista del catálogo |
+| Libros | Libros con ISBN, editorial y área del catálogo |
+| Capítulos | Capítulos vinculados a un libro y área del catálogo |
+| Tesis dirigidas | Tesis, programa e institución |
+| Jurados | Jurados de trabajos de grado o tesis |
+| Producción técnica | Informes, innovaciones, productos tecnológicos, consultorías y prototipos |
 | Perfil | El texto de presentación, las redes académicas (ORCID, Google Scholar, Scopus…) y las áreas de actuación |
 
 **Todavía no puede:**
 
-- **Artículos, libros, capítulos, tesis dirigidas, jurados ni producción técnica.** Es lo que más
-  pesa en la convocatoria de medición, y es lo siguiente en la lista, pero hoy no está.
+- **Completar automáticamente la segunda fase de un producto:** coautores, palabras clave, áreas,
+  reconocimientos, certificados de libros y estudiantes vinculados en tesis se completan desde la web.
+- **Crear revistas, libros, editoriales, programas o áreas que no existan en los catálogos de CvLAC.**
+  Si un catálogo devuelve varias opciones, te las muestra para que elijas.
 - **Iniciar sesión con una cuenta de nacionalidad extranjera.** Por ahora el inicio de sesión asume
   nacionalidad colombiana.
 - **Tocar tus datos de identificación y direcciones,** ni nada de GrupLAC.
@@ -351,6 +359,8 @@ Habla normal, en español. Algunas ideas:
 | Agregar algo | "Agrega el curso 'Escritura científica' que tomé en 2025, 40 horas" |
 | Corregir algo | "En mi formación, la maestría terminó en 2019, no en 2018" |
 | Borrar algo | "Borra el evento 'Prueba'" — te pedirá confirmación antes |
+| Preparar un artículo desde un DOI | "Busca este DOI y muéstrame los datos antes de registrarlo: 10.…" |
+| Registrar producción | "Registra mi artículo con DOI 10.…" o "Agrega que fui jurado de una tesis de maestría en…" |
 | Actualizar el perfil | "Reemplaza mi texto de perfil por este: …" |
 | Agregar una red académica | "Agrega mi ORCID: https://orcid.org/0000-0000-0000-0000" |
 | Ponerte al día con tu hoja de vida | Pega el texto de tu hoja de vida y di: "Compara esto con mi CvLAC y dime qué falta. No cambies nada todavía." |
@@ -457,8 +467,8 @@ Qué pasa con tus datos, en concreto:
   arrancar y las escribe únicamente en el formulario de inicio de sesión de
   `scienti.minciencias.gov.co`.
 - **No hay servidor intermedio, cuentas, telemetría ni analítica.** cvlac-mcp corre como un programa en tu
-  computador y habla directamente con tu app de IA. Solo se conecta a **CvLAC** y, si configuras un
-  portafolio, a **la dirección que tú le des**.
+  computador y habla directamente con tu app de IA. Solo se conecta a **CvLAC**, al portafolio que
+  configures y a **api.crossref.org** cuando pides la consulta DOI de solo lectura.
 - **Tu asistente de IA sí ve tu hoja de vida.** No tus credenciales —cvlac-mcp nunca las devuelve—, pero
   sí lo que lee de tu CvLAC, porque eso viaja al chat. Tenlo en cuenta al elegir la app si tu hoja de
   vida tiene datos sensibles.
@@ -806,6 +816,7 @@ Si trabajas con Claude Code, la skill `cvlac-sync` del
 | `update_profile` | Escribe perfil, redes y/o áreas (detalles abajo) |
 | `read_portfolio` | Renderiza el portafolio de `PORTFOLIO_URL` y lo une con `portfolio-extra.json` |
 | `diff` | Compara CvLAC contra el portafolio: `missing`, `toUpdate`, `similar`, `upToDate` |
+| `lookup_doi` | Consulta Crossref sin escribir y devuelve un borrador de artículo para revisar |
 | `update_section` | Aplica un cambio puntual: `add`, `update` o `delete` |
 | `sync` | `diff` + aplica `missing` y `toUpdate`. `dry_run:true` para previsualizar. Los `similar` nunca se aplican solos |
 | `screenshot` | Captura la `url` dada, o la última lista, ficha o formulario visitado, recargado tal como está ahora. Rechaza los enlaces de acción (borrar, guardar): en CvLAC abrir uno lo ejecuta |
@@ -817,7 +828,9 @@ que una persona decida o revise.
 ### `update_section`
 
 Secciones: `formacion`, `formacionComple`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`,
-`software`, `eventos`, `idiomas`, `lineas`, `demasTrabajos`. El esquema de `data` de cada una está en
+`software`, `eventos`, `idiomas`, `lineas`, `demasTrabajos`, `articulos`, `libros`, `capitulos`,
+`tesis`, `jurados`, `informesTecnicos`, `innovacionesProceso`, `productosTecnologicos`, `consultorias`,
+`prototipos`. El esquema de `data` de cada una está en
 [`src/schemas.ts`](https://github.com/stivenson/cvlac-mcp/blob/master/src/schemas.ts); un campo mal formado
 se rechaza nombrándolo, antes de abrir el navegador.
 
@@ -1000,9 +1013,11 @@ Es la única suite que toca datos reales: por eso exige `CVLAC_E2E=1` y no corre
 
 ## Estado y roadmap
 
-Las 11 secciones con datos, el perfil, las redes académicas y las áreas de actuación se leen y escriben
-(`add`/`update`/`delete`), con CRUD verificado contra el CvLAC real. El diff y el bloqueo de duplicados
-también.
+Las 11 secciones originales, el perfil, las redes académicas y las áreas de actuación se leen y escriben
+(`add`/`update`/`delete`), con CRUD verificado contra el CvLAC real. También están implementadas las
+secciones de artículos, libros, capítulos, tesis, jurados y producción técnica; su CRUD real queda
+pendiente de una corrida e2e autorizada. El diff y el bloqueo de duplicados también cubren las listas
+completas mediante paginación JMesa.
 
 Detalle completo, limitaciones conocidas y lo que sigue:
 **[ROADMAP](https://github.com/stivenson/cvlac-mcp/blob/master/ROADMAP.md)**.

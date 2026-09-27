@@ -18,6 +18,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 describe('SECTION_SCHEMAS', () => {
   it('covers every section the server accepts', () => {
     expect(Object.keys(SECTION_SCHEMAS).sort()).toEqual([
+      'articulos',
+      'capitulos',
+      'consultorias',
       'cursos',
       'demasTrabajos',
       'eventos',
@@ -25,10 +28,17 @@ describe('SECTION_SCHEMAS', () => {
       'formacion',
       'formacionComple',
       'idiomas',
+      'informesTecnicos',
+      'innovacionesProceso',
+      'jurados',
+      'libros',
       'lineas',
+      'productosTecnologicos',
+      'prototipos',
       'proyectos',
       'reconocimientos',
       'software',
+      'tesis',
     ]);
   });
 

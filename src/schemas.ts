@@ -108,6 +108,65 @@ export const eventoSchema = z.object({
   resumen: z.string().optional(),
 });
 
+const yearSchema = z.string().regex(/^\d{4}$/, 'año de 4 cifras');
+const monthSchema = z.string().regex(/^(0?[1-9]|1[0-2])$/, 'mes 1-12').optional();
+
+const articleSchema = z
+  .object({
+    title: z.string().min(1),
+    year: yearSchema,
+    month: monthSchema,
+    tipo: z.string().optional(),
+    issn: z.string().optional(),
+    revista: z.string().optional(),
+    revistaId: z.string().optional(),
+    volumen: z.string().optional(),
+    fasciculo: z.string().optional(),
+    serie: z.string().optional(),
+    paginaInicial: z.string().optional(),
+    paginaFinal: z.string().optional(),
+    idioma: z.string().optional(),
+    medio: z.string().optional(),
+    url: z.string().optional(),
+    doi: z.string().optional(),
+    ciudad: z.string().optional(),
+  })
+  .refine((item) => Boolean(item.issn || item.revista || item.revistaId), { message: 'hace falta issn o revista' });
+
+const jurySchema = z.object({
+  title: z.string().min(1), nivel: z.string().min(1), tipoTrabajo: z.string().optional(), year: yearSchema,
+  month: monthSchema, orientado: z.string().min(1), institucion: z.string().min(1), institucionId: z.string().optional(),
+  programa: z.string().min(1), programaId: z.string().optional(), idioma: z.string().optional(), pais: z.string().optional(),
+  medio: z.string().optional(), url: z.string().optional(), doi: z.string().optional(),
+});
+
+const thesisSchema = z.object({
+  title: z.string().min(1), tipo: z.string().min(1), rol: z.string().optional(), year: yearSchema, month: monthSchema,
+  yearEnd: yearSchema.optional(), monthEnd: monthSchema, paginas: z.string().regex(/^\d+$/).optional(),
+  institucion: z.string().min(1), institucionId: z.string().optional(), programa: z.string().min(1), programaId: z.string().optional(),
+  valoracion: z.string().optional(), estudiantes: z.array(z.string()).optional(),
+});
+
+const chapterSchema = z.object({
+  title: z.string().min(1), bookTitle: z.string().min(1), isbn: z.string().optional(), libroId: z.string().optional(),
+  year: yearSchema, month: monthSchema, paginaInicial: z.string().optional(), paginaFinal: z.string().optional(),
+  paginas: z.string().optional(), serie: z.string().optional(), edicion: z.string().optional(), pais: z.string().optional(),
+  medio: z.string().optional(), doi: z.string().optional(), area: z.string().min(1), areaId: z.string().optional(),
+});
+
+const bookSchema = z.object({
+  title: z.string().min(1), isbn: z.string().min(10), year: yearSchema, month: monthSchema,
+  editorial: z.string().min(1), editorialId: z.string().optional(), publicacion: z.string().optional(), pais: z.string().optional(),
+  medio: z.string().optional(), area: z.string().min(1), areaId: z.string().optional(),
+});
+
+const technicalSchema = z.object({
+  title: z.string().min(1), tipo: z.string().optional(), year: yearSchema, month: monthSchema,
+  yearEnd: yearSchema.optional(), monthEnd: monthSchema, disponibilidad: z.string().optional(), institucion: z.string().optional(),
+  institucionId: z.string().optional(), proyectoId: z.string().optional(), ciudad: z.string().optional(), idioma: z.string().optional(), paginas: z.string().optional(),
+  contrato: z.string().optional(), duracion: z.string().optional(), valorContrato: z.string().regex(/^\d+$/).optional(), nombreComercial: z.string().optional(),
+});
+
 const idiomaSchema = z.object({
   language: z.string().min(1),
   level: z.string().optional(),
@@ -145,6 +204,16 @@ export const SECTION_SCHEMAS: Record<CvLACSectionName, z.ZodType> = {
   idiomas: idiomaSchema,
   lineas: lineaSchema,
   demasTrabajos: demasTrabajoSchema,
+  articulos: articleSchema,
+  jurados: jurySchema,
+  tesis: thesisSchema,
+  capitulos: chapterSchema,
+  libros: bookSchema,
+  informesTecnicos: technicalSchema,
+  innovacionesProceso: technicalSchema,
+  productosTecnologicos: technicalSchema,
+  consultorias: technicalSchema,
+  prototipos: technicalSchema,
 };
 
 export const portfolioExtraSchema = z.object({
