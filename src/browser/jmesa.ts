@@ -43,53 +43,100 @@ export async function readListState(
   return { tableId: raw.tableId, status: parseStatusBar(raw.status) };
 }
 
+/**
+ * A list walk that could not read every row it says it has.
+ *
+ * Callers that guard against duplicates or look a row up to update/delete it
+ * must never treat this as "not found" — that reads a page 1 miss as "nothing
+ * there" and either creates a duplicate or fails silently on the wrong row.
+ */
+export class IncompleteListError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'IncompleteListError';
+  }
+}
+
+function incomplete(listUrl: string, status: ListPageStatus): IncompleteListError {
+  return new IncompleteListError(
+    `CvLAC mostró ${status.to} de ${status.total} filas de ${listUrl} y no se pudieron leer las demás.`
+  );
+}
+
 /** Navigates to a URL and hands back the page to read — it may be a new one after a re-login. */
 export type ListNavigator = (url: string) => Promise<Page>;
 
+/** A page's status bar, or null when the list has no status bar (it fits on one page, or it is empty). */
+export type ListVisitor<T> = (page: Page, status: ListPageStatus | null) => Promise<T | undefined>;
+
 /**
- * Visits each page of a list until `visit` returns something.
+ * Visits each page of a list until `visit` returns something other than `undefined`
+ * (including `null`, `false` or `0` — anything but `undefined` stops the walk and
+ * is returned as is). `undefined` means "keep going".
  *
  * The list is opened as is first: most sections fit in one page, and that costs
- * nothing extra. Only when the status bar says rows are missing does it walk
- * pages of MAX_ROWS.
+ * nothing extra. Only when its status bar says rows are missing does it walk
+ * pages of MAX_ROWS, driven by each page's own status bar rather than a page
+ * count computed once from the first total — CvLAC does not promise `_mr_` is
+ * honored. Throws `IncompleteListError` rather than quietly returning a partial
+ * read when the walk cannot be trusted to have covered every row.
  */
 export async function visitListPages<T>(
-  page: Page,
   listUrl: string,
   go: ListNavigator,
-  visit: (page: Page) => Promise<T | undefined>
+  visit: ListVisitor<T>
 ): Promise<T | undefined> {
-  let current = await go(listUrl);
-  const { tableId, status } = await readListState(current);
-  if (!tableId || !status || status.to >= status.total) return visit(current);
+  const first = await go(listUrl);
+  const { tableId, status } = await readListState(first);
 
-  const pages = Math.ceil(status.total / MAX_ROWS);
-  log.debug('list spans several pages', { listUrl, total: status.total, pages });
-  for (let p = 1; p <= pages; p++) {
-    current = await go(pagedListUrl(listUrl, tableId, p));
-    const hit = await visit(current);
-    if (hit !== undefined) return hit;
+  if (!status || status.to >= status.total) return visit(first, status);
+
+  if (!tableId) {
+    // A status bar with missing rows but no table id means there is no way to
+    // build a paged URL for this list — this is broken markup, not an empty list.
+    throw incomplete(listUrl, status);
   }
-  return undefined;
+
+  log.debug('list spans several pages', { listUrl, total: status.total });
+  const cap = Math.ceil(status.total / MAX_ROWS) + 2;
+  let last = status;
+  for (let p = 1; p <= cap; p++) {
+    const current = await go(pagedListUrl(listUrl, tableId, p));
+    const state = await readListState(current);
+    if (!state.status) throw incomplete(listUrl, last);
+
+    const hit = await visit(current, state.status);
+    if (hit !== undefined) return hit;
+
+    if (state.status.to >= state.status.total) return undefined;
+    if (state.status.to <= last.to) {
+      // The server ignored or capped `_mr_`: the page did not advance, so walking
+      // further would only repeat rows already seen (or loop forever).
+      throw incomplete(listUrl, state.status);
+    }
+    last = state.status;
+  }
+  throw incomplete(listUrl, last);
 }
 
 /** Reads every page of a list and concatenates what `read` returns for each. */
 export async function collectListPages<T>(
-  page: Page,
   listUrl: string,
   go: ListNavigator,
-  read: (page: Page) => Promise<T[]>
+  read: (page: Page, status: ListPageStatus | null) => Promise<T[]>
 ): Promise<T[]> {
   const out: T[] = [];
-  let expected: number | null = null;
-  await visitListPages(page, listUrl, go, async (current) => {
-    out.push(...(await read(current)));
-    expected = (await readListState(current)).status?.total ?? expected;
+  let total: number | null = null;
+  await visitListPages<never>(listUrl, go, async (current, status) => {
+    out.push(...(await read(current, status)));
+    total = status?.total ?? total;
     return undefined;
   });
-  if (expected !== null && out.length < expected) {
-    // `read` drops rows it cannot map; fewer than the status bar says is worth a line.
-    log.warn('list read fewer rows than it reports', { listUrl, read: out.length, total: expected });
+  if (total !== null && out.length < total) {
+    // `read` maps each row to an item and drops the ones it cannot map; ending up
+    // with fewer items than the status bar's total is a mapping gap, not a paging
+    // one (a paging gap throws instead) — worth a line so it does not go unnoticed.
+    log.warn('list read fewer rows than it reports', { listUrl, read: out.length, total });
   }
   return out;
 }

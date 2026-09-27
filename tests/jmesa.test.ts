@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
-import { parseStatusBar, pagedListUrl, MAX_ROWS, collectListPages, visitListPages } from '../src/browser/jmesa.js';
+import {
+  parseStatusBar,
+  pagedListUrl,
+  MAX_ROWS,
+  collectListPages,
+  visitListPages,
+  IncompleteListError,
+} from '../src/browser/jmesa.js';
 
 describe('parseStatusBar', () => {
   it('reads the range and the total', () => {
@@ -51,6 +58,18 @@ function listHtml(from: number, to: number, total: number): string {
   );
 }
 
+/**
+ * A JMesa page with a status bar (rows missing) but no `table.table[id]` — broken markup.
+ * The status bar still needs a real `<table>` around it: a bare `<tr>` outside one is
+ * dropped by the HTML parser before any selector ever sees it.
+ */
+function noTableHtml(to: number, total: number): string {
+  return `<table><tbody><tr class="statusBar"><td>Resultados 1 - ${to} de ${total}.</td></tr></tbody></table>`;
+}
+
+/** The empty-list markup JMesa renders instead of a table and a status bar. */
+const EMPTY_LIST_HTML = '<div>Ningún dato disponible en esta tabla</div>';
+
 describe('collectListPages / visitListPages', () => {
   let browser: Browser;
   let page: Page;
@@ -69,6 +88,20 @@ describe('collectListPages / visitListPages', () => {
       const to = Math.min(p * mr, TOTAL);
       return route.fulfill({ contentType: 'text/html', body: listHtml(from, to, TOTAL) });
     });
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnSmall/**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: listHtml(1, 3, 3) })
+    );
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnEmpty/**', (route) => {
+      visited.push(new URL(route.request().url()).search);
+      return route.fulfill({ contentType: 'text/html', body: EMPTY_LIST_HTML });
+    });
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnBroken/**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: noTableHtml(15, 212) })
+    );
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnCapped/**', (route) => {
+      // Ignores both `_mr_` and `_p_`: always the same first 15 rows of 212.
+      return route.fulfill({ contentType: 'text/html', body: listHtml(1, 15, 212) });
+    });
   }, 60000);
 
   afterAll(async () => {
@@ -84,30 +117,66 @@ describe('collectListPages / visitListPages', () => {
 
   it('reads every row of a list longer than one page', async () => {
     visited.length = 0;
-    const all = await collectListPages(page, LIST, go, titles);
+    const all = await collectListPages(LIST, go, titles);
     expect(all).toHaveLength(212);
     expect(all[0]).toBe('Item 1');
     expect(all[211]).toBe('Item 212');
     // First the plain list, then three pages of 100.
-    expect(visited).toHaveLength(4);
-    expect(visited.every((s, i) => i === 0 || s.includes('__tipo=X'))).toBe(true);
+    expect(visited).toEqual([
+      '?__tipo=X',
+      '?__tipo=X&fake_all_mr_=100&fake_all_p_=1',
+      '?__tipo=X&fake_all_mr_=100&fake_all_p_=2',
+      '?__tipo=X&fake_all_mr_=100&fake_all_p_=3',
+    ]);
   });
 
   it('stops at the page where the visitor finds what it wants', async () => {
     visited.length = 0;
-    const hit = await visitListPages(page, LIST, go, async (p) => {
+    const hit = await visitListPages(LIST, go, async (p) => {
       const t = await titles(p);
       return t.includes('Item 150') ? 'found' : undefined;
     });
     expect(hit).toBe('found');
-    expect(visited).toHaveLength(3); // plain list, page 1, page 2
+    expect(visited).toEqual([
+      '?__tipo=X',
+      '?__tipo=X&fake_all_mr_=100&fake_all_p_=1',
+      '?__tipo=X&fake_all_mr_=100&fake_all_p_=2',
+    ]);
+  });
+
+  it('returns undefined after walking every page when the visitor never finds it', async () => {
+    visited.length = 0;
+    const hit = await visitListPages(LIST, go, async () => undefined);
+    expect(hit).toBeUndefined();
+    expect(visited).toEqual([
+      '?__tipo=X',
+      '?__tipo=X&fake_all_mr_=100&fake_all_p_=1',
+      '?__tipo=X&fake_all_mr_=100&fake_all_p_=2',
+      '?__tipo=X&fake_all_mr_=100&fake_all_p_=3',
+    ]);
   });
 
   it('reads a one-page list once', async () => {
-    await page.route('https://scienti.minciencias.gov.co/cvlac/EnSmall/**', (route) =>
-      route.fulfill({ contentType: 'text/html', body: listHtml(1, 3, 3) })
-    );
-    const all = await collectListPages(page, 'https://scienti.minciencias.gov.co/cvlac/EnSmall/all.do', go, titles);
+    const all = await collectListPages('https://scienti.minciencias.gov.co/cvlac/EnSmall/all.do', go, titles);
     expect(all).toEqual(['Item 1', 'Item 2', 'Item 3']);
+  });
+
+  it('reads an empty list once and finds nothing', async () => {
+    visited.length = 0;
+    const all = await collectListPages('https://scienti.minciencias.gov.co/cvlac/EnEmpty/all.do', go, titles);
+    expect(all).toEqual([]);
+    expect(visited).toEqual(['']);
+  });
+
+  it('throws when the status bar reports missing rows but there is no table id', async () => {
+    await expect(
+      collectListPages('https://scienti.minciencias.gov.co/cvlac/EnBroken/all.do', go, titles)
+    ).rejects.toThrow(IncompleteListError);
+  });
+
+  it('throws when the server ignores paging and the page never advances', async () => {
+    await expect(
+      collectListPages('https://scienti.minciencias.gov.co/cvlac/EnCapped/all.do', go, titles)
+    ).rejects.toThrow(IncompleteListError);
   });
 });
