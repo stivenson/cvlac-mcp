@@ -63,24 +63,24 @@ describe('pickPrograma', () => {
 
 describe('pickMunicipio', () => {
   const items = [
-    { id: 827, txtNmeMunicipio: 'CÚCUTA' },
+    { id: 812, txtNmeMunicipio: 'SANTA ÚRSULA' },
     { id: 974, txtNmeMunicipio: 'BOGOTÁ, D.C.' },
   ];
 
   it('finds the municipality by name, not by DANE code', () => {
-    expect(pickMunicipio(items, 'Cúcuta')?.id).toBe(827);
+    expect(pickMunicipio(items, 'Santa Úrsula')?.id).toBe(812);
   });
 
   it('ignores accents, as the search endpoint does', () => {
-    expect(pickMunicipio(items, 'Cucuta')?.id).toBe(827);
+    expect(pickMunicipio(items, 'Santa Ursula')?.id).toBe(812);
   });
 
   it('refuses a name it cannot find rather than taking the first row', () => {
-    expect(pickMunicipio(items, 'Pamplona')).toBeNull();
+    expect(pickMunicipio(items, 'Villa Ejemplo')).toBeNull();
   });
 
   it('handles an empty result', () => {
-    expect(pickMunicipio([], 'Cúcuta')).toBeNull();
+    expect(pickMunicipio([], 'Santa Úrsula')).toBeNull();
   });
 });
 
@@ -96,16 +96,16 @@ describe('needsProgramaAcademico', () => {
 });
 
 // CvLAC's JSON endpoints answer in latin1 and match on what they receive, so a
-// UTF-8 "Cúcuta" reaches them as "CÃºcuta" and finds nothing. Asking without
+// UTF-8 "Santa Úrsula" reaches them as "CÃºcuta" and finds nothing. Asking without
 // accents finds the row; the accents still matter when picking among results.
 describe('catalogueQuery', () => {
   it('drops the accents CvLAC cannot receive', () => {
-    expect(catalogueQuery('Cúcuta')).toBe('Cucuta');
+    expect(catalogueQuery('Santa Úrsula')).toBe('Santa Ursula');
     expect(catalogueQuery('Bogotá, D.C.')).toBe('Bogota, D.C.');
   });
 
   it('leaves a plain name alone', () => {
-    expect(catalogueQuery('Pamplona')).toBe('Pamplona');
+    expect(catalogueQuery('Villa Ejemplo')).toBe('Villa Ejemplo');
   });
 
   it('keeps the ñ, which latin1 does carry', () => {
@@ -158,19 +158,19 @@ describe('cvlacDateString', () => {
 const DEPTOS_XML =
   '<departamentos>' +
   '<departamento><id>NA</id><name>NARIÑO</name><pais>COL</pais></departamento>' +
-  '<departamento><id>NO</id><name>NORTE DE SANTANDER</name><pais>COL</pais></departamento>' +
+  '<departamento><id>DE</id><name>DEPARTAMENTO EJEMPLO</name><pais>COL</pais></departamento>' +
   '</departamentos>';
 
 const MUNICIPIOS_XML =
   '<municipios>' +
   '<municipio><id>90811</id><name>No Informado</name><cod_rh>0000000000</cod_rh> </municipio>' +
   '<municipio><id>1030</id><name>VILLA DEL ROSARIO</name><cod_rh>0000000000</cod_rh> </municipio>' +
-  '<municipio><id>991</id><name>CÚCUTA</name><cod_rh>0000000000</cod_rh> </municipio>' +
+  '<municipio><id>940</id><name>SANTA ÚRSULA</name><cod_rh>0000000000</cod_rh> </municipio>' +
   '</municipios>';
 
 describe('parseDepartamentosXml', () => {
   it('reads the sigla CvLAC asks for by name', () => {
-    expect(pickByName(parseDepartamentosXml(DEPTOS_XML), 'NORTE DE SANTANDER')?.id).toBe('NO');
+    expect(pickByName(parseDepartamentosXml(DEPTOS_XML), 'DEPARTAMENTO EJEMPLO')?.id).toBe('DE');
   });
 
   it('matches a department written without accents', () => {
@@ -180,29 +180,29 @@ describe('parseDepartamentosXml', () => {
 
 describe('parseMunicipiosXml', () => {
   it('reads the id the form stores, which is none of the other numberings', () => {
-    const cucuta = pickByName(parseMunicipiosXml(MUNICIPIOS_XML), 'Cúcuta');
-    expect(cucuta?.id).toBe('991');
-    expect(cucuta?.codRh).toBe('0000000000');
+    const santaUrsula = pickByName(parseMunicipiosXml(MUNICIPIOS_XML), 'Santa Úrsula');
+    expect(santaUrsula?.id).toBe('940');
+    expect(santaUrsula?.codRh).toBe('0000000000');
   });
 
   it('keeps the accented name, which is what the form displays', () => {
-    expect(pickByName(parseMunicipiosXml(MUNICIPIOS_XML), 'Cucuta')?.name).toBe('CÚCUTA');
+    expect(pickByName(parseMunicipiosXml(MUNICIPIOS_XML), 'Santa Ursula')?.name).toBe('SANTA ÚRSULA');
   });
 
   it('does not settle for "No Informado" when the name is unknown', () => {
-    expect(pickByName(parseMunicipiosXml(MUNICIPIOS_XML), 'Pamplona')).toBeNull();
+    expect(pickByName(parseMunicipiosXml(MUNICIPIOS_XML), 'Villa Ejemplo')).toBeNull();
   });
 });
 
 describe('municipioDisplayName', () => {
   it('spells the location the way the picker writes it', () => {
-    expect(municipioDisplayName('Colombia', 'NORTE DE SANTANDER', 'CÚCUTA')).toBe(
-      'Colombia - NORTE DE SANTANDER - CÚCUTA'
+    expect(municipioDisplayName('Colombia', 'DEPARTAMENTO EJEMPLO', 'SANTA ÚRSULA')).toBe(
+      'Colombia - DEPARTAMENTO EJEMPLO - SANTA ÚRSULA'
     );
   });
 
   it('leaves the department out when there is none', () => {
-    expect(municipioDisplayName('Colombia', null, 'CÚCUTA')).toBe('Colombia - CÚCUTA');
+    expect(municipioDisplayName('Colombia', null, 'SANTA ÚRSULA')).toBe('Colombia - SANTA ÚRSULA');
   });
 });
 
@@ -228,26 +228,25 @@ describe('countryOption', () => {
   });
 });
 
-// Searching an institution by name returns 193 rows for "UNIVERSIDAD SIMON
-// BOLIVAR": the one in Venezuela, the Andina, sedes, a teachers' union and an
-// employees' fund. Taking the first partial match attaches a record to whichever
+// Searching a common university name returned 193 rows in the live catalogue:
+// a namesake in Venezuela, sedes, a teachers' union and an employees' fund. Taking the first partial match attaches a record to whichever
 // of them CvLAC happened to list first.
 describe('resolveChoice', () => {
   const rows = [
-    { id: 42724, name: 'Sindicato de Profesores Universidad Simón Bolívar' },
-    { id: 603, name: 'UNIVERSIDAD SIMÓN BOLÍVAR' },
-    { id: 20324, name: 'Universidad Simón Bolívar - Venezuela' },
+    { id: 42000, name: 'Sindicato de Profesores Universidad Julián Pérez' },
+    { id: 6031, name: 'UNIVERSIDAD JULIÁN PÉREZ' },
+    { id: 20000, name: 'Universidad Julián Pérez - Venezuela' },
   ];
   const label = (r: { name: string }) => r.name;
 
   it('settles on the row whose name matches exactly, wherever it sits', () => {
-    const out = resolveChoice(rows, 'Universidad Simon Bolivar', label);
+    const out = resolveChoice(rows, 'Universidad Julian Perez', label);
     expect(out.kind).toBe('exact');
-    expect(out.kind === 'exact' && out.item.id).toBe(603);
+    expect(out.kind === 'exact' && out.item.id).toBe(6031);
   });
 
   it('asks when only partial matches are left', () => {
-    const out = resolveChoice(rows, 'Simón Bolívar', label);
+    const out = resolveChoice(rows, 'Julián Pérez', label);
     expect(out.kind).toBe('ambiguous');
     expect(out.kind === 'ambiguous' && out.options.length).toBe(3);
   });
@@ -255,7 +254,7 @@ describe('resolveChoice', () => {
   it('takes a lone partial match without asking', () => {
     const out = resolveChoice(rows, 'Venezuela', label);
     expect(out.kind).toBe('exact');
-    expect(out.kind === 'exact' && out.item.id).toBe(20324);
+    expect(out.kind === 'exact' && out.item.id).toBe(20000);
   });
 
   it('reports nothing matched rather than offering the whole list', () => {

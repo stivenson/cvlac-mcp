@@ -40,9 +40,9 @@ describe('readTimelineEntries', () => {
     const entries = await readTimelineEntries(page);
     expect(entries).toHaveLength(2);
     expect(entries[0]).toMatchObject({
-      date: 'Febrero 2024 - Actualidad',
-      title: 'Universidad de los Andes',
-      subtitle: 'Maestría en Inteligencia Artificial',
+      date: 'Agosto 2019 - Actualidad',
+      title: 'Universidad Ejemplo',
+      subtitle: 'Maestría en Estadística Aplicada',
     });
   });
 
@@ -50,16 +50,16 @@ describe('readTimelineEntries', () => {
     await page.setContent(TIMELINE);
     const entry = (await readTimelineEntries(page))[1];
     expect(entry.bullets).toEqual([
-      'Desarrollo de productos bancarios en la nube',
-      'Manejo de DevOps y arquitectura',
+      'Tableros de indicadores para hospitales',
+      'Limpieza y validación de bases de datos',
     ]);
-    expect(entry.tags).toEqual(['Python', 'AWS']);
+    expect(entry.tags).toEqual(['R', 'SQL']);
   });
 
   it('reads the course lines, icon excluded', async () => {
     await page.setContent(COURSES);
     expect(await readListEntries(page)).toEqual([
-      'Curso Práctico de Cloud Computing (Platzi) - Aprobado abril 2021',
+      'Curso de Análisis de Datos (Plataforma Ejemplo) - Aprobado marzo 2020',
       'Taller de Optimización (Universidad Ejemplo)',
     ]);
   });
@@ -69,17 +69,17 @@ describe('toEducation', () => {
   it('reads the institution from the title and the degree from the subtitle', () => {
     expect(
       toEducation({
-        date: 'Agosto 2009 - Julio 2014',
-        title: 'Universidad Simón Bolívar',
-        subtitle: 'Ingeniería de Sistemas',
-        bullets: ['Exaltación por el estudio de Gramalote'],
+        date: 'Agosto 2010 - Julio 2015',
+        title: 'Universidad Ejemplo del Norte',
+        subtitle: 'Licenciatura en Biología',
+        bullets: ['Distinción por el censo de Villaejemplo'],
         tags: [],
       })
     ).toEqual({
-      institution: 'Universidad Simón Bolívar',
-      degree: 'Ingeniería de Sistemas',
-      period: 'Agosto 2009 - Julio 2014',
-      description: 'Exaltación por el estudio de Gramalote',
+      institution: 'Universidad Ejemplo del Norte',
+      degree: 'Licenciatura en Biología',
+      period: 'Agosto 2010 - Julio 2015',
+      description: 'Distinción por el censo de Villaejemplo',
     });
   });
 });
@@ -88,17 +88,17 @@ describe('toExperience', () => {
   it('reads company, role and modality, keeping bullets and tags', () => {
     expect(
       toExperience({
-        date: 'Marzo 2021 - Julio 2025',
+        date: 'Enero 2016 - Junio 2019',
         title: 'Empresa Ejemplo S.A.',
-        subtitle: 'Full Stack - Senior Developer',
-        bullets: ['semi-presencial', 'Productos bancarios'],
+        subtitle: 'Analista de Datos',
+        bullets: ['semi-presencial', 'Tableros hospitalarios'],
         tags: ['Python'],
         modality: 'semi-presencial',
       })
     ).toMatchObject({
       company: 'Empresa Ejemplo S.A.',
-      role: 'Full Stack - Senior Developer',
-      period: 'Marzo 2021 - Julio 2025',
+      role: 'Analista de Datos',
+      period: 'Enero 2016 - Junio 2019',
       modality: 'semi-presencial',
       technologies: ['Python'],
     });
@@ -109,9 +109,9 @@ describe('toExperience', () => {
 // the month it was approved.
 describe('parseCourseLine', () => {
   it('separates the name, the provider and the date', () => {
-    expect(parseCourseLine('Curso Práctico de Cloud Computing (Platzi) - Aprobado abril 2021')).toEqual({
-      name: 'Curso Práctico de Cloud Computing (Platzi)',
-      date: '2021-04',
+    expect(parseCourseLine('Curso de Análisis de Datos (Plataforma Ejemplo) - Aprobado marzo 2020')).toEqual({
+      name: 'Curso de Análisis de Datos (Plataforma Ejemplo)',
+      date: '2020-03',
       type: 'curso',
     });
   });
@@ -152,7 +152,7 @@ describe('readAchievements and readSkillGroups', () => {
   it('reads each achievement card as a title and its description', async () => {
     await page.setContent(readFileSync(join(FIXTURES, 'dashboard.html'), 'utf8'));
     expect(await readAchievements(page)).toEqual([
-      { title: 'Exaltación Académica', description: 'Mención por trabajo social en un municipio.' },
+      { title: 'Distinción Académica', description: 'Mención por trabajo social en un municipio.' },
       { title: 'Primer puesto hackatón', description: 'Ganador de la categoría de IA aplicada.' },
     ]);
   });

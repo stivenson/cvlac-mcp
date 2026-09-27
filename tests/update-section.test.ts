@@ -200,7 +200,7 @@ describe('listRowLabels', () => {
     expect(await listRowLabels(page, 5)).toEqual([
       'Maestría en Ciencia de Datos',
       'Ingeniería de Sistemas',
-      'Técnico en Mantenimiento Electrónico',
+      'Técnico en Gestión Agropecuaria',
     ]);
   });
 

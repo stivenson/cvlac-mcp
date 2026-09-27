@@ -12,7 +12,7 @@ const BUNDLE = {
     {institution:"Universidad de Antioquia",degree:"Ingeniería de Sistemas",period:"Agosto 2010 - Julio 2015",description:"Mención"}
   `,
   experience: `
-    {company:"Empresa Ejemplo (Grupo Ficticio)",role:"Full Stack - Senior Developer",period:"Marzo 2021 - Julio 2025",modality:"semi-presencial",description:["Desarrollo de productos"],technologies:["Python"]}
+    {company:"Empresa Ejemplo (Grupo Ficticio)",role:"Analista de Datos",period:"Enero 2016 - Junio 2019",modality:"semi-presencial",description:["Desarrollo de productos"],technologies:["Python"]}
   `,
   courses: `
     {name:"Taller de Introducción a la Programación (UNAL)",emoji:"📋",color:"#1976D2",date:"2024-11",type:"taller"}

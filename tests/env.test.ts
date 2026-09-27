@@ -38,7 +38,7 @@ describe('resolveEnvFile', () => {
   });
 });
 
-const LINES = "CVLAC_NOMBRE='Iván'\nCVLAC_CEDULA=1090123456\nCVLAC_PASSWORD='cl$ve#1'\n";
+const LINES = "CVLAC_NOMBRE='Iván'\nCVLAC_CEDULA=1234567890\nCVLAC_PASSWORD='cl$ve#1'\n";
 
 describe('decodeEnvFile', () => {
   // What PowerShell 5.1 writes with Out-File or `>`. Read as UTF-8, dotenv found
@@ -89,7 +89,7 @@ describe('loadEnvFile', () => {
     const env: NodeJS.ProcessEnv = { CVLAC_NOMBRE: 'Desde el editor' };
     loadEnvFile(path, env);
     expect(env.CVLAC_NOMBRE).toBe('Desde el editor');
-    expect(env.CVLAC_CEDULA).toBe('1090123456');
+    expect(env.CVLAC_CEDULA).toBe('1234567890');
   });
 
   it('reports a missing file instead of throwing', () => {

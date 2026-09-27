@@ -19,8 +19,8 @@ export function normalize(s: string): string {
     .trim();
 }
 
-/** Normalized "core" name: drops parenthetical qualifiers like "(Platzi)" and trailing
- *  " - Aprobado abril 2021" style suffixes so the same item matches across both sources. */
+/** Normalized "core" name: drops parenthetical qualifiers like "(en línea)" and trailing
+ *  " - Aprobado marzo 2020" style suffixes so the same item matches across both sources. */
 function coreName(s: string): string {
   return normalize(
     s
@@ -233,8 +233,8 @@ export function computeDiff(portfolio: PortfolioData, cvlac: CvLACData): DiffRes
 
   // ── Experiencia profesional ──────────────────────────────────────────────
   // Intentionally excluded from the diff (verified live, see docs/cvlac-findings.md):
-  // CvLAC company names differ heavily from the portfolio (e.g. "MO TECNOLOGIAS COLOMBIA
-  // SAS" vs "Mo Technologies (Mastercard)") so name-matching yields false "missing", and
+  // CvLAC company names differ heavily from the portfolio (the legal name, e.g.
+  // "EMPRESA EJEMPLO SAS", vs a trade name like "Ejemplo Tech (Banco X)") so name-matching yields false "missing", and
   // the role/cargo is not exposed in the list view. Experiencia is managed manually.
 
   // ── Cursos de corta duración ─────────────────────────────────────────────

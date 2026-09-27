@@ -20,8 +20,8 @@ const portfolioData: PortfolioData = {
   experience: [
     {
       company: 'Empresa Ejemplo (Grupo Ficticio)',
-      role: 'Full Stack - Senior Developer',
-      period: 'Mar 2021 - Jul 2025',
+      role: 'Analista de Datos',
+      period: 'Ene 2016 - Jun 2019',
       modality: 'semi-presencial',
       description: [],
     },
@@ -318,16 +318,16 @@ describe('computeDiff — items CvLAC holds under another section or wording', (
       only({
         achievements: [
           {
-            title: 'Exaltación Académica',
-            description: 'Mención por trabajo social en Villaejemplo. Proyecto que unió técnica y propósito.',
+            title: 'Distinción Académica',
+            description: 'Mención por trabajo social en Villaejemplo. Trabajo de campo con la comunidad.',
           },
         ],
       }),
       cvlac({
         reconocimientos: [
           {
-            title: 'Exaltación por su apoyo en la gestión del proyecto de estudio socioeconómico de Villaejemplo',
-            year: '2012',
+            title: 'Distinción por su apoyo en la gestión del censo comunitario de Villaejemplo',
+            year: '2016',
           },
         ],
       })
@@ -342,9 +342,9 @@ describe('computeDiff — items CvLAC holds under another section or wording', (
   it('does not tie two awards that share nothing but their kind', () => {
     const result = computeDiff(
       only({
-        achievements: [{ title: 'Exaltación Académica', description: 'Por un trabajo en Bogotá.' }],
+        achievements: [{ title: 'Distinción Académica', description: 'Por un trabajo en Bogotá.' }],
       }),
-      cvlac({ reconocimientos: [{ title: 'Exaltación deportiva en natación', year: '2010' }] })
+      cvlac({ reconocimientos: [{ title: 'Distinción deportiva en natación', year: '2010' }] })
     );
     expect(result.missing).toHaveLength(1);
   });

@@ -993,7 +993,7 @@ Es la única suite que toca datos reales: por eso exige `CVLAC_E2E=1` y no corre
 - **Un formulario no guarda un campo:** varios campos de CvLAC son `readonly` y se llenan por JS. Usa
   `inspect_form` para ver los nombres reales, `CVLAC_HEADLESS=false` para ver el navegador y
   `CVLAC_LOG_LEVEL=debug` para el detalle de cada campo.
-- **Falsos faltantes en `diff`:** `nameMatches()` normaliza tildes y sufijos (`(Platzi)`,
+- **Falsos faltantes en `diff`:** `nameMatches()` normaliza tildes y sufijos (`(en línea)`,
   ` - Aprobado ...`); la experiencia está fuera del diff a propósito.
 
 <a id="estado"></a>

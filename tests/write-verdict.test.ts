@@ -102,7 +102,7 @@ describe('changedFields', () => {
   });
 
   it('counts a field the form did not have before as changed', () => {
-    expect(changedFields({}, { txt_lugar: 'Cúcuta' })).toEqual({ txt_lugar: 'Cúcuta' });
+    expect(changedFields({}, { txt_lugar: 'Santa Úrsula' })).toEqual({ txt_lugar: 'Santa Úrsula' });
   });
 
   it('returns nothing when the filler changed nothing', () => {
@@ -139,12 +139,12 @@ describe('verificationVerdict', () => {
 
 // Each of these is the readable half of a picker whose hidden code is what the
 // form stores, and CvLAC re-renders it its own way: a municipality submitted as
-// "Colombia - NORTE DE SANTANDER - CÚCUTA" comes back as "CÚCUTA". Comparing
+// "Colombia - DEPARTAMENTO EJEMPLO - SANTA ÚRSULA" comes back as "SANTA ÚRSULA". Comparing
 // them reported three saved updates as failures.
 describe('verifiableFields', () => {
   it('drops the display half of a picker', () => {
-    expect(verifiableFields({ cod_municipio_text: 'Colombia - X - CÚCUTA', cod_municipio: '991' })).toEqual({
-      cod_municipio: '991',
+    expect(verifiableFields({ cod_municipio_text: 'Colombia - X - SANTA ÚRSULA', cod_municipio: '940' })).toEqual({
+      cod_municipio: '940',
     });
   });
 
@@ -163,7 +163,7 @@ describe('verifiableFields', () => {
   // The country input of the location picker carries name="null" — CvLAC's own
   // slip. The form does not keep it, so it disagreed with every write.
   it('drops the input CvLAC named "null"', () => {
-    expect(verifiableFields({ null: 'COL', cod_municipio: '991' })).toEqual({ cod_municipio: '991' });
+    expect(verifiableFields({ null: 'COL', cod_municipio: '940' })).toEqual({ cod_municipio: '940' });
   });
 
   it('keeps ordinary fields', () => {
@@ -278,20 +278,20 @@ describe('blockedRefusal', () => {
 // row is a record attached to another organisation, and there is no undo.
 describe('choiceConfirmation', () => {
   const options = [
-    { id: '603', label: 'UNIVERSIDAD SIMÓN BOLÍVAR' },
-    { id: '20324', label: 'Universidad Simón Bolívar - Venezuela' },
+    { id: '6031', label: 'UNIVERSIDAD JULIÁN PÉREZ' },
+    { id: '20000', label: 'Universidad Julián Pérez - Venezuela' },
   ];
 
   it('writes nothing and returns needs_confirmation', () => {
-    const result = choiceConfirmation('institución', 'Universidad Simón Bolívar', options);
+    const result = choiceConfirmation('institución', 'Universidad Julián Pérez', options);
     expect(result.success).toBe(false);
     expect(result.status).toBe('needs_confirmation');
   });
 
   it('carries the candidates, with the id needed to pick one', () => {
-    const result = choiceConfirmation('institución', 'Universidad Simón Bolívar', options);
+    const result = choiceConfirmation('institución', 'Universidad Julián Pérez', options);
     expect(result.choices).toEqual([
-      { field: 'institución', value: 'Universidad Simón Bolívar', options },
+      { field: 'institución', value: 'Universidad Julián Pérez', options },
     ]);
   });
 

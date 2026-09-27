@@ -70,8 +70,8 @@ describe('extractors', () => {
   it('reads the research lines by name', async () => {
     await page.setContent(readFileSync(join(FIXTURES, 'lista-lineas.html'), 'utf8'));
     expect(await extractLineasFromPage(page)).toEqual([
-      { name: 'Inteligencia Artificial.' },
-      { name: 'Tecnologías de La información' },
+      { name: 'Ecología de suelos.' },
+      { name: 'Salud de La comunidad rural' },
     ]);
   });
 

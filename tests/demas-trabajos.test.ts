@@ -52,7 +52,7 @@ describe('extractDemasTrabajosFromPage', () => {
   it('reads the name and the year of every work', async () => {
     await page.setContent(readFileSync(join(FIXTURES, 'lista-demas-trabajos.html'), 'utf8'));
     expect(await extractDemasTrabajosFromPage(page)).toEqual([
-      { name: 'Portal de ejemplo para gestión de tutorías', year: '2026' },
+      { name: 'Cartilla de ejemplo para huertas escolares', year: '2026' },
       { name: 'Guía técnica de ejemplo', year: '2019' },
     ]);
   });

@@ -213,7 +213,7 @@ async function setInstitucionFields(
  *
  * Three numberings exist and only one is the code the form stores: the DANE
  * code wrote Sketty (Wales), the id from the JSON search wrote Neiva, and this
- * cascade — country, department, municipality — writes Cúcuta. The JSON search
+ * cascade — country, department, municipality — writes the right one. The JSON search
  * is still the cheapest way to learn which department a town belongs to, so it
  * is used for that and nothing else.
  */

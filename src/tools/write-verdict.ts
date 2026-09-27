@@ -90,7 +90,7 @@ export function verificationVerdict(
  *
  * Each is the readable half of a picker: the form keeps the hidden code beside
  * it and re-renders the caption its own way, so a municipality submitted as
- * "Colombia - NORTE DE SANTANDER - CÚCUTA" reads back as "CÚCUTA". Comparing
+ * "Colombia - <DEPARTAMENTO> - <MUNICIPIO>" reads back as "<MUNICIPIO>". Comparing
  * captions reported three updates as failed that CvLAC had stored; the codes
  * next to them are compared instead, and those are exact.
  */

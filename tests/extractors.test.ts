@@ -130,7 +130,7 @@ describe('name-only extractors', () => {
     const items = await extractEventosFromPage(page);
     expect(items.map((i) => i.name)).toEqual([
       'Congreso Nacional de Ingeniería',
-      'Encuentro Regional de Investigación',
+      'Simposio de Biología Andina',
     ]);
   });
 });

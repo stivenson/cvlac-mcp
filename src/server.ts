@@ -149,8 +149,8 @@ export function createServer(): McpServer {
         'An "add" whose item resembles an existing entry returns status "needs_confirmation" ' +
         'and writes nothing; resolve it with action:"update" or repeat with confirm_duplicate:true. ' +
         'A "delete" also writes nothing until it is repeated with confirm_delete:true. ' +
-        'A picker whose search matched several rows — CvLAC lists 193 institutions for ' +
-        '"Universidad Simon Bolivar" — also returns needs_confirmation, with the candidates in ' +
+        'A picker whose search matched several rows — a common university name can match close ' +
+        'to 200 institutions in CvLAC — also returns needs_confirmation, with the candidates in ' +
         '"choices"; repeat with the chosen id in data.institucionId.',
       inputSchema: {
         section: sectionSchema,

@@ -132,8 +132,7 @@ const PLAN = {
     // The runner picks the first candidate that collides with no real row.
     candidates: [
       { label: 'Universidad de los Andes', institucionId: '663' },
-      { label: 'Universidad Simón Bolívar', institucionId: '603' },
-      { label: 'Universidad Francisco de Paula Santander' },
+      { label: 'Universidad Nacional de Colombia' },
     ],
     add: { company: '', role: 'Prueba automatizada', period: '2019 - 2020' },
     update: { period: '2019 - 2021' },
@@ -190,8 +189,8 @@ const PLAN = {
       startDate: '01/03/2024',
       endDate: '01/03/2024',
       lugar: 'Prueba automatizada',
-      ciudad: 'Cúcuta',
-      codMunicipio: '54001',
+      ciudad: 'Bogotá',
+      codMunicipio: '11001',
       tipoEvento: 'TA',
       ambito: 'N',
       rol: 'PO',

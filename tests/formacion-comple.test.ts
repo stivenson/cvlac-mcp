@@ -10,7 +10,7 @@ describe('inferNivelComple', () => {
   it.each([
     ['Diplomado en Desarrollo de aplicaciones móviles', '8'],
     ['Curso de extensión en Estadística', '8'],
-    ['Curso de corta duración en Soldadura', 'F'],
+    ['Curso de corta duración en Carpintería', 'F'],
     ['Taller de programación web', 'F'],
     ['Seminario de actualización docente', 'F'],
     ['MBA', 'E'],

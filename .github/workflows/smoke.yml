@@ -75,7 +75,7 @@ jobs:
         run: |
           $contenido = @'
           CVLAC_NOMBRE='Jos{0}'
-          CVLAC_CEDULA='1090123456'
+          CVLAC_CEDULA='1234567890'
           CVLAC_PASSWORD='cl$v{0}#1'
           '@ -f [char]0xE9
           [IO.File]::WriteAllText("$env:RUNNER_TEMP\readme.env", $contenido)
@@ -91,7 +91,7 @@ jobs:
           # ASCII only, with the accents as escapes: a console code page cannot mangle it.
           @'
           import { loadEnvFile } from './dist/env.js';
-          const want = { CVLAC_NOMBRE: 'Jos\u00e9', CVLAC_CEDULA: '1090123456', CVLAC_PASSWORD: 'cl$v\u00e9#1' };
+          const want = { CVLAC_NOMBRE: 'Jos\u00e9', CVLAC_CEDULA: '1234567890', CVLAC_PASSWORD: 'cl$v\u00e9#1' };
           const env = {};
           const status = loadEnvFile(process.argv[2], env);
           for (const [key, value] of Object.entries(want)) {

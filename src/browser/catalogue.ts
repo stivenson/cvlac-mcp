@@ -5,8 +5,8 @@
  * by a popup. The server reads the code and ignores the text, so writing the
  * text alone produces either a rejection ("Seleccione un programa académico") or
  * — worse — a saved record pointing at the wrong row: a municipality passed as
- * its DANE code once stored a formación in Sketty, Wales, because 54001 happens
- * to be a different municipality in CvLAC's own numbering.
+ * its DANE code once stored a formación in Sketty, Wales, because that number
+ * happens to be a different municipality in CvLAC's own numbering.
  */
 
 const norm = (s: string): string =>
@@ -22,8 +22,8 @@ const norm = (s: string): string =>
  * What to send to a CvLAC search endpoint.
  *
  * Those endpoints answer in latin1 and compare against the bytes they receive,
- * so an accent encoded as UTF-8 arrives mangled — "Cúcuta" reaches them as
- * "CÃºcuta" and matches nothing, which silently left a formación and an evento
+ * so an accent encoded as UTF-8 arrives mangled — "Bogotá" reaches them as
+ * "BogotÃ¡" and matches nothing, which silently left a formación and an evento
  * with no municipality. The accents still count when picking among the results;
  * they just cannot be asked for. Ñ survives because latin1 has it.
  */
@@ -164,8 +164,8 @@ export function parseDepartamentosXml(xml: string): NamedRow[] {
  * `getMunicipiosAsXML`: the only place the code `cod_municipio` stores comes from.
  *
  * CvLAC numbers municipalities three different ways — DANE, the id its JSON
- * search returns, and this one — and the form understands only this. Cúcuta is
- * 54001, 827 and 991 respectively; the first two got written as Sketty and Neiva.
+ * search returns, and this one — and the form understands only this. For the municipality
+ * first tried, the other two got written as Sketty and Neiva.
  */
 export function parseMunicipiosXml(xml: string): MunicipioOption[] {
   return tag(xml, 'municipio')
@@ -212,8 +212,8 @@ export type CatalogueResolution<T> =
 /**
  * Which row of a CvLAC picker a name means — or that a person has to say.
  *
- * Searching "UNIVERSIDAD SIMON BOLIVAR" returns 193 institutions: the one in
- * Venezuela, the Andina, several sedes, a teachers' union and an employees'
+ * Searching a common university name returned 193 institutions: a namesake in
+ * another country, several sedes, a teachers' union and an employees'
  * fund. Taking the first partial match attached the record to whichever CvLAC
  * listed first, silently and with no undo.
  *

@@ -32,7 +32,7 @@ Un recorrido de las **86 entradas** del menú de CvLAC (2026-09-16) encontró qu
 
 Cosas que el diseño actual no puede hacer, no bugs pendientes.
 
-- **Experiencia profesional está fuera del diff.** Los nombres de empresa en CvLAC difieren demasiado de los del portafolio ("MO TECNOLOGIAS COLOMBIA SAS" vs "Mo Technologies (Mastercard)") y el cargo no aparece en la lista, solo en el detalle. Un match automático generaría falsos faltantes. Se gestiona a mano.
+- **Experiencia profesional está fuera del diff.** Los nombres de empresa en CvLAC difieren demasiado de los del portafolio (la razón social, "EMPRESA EJEMPLO COLOMBIA SAS", contra el nombre comercial, "Ejemplo Tech (Banco X)") y el cargo no aparece en la lista, solo en el detalle. Un match automático generaría falsos faltantes. Se gestiona a mano.
 - **Proyectos, software y eventos solo se pueden crear, nunca actualizar.** Su vista de lista muestra únicamente el nombre, así que no hay con qué comparar para detectar un cambio.
 - **El `add` de formación complementaria depende del catálogo de CvLAC.** Su buscador de programas académicos solo ofrece los ya registrados para esa institución y ese nivel, y el popup no permite crear uno. Si no hay ninguno, la sección no admite altas — ni desde aquí ni desde la web con ese picker.
 - **El portafolio se lee renderizándolo.** Ya no se parsea el bundle: `fetchPortfolioData` abre un chromium y lee el DOM de `#/resume` y del dashboard. Sigue dependiendo de los nombres de clase del sitio, pero ahora un cambio se ve como listas vacías con warning en el log, no en silencio. `achievements` y `skills` también se leen.
@@ -50,13 +50,20 @@ Ordenado por relación valor/riesgo.
 
 Declara funciones con nombre dentro de un `$$eval`, y esbuild —que usa `tsx`— las envuelve en un `__name` que no existe en la página. Revienta solo en modo dev: el `dist` que ejecuta el MCP y la suite e2e no está afectado. Arreglo: escribir esos callbacks sin funciones nombradas, como ya se hace en `portfolio.ts`.
 
-### 3. Cerrar lo que queda a mano en el CvLAC
+### 3. Producción bibliográfica, tesis dirigidas y jurados
 
-Ya no queda ninguna sección sin tool. Lo que sigue siendo manual es el **contenido**: los textos de experiencia profesional están genéricos, y áreas de actuación tiene una sola área registrada. El contenido sugerido está en `CVLAC_GUIA_SECCIONES_MANUALES.md` del workspace cliente.
+Es lo que más pesa en la convocatoria de medición y lo que más trabajo da llenar, y hoy no está. Empezar
+por artículos con DOI: con Crossref, CvLAC se llena casi solo (revista, ISSN, volumen, páginas,
+coautores). Antes hay que verificar si las listas de CvLAC paginan, porque una hoja de vida senior tiene
+cientos de productos.
 
-### 4. Sacar los datos del portafolio de una fuente estable
+### 4. Separar la fuente de datos del motor
 
-El portafolio no publica sus datos, solo su interfaz, así que hay que renderizarla y leer sus clases. Publicar un `data.json` en el sitio quitaría esa dependencia y, de paso, `portfolio-extra.json` — proyectos, software y eventos saldrían de ahí. Requiere tocar el repo del portafolio.
+Hoy `diff` y `sync` solo leen un portafolio web con una estructura concreta, que casi ningún
+investigador tiene. Si reciben un JSON normalizado de hoja de vida, con esquema publicado, cualquier
+fuente pasa a ser un adaptador: un PDF o Word de la hoja de vida, el dictado en el chat, ORCID, un
+portafolio web o el `portfolio-extra.json` actual. El modelo del cliente puede armar ese JSON casi
+siempre sin código nuevo en el servidor.
 
 ### 5. Usar el detalle para detectar `update` en proyectos, software y eventos
 
@@ -104,12 +111,18 @@ El repo **ya está público**. Queda lo que sigue pendiente de todos modos.
 - [x] README con instalación genérica y aviso de uso responsable, cubriendo Cursor, Claude Code,
       Claude Desktop, VS Code, Windsurf, Zed y JetBrains.
 - [ ] Barrido final de secretos sobre el árbol a publicar:
-      `git grep -inE '(tu-nombre|tu-cedula|cucuta|54001)'`
+      `git grep -inE '<tu nombre>|<tu cédula>|<tu municipio>|<tus instituciones>'`
 - [ ] Decidir si el workspace cliente se publica junto con este repo. Vive aparte, en [`stivenson/cvlac-workspace`](https://github.com/stivenson/cvlac-workspace) (privado): skill `cvlac-sync`, `.mcp.json` y las notas de estado del CvLAC.
 - [x] Cambiar el repo a público.
 
 ## Historial
 
+- **2026-09-27 (1.0.2, limpieza)** — Fuera del repo público todo dato personal del autor: los documentos
+  de diseño iniciales y el script de perfil de una sola vez (pasan al workspace privado), los empleadores
+  y cursos que servían de ejemplo en código y documentación, los conteos de su CvLAC, y el municipio y las
+  instituciones con que lo ubicaban. Los fixtures, que decían ser ficticios pero copiaban su hoja de vida
+  con cambios mínimos, llevan ahora datos inventados de verdad. Los hallazgos de CvLAC se conservan, contados
+  sin nombrar a quién pertenecía el registro.
 - **2026-09-27 (1.0.2)** — README reescrito para investigadores sin perfil técnico, sin perder la
   referencia técnica. Abre con qué es y un ejemplo de conversación; dice qué puede hacer y **qué no**
   (producción bibliográfica, tesis, jurados, cuentas extranjeras) y que el `diff` solo sirve con un
@@ -156,7 +169,7 @@ El repo **ya está público**. Queda lo que sigue pendiente de todos modos.
 - **2026-09-18** — Todas las secciones con datos quedaron gestionadas: formación complementaria, idiomas, líneas de investigación y demás trabajos, más el perfil del investigador y las redes académicas. Tres reglas nuevas, cada una nacida de una escritura que mintió: un `delete` no se ejecuta a la primera, un formulario sin cambios o sin un campo obligatorio no se envía (enviarlo devolvía un 500 del validador de CvLAC que se leía como validación fallida), y un combobox ambiguo lo resuelve una persona — el catálogo tiene seis "Universidad de los Andes" y antes se tomaba la primera. `read_portfolio` pasó de parsear el bundle a renderizar el sitio, que llevaba devolviendo todo vacío desde que el portafolio se reescribió. El diff dejó de reportar como faltante lo que CvLAC guarda en otra sección o con otra redacción: `sync` habría duplicado dos registros. Áreas de actuación cerró la lista: su catálogo de 267 áreas viaja entero dentro de la página del popup, y el `select multiple` que las guarda solo envía lo seleccionado, así que se escriben seleccionadas en vez de confiar en el handler de la página. Tests de 291 a 421.
 
 - **2026-09-12** — Un 5xx de CvLAC ya no se lee como sección vacía: `assertAvailable` corta en cada navegación y el usuario recibe el motivo. Tests del borde MCP (registro de tools, validación previa a cualquier navegación) y de las URLs por sección. Empaquetado para npm listo pero **sin publicar** (ver punto 5). `CVLAC_ENV_FILE` para instalaciones fuera del repo; corregido que dotenv escribía su banner en el stdout del MCP, o sea tráfico malformado en el canal JSON-RPC de cada arranque. README cubre los siete editores MCP en vez de solo Cursor. Tests de 138 a 142.
-- **2026-07-20** — Configuración personal externalizada; logging con redacción; warnings por campo y lectura de los errores del formulario; diff con cuatro grupos y bloqueo de duplicados; tests de 12 a 138. Se descubrió y corrigió que una sesión expirada no redirige (habría duplicado los 23 ítems del portafolio en un `sync`).
-- **2026-05-31** — Primera sincronización real: reconocimiento ACOFI 2026 y diplomado USB agregados.
+- **2026-07-20** — Configuración personal externalizada; logging con redacción; warnings por campo y lectura de los errores del formulario; diff con cuatro grupos y bloqueo de duplicados; tests de 12 a 138. Se descubrió y corrigió que una sesión expirada no redirige (habría duplicado todo el portafolio en un `sync`).
+- **2026-05-31** — Primera sincronización real: dos ítems agregados desde el portafolio.
 - **2026-05-30** — Navegación en vivo del CvLAC; URLs, columnas y campos de formulario documentados en `docs/cvlac-findings.md`.
 - **2026-04-14** — Diseño e implementación inicial (7 tools, extractores, motor de diff).

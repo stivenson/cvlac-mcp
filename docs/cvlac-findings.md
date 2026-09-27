@@ -41,14 +41,14 @@ Los índices están fijados por los tests: `tests/extractors.test.ts` corre cada
 
 ### Resolución de la ambigüedad de "cursos"
 
-- "Curso de corta duración" (`/cvlac/EnProdCurso/all.do?__tipo=2B`, botón "Crear curso de corta duración dictado") **es donde Stivenson tiene registrados sus cursos del portafolio** (Platzi AWS, IBM Coursera, Taller IA USB, SENA Proyecto de Vida/Microcontroladores, etc.). El código apunta aquí → CORRECTO.
-- "Formación complementaria" (`/cvlac/EnFormacionComple/all.do?isTrayectoria=FC`) contiene OTROS ítems (cursos SENA técnicos antiguos: soldadura, instalación de software, etc.). El código define esta URL (`formacionComple`) pero no la usa.
+- "Curso de corta duración" (`/cvlac/EnProdCurso/all.do?__tipo=2B`, botón "Crear curso de corta duración dictado") es donde quedan los cursos que un portafolio suele listar (plataformas en línea, talleres). El código apunta aquí → CORRECTO.
+- "Formación complementaria" (`/cvlac/EnFormacionComple/all.do?isTrayectoria=FC`) guarda otra cosa: cursos técnicos y de extensión registrados como trayectoria. El código define esta URL (`formacionComple`) pero no la usa.
 
-  **Corregido el 2026-09-16:** aquí decía "y está bien así". No lo está: esa sección tiene **9 registros reales** y ninguna tool. Ver el recorrido completo del menú al final de este documento.
+  **Corregido el 2026-09-16:** aquí decía "y está bien así". No lo está: la cuenta de prueba tenía registros ahí y ninguna tool. Ver el recorrido completo del menú al final de este documento.
 
 ### Experiencia: por qué queda fuera del diff
 
-Los nombres de empresa en CvLAC difieren mucho del portafolio (ej. CvLAC "MO TECNOLOGIAS COLOMBIA SAS" / "bewe software" / "Manpower Professional ltda" vs portafolio "Mo Technologies (Mastercard - Start Path)"). Un match por nombre generaría falsos faltantes. Además el rol/cargo no aparece en la lista (solo en el detalle). Por eso experiencia se gestiona manualmente y se excluye del diff.
+Los nombres de empresa en CvLAC difieren mucho del portafolio: CvLAC guarda la razón social ("EMPRESA EJEMPLO COLOMBIA SAS") y un portafolio suele usar el nombre comercial, a veces con el cliente ("Ejemplo Tech (Banco X)"). Un match por nombre generaría falsos faltantes. Además el rol/cargo no aparece en la lista (solo en el detalle). Por eso experiencia se gestiona manualmente y se excluye del diff.
 
 ## Formularios de creación (`create.do` → POST a `insert.do`)
 
@@ -63,21 +63,21 @@ Todos tienen botón submit con `value="Guardar"` (por eso `clickGuardar` con `ge
 
 ### Municipios — `cod_municipio` NO es el código DANE
 
-El picker es un popup (`/cvlac/binary/ubicacion.do?methodToCall=display&t=m&ni=<sufijo>`) con cascada país → departamento → municipio. El hidden `cod_municipio` guarda **el id interno de CvLAC**: Cúcuta es `827`, no `54001`. Pasar el DANE no falla — guarda otro municipio (54001 resultó ser *Sketty*, Swansea, Gales).
+El picker es un popup (`/cvlac/binary/ubicacion.do?methodToCall=display&t=m&ni=<sufijo>`) con cascada país → departamento → municipio. El hidden `cod_municipio` guarda **el id interno de CvLAC**, no el código DANE. Pasar el DANE no falla — guarda otro municipio (en la primera prueba, *Sketty*, Swansea, Gales).
 
-**Hay tres numeraciones distintas** y solo una sirve para `cod_municipio`. Para Cúcuta: DANE `54001` (guardó *Sketty*, Gales), id del JSON `EnMunicipio/buscar.do` `827` (guardó *NEIVA*), e id de la cascada del popup `991` (correcto).
+**Hay tres numeraciones distintas** y solo una sirve para `cod_municipio`. Para el mismo municipio: el DANE guardó *Sketty* (Gales), el id del JSON `EnMunicipio/buscar.do` guardó *NEIVA*, y el id de la cascada del popup es el correcto.
 
 La buena sale de la cascada, en XML:
 
-- `GET /cvlac/binary/ubicacion.xml?methodToCall=getDepartamentosAsXML&sglPais=COL` → `<departamento><id>NO</id><name>NORTE DE SANTANDER</name></departamento>` (el país va en sigla de **3** letras; el JSON devuelve la de 2).
-- `GET /cvlac/binary/ubicacion.xml?methodToCall=getMunicipiosAsXML&sglDepartamento=NO&sglPais=COL` → `<municipio><id>991</id><name>CÚCUTA</name><cod_rh>0000000000</cod_rh></municipio>`
+- `GET /cvlac/binary/ubicacion.xml?methodToCall=getDepartamentosAsXML&sglPais=COL` → `<departamento><id>XX</id><name>NOMBRE DEL DEPARTAMENTO</name></departamento>` (el país va en sigla de **3** letras; el JSON devuelve la de 2).
+- `GET /cvlac/binary/ubicacion.xml?methodToCall=getMunicipiosAsXML&sglDepartamento=XX&sglPais=COL` → `<municipio><id>NNN</id><name>NOMBRE DEL MUNICIPIO</name><cod_rh>0000000000</cod_rh></municipio>`
 
-El popup escribe **cuatro** campos (`returnData()`): `cod_municipio_text` = `"Colombia - NORTE DE SANTANDER - CÚCUTA"`, `cod_municipio` = id, `cod_rh_municipio` = `cod_rh`, y el hidden de país (`name="null"`) = `COL`.
+El popup escribe **cuatro** campos (`returnData()`): `cod_municipio_text` = `"Colombia - <DEPARTAMENTO> - <MUNICIPIO>"`, `cod_municipio` = id, `cod_rh_municipio` = `cod_rh`, y el hidden de país (`name="null"`) = `COL`.
 
 El JSON sigue siendo útil para saber **a qué departamento** pertenece un municipio:
 
 ```json
-[{"id":827,"idDepartamento":52,"txtNmeMunicipio":"CÚCUTA","departamento":{"id":52,"txtNmeDepartamento":"NORTE DE SANTANDER","pais":{"id":1,"sglPais":"CO"}}}]
+[{"id":123,"idDepartamento":45,"txtNmeMunicipio":"<MUNICIPIO>","departamento":{"id":45,"txtNmeDepartamento":"<DEPARTAMENTO>","pais":{"id":1,"sglPais":"CO"}}}]
 ```
 
 El JSON de instituciones también trae su `municipio` ya resuelto (`idMunicipio` + objeto anidado), útil si algún día se quiere heredar la ciudad de la institución.
@@ -112,23 +112,9 @@ El JSON de instituciones también trae su `municipio` ya resuelto (`idMunicipio`
 - OK: `txt_nme_evento`, `tpo_clasificacion` (N/I), `dta_inicioString`/`dta_finString` (readonly→JS), `cod_municipio_text` (readonly, id dinámico `_loc_NNNNN`), `txt_lugar`, checkboxes de rol `tpo_part_ponente`/`tpo_part_ponenteMag`/`tpo_part_organizador`/`tpo_part_asistente`, `txt_nme_institucion` (readonly), `txt_resumen_evento`.
 - `tpo_evento` (select): OT=Otro, **CG=Congreso** (no "CO"), EN=Encuentro, SE=Seminario, SI=Simposio, TA=Taller. Corregir el comentario del tipo en `types.ts`.
 
-## Estado de datos en CvLAC
+## Canario de sesión
 
-Conteos leídos el **2026-07-20** con `read_cvlac('all')`:
-
-| Sección | Ítems |
-|---|---|
-| formacion | 7 |
-| experiencia | 9 |
-| cursos (EnProdCurso) | 9 |
-| reconocimientos | 6 |
-| proyectos | 4 |
-| software | 5 |
-| eventos | 5 |
-
-Diff contra el portafolio en esa fecha: **8 faltantes, 15 al día**, 0 a actualizar, 0 parecidos.
-
-Estos números sirven de canario: si `read_cvlac` devuelve 0 en todas las secciones, la sesión está caída (ver la primera sección de este documento), no es que el CvLAC se haya vaciado.
+Si `read_cvlac` devuelve 0 en todas las secciones de un CvLAC que tiene datos, la sesión está caída (ver la primera sección de este documento), no es que el CvLAC se haya vaciado.
 
 ## La página de caída de MinCiencias
 
@@ -146,7 +132,7 @@ No todas las fichas muestran lo que se editó, y eso limita qué se puede verifi
 | `proyectos` | **sin fechas**; sí tipo, título y resumen |
 | `formacion` | **sin fechas**; el período solo está en la lista (`all.do`) |
 
-La ficha de `formacion` además mete etiqueta y valor **en la misma celda** (`Municipio CÚCUTA`), un tercer layout que `extractDetailFields` todavía no separa.
+La ficha de `formacion` además mete etiqueta y valor **en la misma celda** (`Municipio <NOMBRE>`), un tercer layout que `extractDetailFields` todavía no separa.
 
 ## Campos que no se pueden usar para verificar una escritura
 
@@ -154,7 +140,7 @@ Al releer un formulario para confirmar que un cambio quedó, estos campos discre
 
 | Campo | Por qué |
 |---|---|
-| `cod_municipio_text`, `txt_nme_institucion`, `txt_nme_programa_acad`, `nme_inst` | son el rótulo legible de un picker; CvLAC los re-renderiza a su manera (`"Colombia - NORTE DE SANTANDER - CÚCUTA"` vuelve como `"CÚCUTA"`). El código oculto de al lado sí es exacto. |
+| `cod_municipio_text`, `txt_nme_institucion`, `txt_nme_programa_acad`, `nme_inst` | son el rótulo legible de un picker; CvLAC los re-renderiza a su manera (`"Colombia - <DEPARTAMENTO> - <MUNICIPIO>"` vuelve como `"<MUNICIPIO>"`). El código oculto de al lado sí es exacto. |
 | `null` | no es un nombre de campo: el input de país del picker de ubicación lleva literalmente `name="null"`, y el formulario no conserva lo que se le ponga. |
 | `dta_inicioString`, `dta_finString` | se guardan en `yyyy-mm-dd`; escribirles `dd/mm/yyyy` deja el formulario con una forma y la ficha con otra. |
 
@@ -163,11 +149,11 @@ Al releer un formulario para confirmar que un cambio quedó, estos campos discre
 El formulario de edición de cursos (`EnProdCurso/edit.do?cod_producto=N&cod_rh=...`) arranca con un bloque de hidden que repite nombres del formulario visible, con **los valores almacenados**:
 
 ```html
-<input type="hidden" name="txt_nme_prod"     value="Curso Especial en Proyecto de Vida (SENA)">
-<input type="hidden" name="nro_ano_presenta" value="2012">
+<input type="hidden" name="txt_nme_prod"     value="Taller de ejemplo">
+<input type="hidden" name="nro_ano_presenta" value="2019">
 <input type="hidden" name="nro_mes_presenta" value="1">
 ...
-<input type="text"   name="txt_nme_prod" id="txt_nme_prod" value="Curso Especial...">
+<input type="text"   name="txt_nme_prod" id="txt_nme_prod" value="Taller de ejemplo">
 <select name="nro_ano_presenta">...</select>
 ```
 
@@ -188,21 +174,21 @@ Se navegaron las **86 entradas** del menú lateral con la cuenta real, solo lect
 
 **Cuidado con el conteo:** una lista vacía no trae cero filas, trae **una** con el texto `Ningún dato disponible en esta tabla`. Contar filas sin mirar el contenido da 1 en decenas de secciones vacías.
 
-De las 86, solo **11 tienen datos**:
+En esa cuenta, solo **11 tenían datos** (estado de las tools en esa fecha; hoy las 11 tienen):
 
-| Sección | Ítems | ¿Tool? |
-|---|---|---|
-| Formación académica | 7 | ✅ `formacion` |
-| Formación complementaria (`EnFormacionComple/all.do?isTrayectoria=FC`) | 9 | ❌ |
-| Experiencia profesional | 9 | ✅ `experiencia` |
-| Líneas de investigación (`EnLineaInv/all.do`) | 2 | ❌ |
-| Idiomas (`ReRecursoHumIdioma/all.do`) | 2 | ❌ |
-| Curso de corta duración | 9 | ✅ `cursos` |
-| Evento científico | 5 | ✅ `eventos` |
-| Software | 5 | ✅ `software` |
-| Proyectos | 4 | ✅ `proyectos` |
-| Reconocimientos | 6 | ✅ `reconocimientos` |
-| Demás trabajos (`EnProdTecnica/all_demasTrabajos.do`) | 1 | ❌ |
+| Sección | ¿Tool en 2026-09-16? |
+|---|---|
+| Formación académica | ✅ `formacion` |
+| Formación complementaria (`EnFormacionComple/all.do?isTrayectoria=FC`) | ❌ |
+| Experiencia profesional | ✅ `experiencia` |
+| Líneas de investigación (`EnLineaInv/all.do`) | ❌ |
+| Idiomas (`ReRecursoHumIdioma/all.do`) | ❌ |
+| Curso de corta duración | ✅ `cursos` |
+| Evento científico | ✅ `eventos` |
+| Software | ✅ `software` |
+| Proyectos | ✅ `proyectos` |
+| Reconocimientos | ✅ `reconocimientos` |
+| Demás trabajos (`EnProdTecnica/all_demasTrabajos.do`) | ❌ |
 
 Detalles que valen para cuando se automatice alguna:
 
@@ -251,7 +237,7 @@ Un solo `textarea txt_desc_perfil`, y **diez hidden con la identidad de la perso
 
 `txt_desc_perfil` es **`required` y `maxlength=3950`** (el contador en pantalla dice 4000, el atributo dice 3950). Consecuencia que costó una corrida entera: **no hay forma de vaciarlo**. Un submit con el campo vacío ni siquiera sale del formulario, y la página vuelve mostrando el texto que acaba de negarse a borrar — que el código leyó como *"rejected: \<ese mismo texto\>"*. Solo se reemplaza; para quitarlo de verdad hay que ir a la web.
 
-Regla: **tocar solo el textarea**. Reconstruir o reordenar ese formulario arriesga la cédula y la fecha de nacimiento del registro oficial. (De paso, `cod_mun_nacim=991` confirma la numeración de municipios documentada arriba.)
+Regla: **tocar solo el textarea**. Reconstruir o reordenar ese formulario arriesga la cédula y la fecha de nacimiento del registro oficial. (De paso, `cod_mun_nacim` usa la misma numeración de municipios de la cascada documentada arriba.)
 
 ## Las cuatro secciones sin tool: formularios reales (2026-09-17)
 
@@ -311,7 +297,7 @@ Es el mismo tipo de fallo que los duplicados ocultos de cursos: la escritura se 
 
 Verificado el 2026-09-17 intentando crear una formación complementaria.
 
-`queryPrograma.do` **no consulta un catálogo oficial de programas**: devuelve los que ya existen para esa institución en ese nivel. Para SENA en nivel `F` devuelve exactamente los siete que están registrados en este CvLAC. Para la Universidad de los Andes en niveles `8`/`F`/`Y`/`E` devuelve cero.
+`queryPrograma.do` **no consulta un catálogo oficial de programas**: devuelve los que ya existen para esa institución en ese nivel. Para una institución con registros en la cuenta de prueba devuelve exactamente esos, y nada más. Para la Universidad de los Andes en niveles `8`/`F`/`Y`/`E` devuelve cero.
 
 Y el popup (`searchPrograma.do`) tiene **un solo botón, "Buscar"**. No hay ruta para registrar un programa nuevo.
 
@@ -335,9 +321,9 @@ De ahí sale la segunda regla general, hermana de la del submit sin cambios:
 
 ## `findInstitucionId` se queda con la primera coincidencia
 
-Buscar "UNIVERSIDAD SIMON BOLIVAR" devuelve **193 instituciones** — la de Venezuela, la Andina, sedes, un sindicato y un fondo de empleados. El código toma `items[0]`.
+Buscar el nombre de una universidad común devolvió **193 instituciones** — una homónima de otro país, sedes, un sindicato y un fondo de empleados. El código toma `items[0]`.
 
-Ninguna de las primeras doce tiene programas en niveles de formación complementaria, y el registro real de este CvLAC está bajo "UNIVERSIDAD SIMON BOLIVAR (SEDE CÚCUTA)", que no sale entre ellas.
+Ninguna de las primeras doce tiene programas en niveles de formación complementaria, y las sedes regionales, que es donde suelen estar registrados, no salen entre ellas.
 
 Riesgo real y silencioso: un `add` de formación o experiencia puede quedar colgado de la institución equivocada sin que nada lo avise.
 
@@ -350,7 +336,7 @@ Riesgo real y silencioso: un `add` de formación o experiencia puede quedar colg
 | una sola parcial | la usa |
 | ninguna | warning, campo vacío (como antes) |
 
-La respuesta vuelve en `data.institucionId`, que salta la búsqueda. El caso corriente —un nombre que coincide exacto— sigue siendo automático: preguntar por él sería ruido. La de este CvLAC es la 603, "UNIVERSIDAD SIMÓN BOLÍVAR", que coincide exacto.
+La respuesta vuelve en `data.institucionId`, que salta la búsqueda. El caso corriente —un nombre que coincide exacto— sigue siendo automático: preguntar por él sería ruido. Un nombre escrito tal como está en el catálogo coincide exacto.
 
 ## El catálogo de instituciones tiene duplicados exactos
 
@@ -369,4 +355,4 @@ No son universidades distintas de países distintos: son duplicados del propio c
 
 Antes de `resolveChoice` se tomaba la primera y salía bien por casualidad. Ahora devuelve `needs_confirmation` con las seis, que es lo correcto: qué fila se elige determina bajo qué organización queda el registro, y no hay deshacer.
 
-Para la suite e2e esto significa que un candidato puede ser `{ label, institucionId }` en vez de solo un nombre. Los conocidos: **Uniandes 663**, **Universidad Simón Bolívar 603**.
+Para la suite e2e esto significa que un candidato puede ser `{ label, institucionId }` en vez de solo un nombre. La que usa: **Universidad de los Andes 663**.

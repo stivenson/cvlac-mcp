@@ -70,7 +70,7 @@ describe('extractDetailFields on a record laid out in caption rows', () => {
       (await extractDetailFields(page)).map((f) => [f.label, f.value])
     );
 
-    expect(byLabel['Ciudad']).toBe('Pamplona');
+    expect(byLabel['Ciudad']).toBe('Villa Ejemplo');
     expect(byLabel['Disponibilidad']).toBe('Restringido');
   });
 
