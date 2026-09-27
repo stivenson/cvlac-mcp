@@ -7,173 +7,254 @@
 
 <h1 align="center">cvlac-mcp</h1>
 
-[![npm](https://img.shields.io/npm/v/cvlac-mcp?style=flat&logo=npm&logoColor=white&label=npm&color=CB3837)](https://www.npmjs.com/package/cvlac-mcp)
-[![instalación](https://img.shields.io/badge/instalar-npx%20cvlac--mcp-CB3837?style=flat&logo=npm&logoColor=white)](#instalación-rápida-npx--5-minutos)
-![Node](https://img.shields.io/badge/node-%3E%3D20-339933?style=flat&logo=node.js&logoColor=white)
-![TypeScript](https://img.shields.io/badge/typescript-ESM%20strict-3178C6?style=flat&logo=typescript&logoColor=white)
-![MCP](https://img.shields.io/badge/MCP-Server-7A3EFF?style=flat)
-![Playwright](https://img.shields.io/badge/Playwright-Automation-2EAD33?style=flat&logo=playwright&logoColor=white)
-![Vitest](https://img.shields.io/badge/tests-vitest-6E9F18?style=flat&logo=vitest&logoColor=white)
-![Build](https://img.shields.io/badge/build-tsc%20passing-brightgreen?style=flat)
-![License](https://img.shields.io/badge/license-ISC-blue?style=flat)
-![CvLAC](https://img.shields.io/badge/CvLAC-MinCiencias-00573F?style=flat)
-![No oficial](https://img.shields.io/badge/proyecto-no%20oficial-9E9E9E?style=flat)
+<p align="center"><b>Actualiza tu CvLAC conversando con tu asistente de IA, sin llenar formularios a mano.</b></p>
 
-**Actualiza tu hoja de vida de CvLAC (MinCiencias) desde el chat de tu editor, sin llenar formularios a mano.**
+<p align="center">
+  <a href="https://www.npmjs.com/package/cvlac-mcp"><img src="https://img.shields.io/npm/v/cvlac-mcp?style=flat&logo=npm&logoColor=white&label=npm&color=CB3837" alt="npm"></a>
+  <a href="https://github.com/stivenson/cvlac-mcp/actions/workflows/smoke.yml"><img src="https://github.com/stivenson/cvlac-mcp/actions/workflows/smoke.yml/badge.svg" alt="Pruebas en Windows, macOS y Linux"></a>
+  <img src="https://img.shields.io/badge/node-%3E%3D20-339933?style=flat&logo=node.js&logoColor=white" alt="Node 20+">
+  <img src="https://img.shields.io/badge/license-ISC-blue?style=flat" alt="Licencia ISC">
+  <img src="https://img.shields.io/badge/proyecto-no%20oficial-9E9E9E?style=flat" alt="Proyecto no oficial">
+</p>
 
-Servidor MCP (stdio) escrito en **TypeScript + Playwright**. Le dices qué agregar o corregir; él abre CvLAC
-con tu cuenta, llena el formulario, lo guarda y verifica que quedó guardado. Los datos pueden salir de tu
-portafolio web, de un JSON curado o de lo que le dictes en el chat.
+Llenar el CvLAC de MinCiencias es lento: un formulario por cada curso, premio o proyecto, con
+catálogos de instituciones y municipios que no siempre encuentran lo que buscas. **cvlac-mcp** le da a
+tu asistente de IA (Claude, por ejemplo) la capacidad de hacerlo por ti: le dices en el chat qué
+agregar o corregir, y él entra a CvLAC con tu cuenta, llena el formulario, lo guarda y revisa que haya
+quedado guardado.
 
-Sirve para cualquier persona con hoja de vida en CvLAC. No trae datos de nadie: tus credenciales, tus valores
-por defecto y tus proyectos curados viven en archivos locales que el repo ignora.
+Funciona en tu computador. Tus credenciales no salen de él y no pasan por ningún servidor intermedio.
 
-**Instalación en un comando:** no hay que clonar ni compilar — [empieza aquí](#instalación-rápida-npx--5-minutos).
+- [Cómo se ve](#como-se-ve)
+- [Qué puede hacer y qué no](#que-puede-hacer)
+- [Qué necesitas](#que-necesitas)
+- [Instalación paso a paso](#instalacion) — unos 15 minutos
+- [Qué pedirle](#que-pedirle)
+- [Cómo te protege](#como-te-protege)
+- [Problemas frecuentes](#problemas-frecuentes)
+- [Seguridad y privacidad](#seguridad)
+- [Actualizar o desinstalar](#actualizar)
+- [Para desarrolladores](#desarrolladores)
 
-Permite:
-- leer datos en vivo del CvLAC (`read_cvlac`, `read_cvlac_detail`)
-- leer el portafolio (`read_portfolio`)
-- calcular diferencias (`diff`): faltantes, a actualizar, parecidos y al día
-- aplicar cambios por sección (`update_section`: `add` / `update` / `delete`)
-- sincronizar de forma masiva (`sync`, con `dry_run`)
+<a id="como-se-ve"></a>
 
-Dos garantías al escribir: **nunca crea un duplicado sin preguntar** (si ya hay algo igual o parecido devuelve `needs_confirmation` en vez de escribir) y **siempre dice qué campo falló** cuando CvLAC rechaza un formulario.
+## Cómo se ve
 
-> **Uso responsable.** Esto automatiza un sitio gubernamental con tu propia cuenta. Úsalo con supervisión
-> humana, revisa cada `dry_run` antes de aplicar y no lo dejes corriendo sin mirar.
-> Tus credenciales no salen de tu máquina: [Seguridad y privacidad](#seguridad-y-privacidad).
+Una conversación se parece a esto:
 
-> **Proyecto independiente.** No está afiliado a MinCiencias ni respaldado por esa entidad. No
-> reproduce su logotipo ni su identidad visual: el símbolo de arriba es original —unas llaves
-> `{ }` de JSON-RPC dentro de un anillo de trazos que convergen— y las marcas «CvLAC», «ScienTI»
-> y «MinCiencias» se nombran solo para identificar el sistema con el que habla el servidor.
+> **Tú:** Muéstrame los reconocimientos que tengo en CvLAC.
+>
+> **Asistente:** Tienes 6. Entre ellos, "Distinción a la labor docente" (2023) y "Mejor ponencia,
+> Congreso Nacional de Ingeniería" (2021)…
+>
+> **Tú:** Agrega este: "Mención de honor a la labor docente", Universidad del Norte, 2024, nacional.
+>
+> **Asistente:** No lo guardé todavía: se parece a "Distinción a la labor docente" (2023), que ya está
+> en tu CvLAC. ¿Es el mismo reconocimiento y quieres corregirlo, o es otro y lo creo aparte?
+>
+> **Tú:** Es otro, créalo.
+>
+> **Asistente:** Listo, CvLAC confirmó el guardado. Ya aparece en tu lista: "Mención de honor a la labor
+> docente", 2024, ámbito nacional.
 
-Qué está verificado, qué falta y las limitaciones conocidas: **[ROADMAP.md](https://github.com/stivenson/cvlac-mcp/blob/master/ROADMAP.md)**.
+El asistente no borra nada ni crea duplicados sin preguntarte primero. Los nombres de este ejemplo
+son ficticios.
 
----
+<a id="que-puede-hacer"></a>
 
-## Tabla de contenido
+## Qué puede hacer y qué no
 
-- [Instalación rápida (npx) — 5 minutos](#instalación-rápida-npx--5-minutos) ← empieza aquí
-- [Instalación desde el código fuente (clonar)](#instalación-desde-el-código-fuente-clonar) — para desarrollar o contribuir
-  - [Registrar el MCP en tu editor](#paso-5---registrar-el-mcp-en-tu-editor) — Cursor · Claude Code · Claude Desktop · VS Code · Windsurf · Zed · JetBrains
-- [Arquitectura](#arquitectura)
-- [Tools MCP disponibles](#tools-mcp-disponibles)
-- [Variables de entorno](#variables-de-entorno)
-- [Uso local](#uso-local)
-- [Flujo recomendado](#flujo-recomendado)
-- [Pruebas y build](#pruebas-y-build)
-- [Troubleshooting](#troubleshooting)
-- [Seguridad y privacidad](#seguridad-y-privacidad) — [credenciales](#credenciales-y-privacidad) · [uso responsable](#uso-responsable-y-términos)
-- [Estado y roadmap](#estado-y-roadmap)
+**Puede leer, agregar, corregir y borrar:**
 
----
+| En CvLAC se llama | Ejemplos |
+|---|---|
+| Formación académica | Pregrado, especialización, maestría, doctorado |
+| Formación complementaria | Diplomados, cursos de extensión (ver la nota abajo) |
+| Experiencia profesional | Vinculaciones con universidades y empresas |
+| Cursos de corta duración | Cursos y talleres |
+| Reconocimientos | Premios, distinciones, menciones |
+| Proyectos | De investigación, innovación, extensión |
+| Software | Productos de software registrados |
+| Eventos científicos | Congresos, seminarios, talleres donde participaste |
+| Idiomas | Con tus niveles de lectura, escritura, habla y escucha |
+| Líneas de investigación | Activas o no, con su objetivo |
+| Demás trabajos | Otros productos |
+| Perfil | El texto de presentación, las redes académicas (ORCID, Google Scholar, Scopus…) y las áreas de actuación |
 
-## Instalación rápida (npx) — 5 minutos
+**Todavía no puede:**
 
-La vía recomendada si solo quieres **usar** el servidor. No clonas ni compilas: `npx` descarga el paquete y lo
-ejecuta. Si vas a modificar el código, salta a
-[instalación desde el código fuente](#instalación-desde-el-código-fuente-clonar).
+- **Artículos, libros, capítulos, tesis dirigidas, jurados ni producción técnica.** Es lo que más
+  pesa en la convocatoria de medición, y es lo siguiente en la lista, pero hoy no está.
+- **Iniciar sesión con una cuenta de nacionalidad extranjera.** Por ahora el inicio de sesión asume
+  nacionalidad colombiana.
+- **Tocar tus datos de identificación y direcciones,** ni nada de GrupLAC.
+- **Crear un programa en formación complementaria que CvLAC no tenga registrado.** El buscador de
+  CvLAC solo ofrece los que ya existen para esa institución, y la web tampoco deja crear otros.
 
-### 1. Node 20+ y el navegador
+**Comparar automáticamente** tu CvLAC con otra fuente (la herramienta `diff`) hoy solo funciona con un
+portafolio web que tenga una estructura concreta ([detalles](#comparar-portafolio)). Si no tienes uno,
+no importa: le pegas en el chat el texto de tu hoja de vida, o se lo dictas, y el asistente lee tu
+CvLAC y agrega lo que falte, ítem por ítem, preguntándote ante cualquier parecido.
+
+<a id="que-necesitas"></a>
+
+## Qué necesitas
+
+- **Tu usuario de CvLAC:** primer nombre, número de cédula y contraseña, los mismos con los que entras a
+  la web.
+- **Un computador con Windows, macOS o Linux.**
+- **Node.js 20 o superior**, un programa gratuito que hace funcionar esta herramienta. En el paso 1 está
+  cómo instalarlo.
+- **Una app de IA que acepte servidores MCP.** MCP es el estándar con el que estas apps se conectan a
+  herramientas como esta. Si no tienes ninguna, empieza con **[Claude Desktop](https://claude.ai/download)**:
+  es la más sencilla y es la que usa esta guía. También sirven Claude Code, Cursor, VS Code, Windsurf,
+  Zed y JetBrains ([cómo conectarlas](#otras-apps)).
+
+No necesitas saber programar. Vas a copiar y pegar unos comandos en la terminal; la guía dice
+exactamente cuáles.
+
+<a id="instalacion"></a>
+
+## Instalación paso a paso
+
+> **¿Qué es la terminal?** Una ventana donde se escriben comandos.
+> **En Windows:** tecla Windows, escribe `PowerShell` y ábrelo.
+> **En macOS:** Cmd + Espacio, escribe `Terminal` y ábrela.
+> Para pegar un comando: clic derecho en Windows, Cmd + V en macOS. Luego presiona Enter.
+
+### Paso 1 · Instala Node.js
+
+Descarga la versión **LTS** desde [nodejs.org](https://nodejs.org) e instálala con las opciones que
+vienen marcadas. Luego **cierra y vuelve a abrir** la terminal y comprueba:
 
 ```bash
-node --version                        # debe mostrar v20 o superior
-npx -y cvlac-mcp@1 install-browser    # el navegador que maneja CvLAC (~150 MB, una sola vez)
+node --version
 ```
 
-El `@1` fija la versión mayor: recibes arreglos, pero no un cambio incompatible sin enterarte. Para
-pasar a una versión mayor nueva, cambia ese número aquí y en la configuración del editor.
+Debe mostrar `v20` o un número mayor (por ejemplo `v22.11.0`).
 
-¿La descarga falla con `UNABLE_TO_VERIFY_LEAF_SIGNATURE` o `SELF_SIGNED_CERT_IN_CHAIN`? Un antivirus
-(Avast, ESET, Kaspersky…) o la red de tu universidad está inspeccionando el tráfico con su propio
-certificado. Dile a Node que confíe en los certificados de tu sistema (Node 22.15+ / 23.8+):
+<details>
+<summary>Otras formas de instalarlo</summary>
+
+- **Windows:** `winget install OpenJS.NodeJS.LTS`
+- **macOS:** `brew install node@22` con [Homebrew](https://brew.sh)
+- **Linux:** [nvm](https://github.com/nvm-sh/nvm) y luego `nvm install 22`
+
+</details>
+
+### Paso 2 · Descarga el navegador que usa la herramienta
+
+cvlac-mcp maneja CvLAC con su propia copia de Chromium, un navegador que funciona sin ventana. Se
+descarga una sola vez (unos 150 MB):
+
+```bash
+npx -y cvlac-mcp@1 install-browser
+```
+
+Al final debe decir que Chromium quedó instalado.
+
+<details>
+<summary>¿Falla con <code>UNABLE_TO_VERIFY_LEAF_SIGNATURE</code> o <code>SELF_SIGNED_CERT_IN_CHAIN</code>?</summary>
+
+Un antivirus (Avast, ESET, Kaspersky…) o la red de tu universidad revisa el tráfico con su propio
+certificado de seguridad. Dile a Node que confíe en los certificados de tu sistema (necesita Node 22.15
+o superior):
 
 ```powershell
 $env:NODE_OPTIONS="--use-system-ca"; npx -y cvlac-mcp@1 install-browser   # Windows (PowerShell)
 ```
 
 ```bash
-NODE_OPTIONS=--use-system-ca npx -y cvlac-mcp@1 install-browser           # Linux / macOS
+NODE_OPTIONS=--use-system-ca npx -y cvlac-mcp@1 install-browser           # macOS / Linux
 ```
 
 Con un Node anterior, exporta el certificado raíz del antivirus o de la red y apunta a él con
 `NODE_EXTRA_CA_CERTS=/ruta/al/certificado.pem`.
 
-Usa el CLI de Playwright que trae este paquete, no el último publicado. Importa: cada build de
-navegador pertenece a una versión de Playwright, y `npx playwright install` —que resuelve siempre a la
-última— puede dejarte un Chromium que este servidor no sabe arrancar.
+</details>
 
-¿No tienes Node 20? [nvm](https://github.com/nvm-sh/nvm) (`nvm install 20`) en Linux/macOS,
-`brew install node@20` con Homebrew, o `winget install OpenJS.NodeJS.LTS` en Windows.
-En algunas distros de Linux hace falta además `npx playwright install-deps chromium`, que instala
-librerías del sistema y no depende de la versión.
+<details>
+<summary>Por qué no <code>npx playwright install</code>, y qué significa <code>@1</code></summary>
 
-### 2. Guarda tus credenciales en un archivo aparte
+`install-browser` usa el Playwright que trae este paquete. `npx playwright install` baja la última
+versión, y puede dejarte un Chromium que este servidor no sabe abrir (`Executable doesn't exist`).
 
-Son las mismas con las que entras a CvLAC. Se quedan en tu máquina; ver
-[Credenciales y privacidad](#credenciales-y-privacidad).
+El `@1` fija la versión mayor: recibes arreglos, pero ningún cambio incompatible sin enterarte. En
+algunas distribuciones de Linux hace falta además `npx playwright install-deps chromium`.
 
-Cada valor va entre **comillas simples**: sin ellas, una clave con `#` se corta ahí, y con comillas
-dobles la consola cambia lo que venga después de un `$`. `CVLAC_NOMBRE` es tu primer nombre tal como
-lo registraste, con sus tildes.
+</details>
 
-**Linux / macOS:**
+### Paso 3 · Guarda tus datos de acceso
+
+Van en un archivo de texto aparte, dentro de tu carpeta de usuario, que solo tú puedes leer.
+
+**Windows** — en PowerShell:
+
+```powershell
+mkdir "$HOME\.config\cvlac-mcp" -Force
+notepad "$HOME\.config\cvlac-mcp\.env"
+```
+
+El Bloc de notas pregunta si quieres crear el archivo: di que **sí**. Pega estas tres líneas, cambia
+lo que está entre comillas por tus datos, **conserva las comillas simples** y guarda con Ctrl + S:
+
+```text
+CVLAC_NOMBRE='Tu primer nombre'
+CVLAC_CEDULA='1234567890'
+CVLAC_PASSWORD='tu clave'
+```
+
+Cierra el Bloc de notas y deja el archivo legible solo por tu usuario:
+
+```powershell
+icacls "$HOME\.config\cvlac-mcp\.env" /inheritance:r /grant:r "${env:USERNAME}:(R,W)"
+```
+
+**macOS / Linux** — cambia los tres valores **antes** de pegar, conservando las comillas simples:
 
 ```bash
 mkdir -p ~/.config/cvlac-mcp
 cat > ~/.config/cvlac-mcp/.env <<'EOF'
-CVLAC_NOMBRE='tu_primer_nombre'
-CVLAC_CEDULA='tu_numero_de_cedula'
-CVLAC_PASSWORD='tu_clave'
+CVLAC_NOMBRE='Tu primer nombre'
+CVLAC_CEDULA='1234567890'
+CVLAC_PASSWORD='tu clave'
 EOF
 chmod 600 ~/.config/cvlac-mcp/.env
 ```
 
-**Windows (PowerShell):**
+- `CVLAC_NOMBRE` es tu **primer nombre** tal como lo registraste en CvLAC, con tildes y ñ.
+- Las comillas simples importan: sin ellas, una clave con `#` se corta ahí.
+- No guardes este archivo en Escritorio ni en Documentos si esas carpetas se sincronizan con OneDrive o
+  Google Drive. La carpeta de arriba no se sincroniza.
+
+<details>
+<summary>Crear el archivo sin el Bloc de notas (Windows)</summary>
 
 ```powershell
-mkdir "$HOME\.config\cvlac-mcp" -Force
 $contenido = @'
-CVLAC_NOMBRE='tu_primer_nombre'
-CVLAC_CEDULA='tu_numero_de_cedula'
-CVLAC_PASSWORD='tu_clave'
+CVLAC_NOMBRE='Tu primer nombre'
+CVLAC_CEDULA='1234567890'
+CVLAC_PASSWORD='tu clave'
 '@
 [IO.File]::WriteAllText("$HOME\.config\cvlac-mcp\.env", $contenido)
-icacls "$HOME\.config\cvlac-mcp\.env" /inheritance:r /grant:r "${env:USERNAME}:(R,W)"
 ```
 
-> `@'...'@` (comilla simple) no interpreta el `$` de una clave; `@"..."@` sí. `WriteAllText` escribe
-> UTF-8 en las dos versiones de PowerShell, e `icacls` deja el archivo legible solo por tu usuario —
-> el equivalente de `chmod 600`. Si prefieres el Bloc de notas (`notepad "$HOME\.config\cvlac-mcp\.env"`),
-> también guarda en UTF-8.
->
-> Si el archivo quedó en UTF-16 (`Out-File`, `>`) o en ANSI (`Set-Content`), el servidor lo detecta,
-> lo lee igual y lo avisa en su log al arrancar.
+`@'...'@`, con comilla simple, no toca un `$` que haya en tu clave; `@"..."@` sí lo cambiaría.
+`WriteAllText` guarda en UTF-8. Si el archivo te quedó en otra codificación —`Out-File` y `>` guardan
+en UTF-16, y `Set-Content` en ANSI—, cvlac-mcp lo detecta, lo lee igual y lo anota en su registro al
+arrancar.
 
-No guardes este archivo en Escritorio ni en Documentos si esas carpetas se sincronizan con OneDrive o
-Google Drive: `~/.config/cvlac-mcp/` no se sincroniza.
+</details>
 
-### 3. Registra el MCP en tu editor
+### Paso 4 · Conecta cvlac-mcp con Claude Desktop
 
-**Linux / macOS:**
+1. Abre Claude Desktop y ve a **Configuración → Desarrollador → Editar configuración** (en inglés:
+   *Settings → Developer → Edit Config*). Se abre la carpeta con el archivo
+   `claude_desktop_config.json`: ábrelo con el Bloc de notas o TextEdit.
+2. Pega el bloque de tu sistema, cambiando `TU_USUARIO` por tu usuario del computador. Para saber cuál
+   es: `echo $env:USERNAME` en PowerShell, o `whoami` en la terminal de macOS.
 
-```json
-{
-  "mcpServers": {
-    "cvlac-mcp": {
-      "command": "npx",
-      "args": ["-y", "cvlac-mcp@1"],
-      "env": {
-        "CVLAC_ENV_FILE": "/home/TU_USUARIO/.config/cvlac-mcp/.env"
-      }
-    }
-  }
-}
-```
-
-**Windows:** `npx` no es un ejecutable sino un script, así que va detrás de `cmd /c`. Las rutas llevan
-las barras invertidas duplicadas, porque el archivo es JSON:
+**Windows:**
 
 ```json
 {
@@ -189,58 +270,270 @@ las barras invertidas duplicadas, porque el archivo es JSON:
 }
 ```
 
-Cambia `TU_USUARIO` por tu usuario: la ruta debe ser **absoluta**. `CVLAC_ENV_FILE` es obligatorio en
-esta vía — instalado desde npm el servidor vive en la caché de `npx`, un directorio que tú no editas, así
-que no encontraría el `.env` por su cuenta.
+**macOS** (en Linux, la ruta empieza por `/home/` en vez de `/Users/`):
 
-**Claude Code** lo registra con un comando. En Windows, la consola importa:
+```json
+{
+  "mcpServers": {
+    "cvlac-mcp": {
+      "command": "npx",
+      "args": ["-y", "cvlac-mcp@1"],
+      "env": {
+        "CVLAC_ENV_FILE": "/Users/TU_USUARIO/.config/cvlac-mcp/.env"
+      }
+    }
+  }
+}
+```
+
+3. Guarda y **cierra Claude Desktop del todo**; no basta con cerrar la ventana. En Windows, clic derecho
+   en su ícono junto al reloj → Salir. En macOS, Cmd + Q. Luego ábrelo de nuevo.
+
+Detalles que suelen fallar:
+
+- Si el archivo ya tenía algo, no lo reemplaces: agrega `"cvlac-mcp": {...}` dentro del `"mcpServers"`
+  que ya existe, separado con una coma.
+- En Windows las barras de la ruta van **dobles** (`\\`), porque el archivo es JSON. `cmd /c` va delante
+  porque en Windows `npx` no es un programa sino un script.
+- `CVLAC_ENV_FILE` es obligatorio: le dice a cvlac-mcp dónde quedó el archivo del paso 3.
+
+### Paso 5 · Pruébalo
+
+En un chat nuevo de Claude Desktop, escribe:
+
+1. **"Inicia sesión en CvLAC"** — debe responder que inició sesión.
+2. **"Muéstrame mi formación académica en CvLAC"** — debe listar lo que ya tienes.
+
+Si las dos funcionan, quedó listo. La primera vez puede tardar unos 15 segundos en conectar, porque se
+descarga el paquete; si aparece desconectado, espera un momento y reinicia Claude Desktop.
+
+¿Algo falló? → [Problemas frecuentes](#problemas-frecuentes).
+
+<a id="otras-apps"></a>
+
+### Otras apps de IA
+
+La configuración es la misma del paso 4 en todas; cambia dónde se pega.
+
+| App | Dónde va |
+|---|---|
+| **Claude Code** | Con un comando, abajo |
+| **Cursor** | `~/.cursor/mcp.json` · Windows: `%USERPROFILE%\.cursor\mcp.json` |
+| **VS Code** (Copilot, modo agente) | *Command Palette → MCP: Open User Configuration*. La clave es `"servers"` en vez de `"mcpServers"`, y cada servidor lleva además `"type": "stdio"` |
+| **Windsurf** | `~/.codeium/windsurf/mcp_config.json` |
+| **Zed** | `settings.json`, bajo `"context_servers"`, con `"source": "custom"` |
+| **JetBrains** | *Settings → Tools → AI Assistant → Model Context Protocol (MCP) → Add*; acepta el mismo JSON |
+
+**Claude Code:**
 
 ```bash
-# Linux / macOS
+# macOS / Linux
 claude mcp add cvlac-mcp --scope user -e CVLAC_ENV_FILE=$HOME/.config/cvlac-mcp/.env -- npx -y cvlac-mcp@1
 
-# Windows, desde Git Bash: sin MSYS_NO_PATHCONV, Git Bash convierte "/c" en "C:/" y el servidor no conecta
+# Windows, desde Git Bash
 MSYS_NO_PATHCONV=1 claude mcp add cvlac-mcp --scope user -e 'CVLAC_ENV_FILE=C:\Users\TU_USUARIO\.config\cvlac-mcp\.env' -- cmd /c npx -y cvlac-mcp@1
 ```
 
-Desde **PowerShell**, el `--` no llega a `claude` y el comando falla con `unknown option '-y'`. Usa Git
-Bash, pon `--%` antes de los argumentos, o pega el JSON de Windows de arriba con `claude mcp add-json`.
+En Git Bash, sin `MSYS_NO_PATHCONV=1`, el `/c` se convierte en `C:/` y el servidor no conecta. Desde
+PowerShell el comando falla con `unknown option '-y'`, porque PowerShell se come el `--`: usa Git Bash,
+pon `--%` antes de los argumentos, o pega el JSON de Windows con `claude mcp add-json`.
 
-Dónde va ese JSON en cada editor (Cursor, Claude Code, Claude Desktop, VS Code, Windsurf, Zed, JetBrains):
-[Paso 5](#paso-5---registrar-el-mcp-en-tu-editor).
+<a id="que-pedirle"></a>
 
-### 4. Verifica
+## Qué pedirle
 
-Reinicia el editor (Claude Desktop hay que cerrarlo del todo) y en el chat pide, en este orden:
+Habla normal, en español. Algunas ideas:
 
-1. `login` — debe autenticar y dejar la sesión guardada.
-2. `read_cvlac` de la sección `formacion` — debe devolver lo que ya tienes en CvLAC.
+| Quieres… | Escribe algo como… |
+|---|---|
+| Ver lo que tienes | "Muéstrame mis cursos en CvLAC" |
+| Ver un registro completo | "Muéstrame todos los datos guardados del proyecto X" |
+| Agregar algo | "Agrega el curso 'Escritura científica' que tomé en 2025, 40 horas" |
+| Corregir algo | "En mi formación, la maestría terminó en 2019, no en 2018" |
+| Borrar algo | "Borra el evento 'Prueba'" — te pedirá confirmación antes |
+| Actualizar el perfil | "Reemplaza mi texto de perfil por este: …" |
+| Agregar una red académica | "Agrega mi ORCID: https://orcid.org/0000-0000-0000-0000" |
+| Ponerte al día con tu hoja de vida | Pega el texto de tu hoja de vida y di: "Compara esto con mi CvLAC y dime qué falta. No cambies nada todavía." |
 
-Si ambas responden sin error, quedó listo. ¿Falla algo? → [Troubleshooting](#troubleshooting).
+Consejos:
 
-La primera vez `npx` descarga el paquete y el servidor puede tardar unos 15 segundos en arrancar. Si el
-editor lo muestra desconectado, espera un momento y reinícialo: la segunda vez ya está en caché.
+- **Pide primero ver, después cambiar.** "Dime qué agregarías, sin guardar nada" es una buena forma de
+  empezar.
+- **Da los datos completos:** fechas, institución, horas, ámbito (nacional o internacional). Si falta un
+  dato que CvLAC exige, el asistente te avisa en vez de inventarlo.
+- **Revisa en CvLAC** lo que quede escrito. Lo que figura en tu hoja de vida es tu responsabilidad, y el
+  asistente, aunque verifica cada guardado, se puede equivocar al interpretar lo que le pides.
 
-Para comprobar el paquete sin pasar por el editor: `npx -y cvlac-mcp@1 --version` imprime la versión y
-`npx -y cvlac-mcp@1 --help` lista los comandos.
+<a id="como-te-protege"></a>
 
-### Archivos opcionales
+## Cómo te protege
 
-Nada de esto hace falta para arrancar. Cuando los quieras, apúntalos con variables en el mismo bloque `env`:
+CvLAC no tiene botón de deshacer, así que cvlac-mcp prefiere preguntar antes que equivocarse:
 
-| Variable | Qué apunta | Para qué |
-|---|---|---|
-| `CVLAC_CONFIG_PATH` | Tu `cvlac.config.json` | Valores por defecto: institución, país, URL del portafolio ([Paso 4b](#paso-4b---configurar-tus-valores-por-defecto-cvlacconfigjson)) |
-| `CVLAC_PORTFOLIO_EXTRA_PATH` | Tu `data/portfolio-extra.json` | Proyectos, software y eventos curados a mano ([Paso 4c](#paso-4c---curar-proyectos-software-y-eventos-dataportfolio-extrajson)) |
+- **No crea duplicados sin preguntar.** Si lo que vas a agregar se parece a algo que ya está, no escribe
+  nada y te muestra los parecidos.
+- **No borra a la primera.** Todo borrado exige una segunda confirmación, incluido quitar una red
+  académica o un área de actuación.
+- **No elige por ti.** Si el nombre de una institución coincide con varias en el catálogo de CvLAC —hay
+  seis "Universidad de los Andes"—, te muestra las opciones.
+- **No inventa datos.** Si falta un dato, te avisa en vez de rellenarlo con algo que suene bien.
+- **Comprueba el resultado.** No da por guardado algo solo porque envió el formulario: mira cómo respondió
+  CvLAC y, si queda duda, vuelve a leer el registro. Si CvLAC se cae a mitad de un guardado, te dice que
+  **no pudo confirmarlo**, para que lo revises antes de intentarlo otra vez.
+- **Dice qué falló.** Si CvLAC rechaza un formulario, te dice qué campo y por qué.
+- **Cuida tu cuenta.** Si CvLAC rechaza tu clave, no vuelve a intentarlo, para no bloquearte. Además
+  espacia sus visitas a CvLAC para no saturarlo.
 
-Sugerido: guárdalos junto al `.env`, en `~/.config/cvlac-mcp/`.
+<a id="problemas-frecuentes"></a>
+
+## Problemas frecuentes
+
+<details>
+<summary><b>"Faltan credenciales", aunque las escribiste</b></summary>
+
+El mensaje dice qué datos faltan y qué archivo buscó:
+
+- **"no existe":** la ruta de `CVLAC_ENV_FILE` en la configuración (paso 4) no apunta al archivo. Revisa
+  el usuario y, en Windows, que las barras sean dobles.
+- **"no encontré ninguna variable":** el archivo existe pero está vacío o mal escrito. Cada línea debe
+  ser `NOMBRE='valor'`.
+- **"no trae esas":** revisa que los nombres estén escritos exactamente como en el paso 3.
+
+</details>
+
+<details>
+<summary><b>CvLAC rechazó el inicio de sesión</b></summary>
+
+cvlac-mcp lo intentó **una sola vez**, para no bloquear tu cuenta. Revisa en tu archivo:
+
+- `CVLAC_NOMBRE`: tu **primer** nombre, con tildes, tal como lo registraste.
+- `CVLAC_CEDULA`: solo números, sin puntos.
+- `CVLAC_PASSWORD`: entre comillas simples.
+
+Antes de volver a intentarlo, entra a mano a
+[CvLAC](https://scienti.minciencias.gov.co/cvlac/Login/pre_s_login.do) con esos mismos datos.
+
+</details>
+
+<details>
+<summary><b>Claude Desktop no muestra cvlac-mcp, o aparece desconectado</b></summary>
+
+- ¿Cerraste Claude Desktop **del todo** después de editar la configuración? (paso 4, punto 3)
+- Revisa que el JSON sea válido: comas entre bloques, llaves cerradas, barras dobles en Windows.
+- La primera vez tarda en descargarse: espera un minuto y reinicia.
+- En macOS, si instalaste Node con nvm o Homebrew, Claude Desktop puede no encontrar `npx`. Pon la ruta
+  completa: en la terminal, `which npx` te la da (por ejemplo `/opt/homebrew/bin/npx`), y va en
+  `"command"`.
+
+</details>
+
+<details>
+<summary><b><code>Executable doesn't exist</code> o no abre el navegador</b></summary>
+
+Falta el navegador, o es de otra versión. Repite el paso 2: `npx -y cvlac-mcp@1 install-browser`. En
+Linux, si existe pero no arranca, faltan librerías del sistema: `npx playwright install-deps chromium`.
+
+</details>
+
+<details>
+<summary><b>CvLAC está caído o responde con errores 5xx</b></summary>
+
+MinCiencias tiene caídas frecuentes. cvlac-mcp lo detecta, reintenta con calma y, si sigue caído, te lo
+dice en vez de reportar tu hoja de vida como vacía. Espera un rato y vuelve a intentarlo. Si fue en
+medio de un guardado, revisa en CvLAC si quedó antes de repetirlo.
+
+</details>
+
+¿Otra cosa? Abre un [issue](https://github.com/stivenson/cvlac-mcp/issues), pero **sin tus datos ni
+capturas con información personal**.
+
+<a id="seguridad"></a>
+
+## Seguridad y privacidad
+
+Qué pasa con tus datos, en concreto:
+
+- **Tus credenciales no salen de tu computador.** Viven en el archivo del paso 3. cvlac-mcp las lee al
+  arrancar y las escribe únicamente en el formulario de inicio de sesión de
+  `scienti.minciencias.gov.co`.
+- **No hay servidor intermedio, cuentas, telemetría ni analítica.** cvlac-mcp corre como un programa en tu
+  computador y habla directamente con tu app de IA. Solo se conecta a **CvLAC** y, si configuras un
+  portafolio, a **la dirección que tú le des**.
+- **Tu asistente de IA sí ve tu hoja de vida.** No tus credenciales —cvlac-mcp nunca las devuelve—, pero
+  sí lo que lee de tu CvLAC, porque eso viaja al chat. Tenlo en cuenta al elegir la app si tu hoja de
+  vida tiene datos sensibles.
+- **La sesión vale tanto como tu clave.** Para no pedir la clave en cada paso, cvlac-mcp guarda la sesión
+  en `.cvlac-session.json`, en tu carpeta de usuario. Mientras siga vigente, quien copie ese archivo
+  entra a tu CvLAC **y puede modificarlo** sin tu clave. En macOS y Linux se crea legible solo por ti; en
+  Windows hereda los permisos de tu carpeta de usuario. Para restringirlo a mano:
+  `chmod 600 ~/.cvlac-session.json` (macOS/Linux) o
+  `icacls "$HOME\.cvlac-session.json" /inheritance:r /grant:r "${env:USERNAME}:(R,W)"` (Windows).
+- **Ni el archivo de datos ni la sesión en carpetas sincronizadas** (OneDrive, Google Drive, Dropbox). Las
+  rutas de esta guía no lo están.
+- **Para cerrar la sesión,** borra `.cvlac-session.json`. La próxima vez, cvlac-mcp inicia sesión de
+  nuevo.
+- **Los registros no muestran secretos.** Aunque actives el modo detallado para depurar, la clave, la
+  cédula y las cookies aparecen como `***`.
+- **Las capturas de pantalla pueden tener datos personales.** Revísalas antes de compartirlas.
+- **Si sospechas que se filtró algo,** cambia tu clave en CvLAC y borra el archivo de sesión.
+
+### Uso responsable
+
+- Esto automatiza un sitio del Estado colombiano **con tu propia cuenta y tus propios datos**. No evade
+  la autenticación, no entra a hojas de vida ajenas y no usa ninguna API oculta: hace lo mismo que harías
+  tú en el navegador, más rápido.
+- **Revisa los términos de uso de ScienTI/MinCiencias** y las políticas de tu institución antes de usarlo.
+- **Supervisión humana siempre.** Pide ver los cambios antes de aplicarlos, no lo dejes trabajando sin
+  mirar y no lo programes para que corra solo.
+- No lo corras en paralelo sobre varias cuentas ni subas su ritmo de peticiones.
+- **Lo que quede en tu hoja de vida es tu responsabilidad.** Es una declaración con efectos ante
+  convocatorias y evaluaciones: verifica en CvLAC lo que se haya escrito.
+
+> **Proyecto independiente.** No está afiliado a MinCiencias ni respaldado por esa entidad. No reproduce
+> su logotipo ni su identidad visual: el símbolo de arriba es original —unas llaves `{ }` de JSON-RPC
+> dentro de un anillo de trazos que convergen— y las marcas «CvLAC», «ScienTI» y «MinCiencias» se
+> nombran solo para identificar el sistema con el que habla el servidor.
+
+<a id="actualizar"></a>
+
+## Actualizar o desinstalar
+
+- **Actualizar:** no tienes que hacer nada. Con `cvlac-mcp@1`, cada vez que abres tu app de IA se usa la
+  última versión 1.x. Si alguna vez sale una 2.x, cambia `@1` por `@2` en la configuración (lee antes qué
+  cambió en el [ROADMAP](https://github.com/stivenson/cvlac-mcp/blob/master/ROADMAP.md)).
+- **Ver qué versión tienes:** `npx -y cvlac-mcp@1 --version`.
+- **Desinstalar:** quita el bloque `"cvlac-mcp"` de la configuración de tu app y borra la carpeta
+  `.config/cvlac-mcp` y el archivo `.cvlac-session.json` de tu carpeta de usuario.
 
 ---
 
-## Instalación desde el código fuente (clonar)
+<a id="desarrolladores"></a>
 
-Para **desarrollar, contribuir o auditar** el código. Si solo quieres usar el servidor, la vía de arriba es
-más corta. Sigue los pasos en orden; cada uno incluye una verificación para no avanzar con un entorno roto.
+# Para desarrolladores
+
+Todo lo de aquí en adelante es para quien quiera auditar el código, contribuir, usar las herramientas MCP
+directamente o comparar el CvLAC con un portafolio web.
+
+Servidor MCP (stdio) en **TypeScript + Playwright**, ESM estricto, probado con Vitest en Linux,
+Windows y macOS. Qué está verificado, qué falta y las limitaciones conocidas están en el
+**[ROADMAP](https://github.com/stivenson/cvlac-mcp/blob/master/ROADMAP.md)**.
+
+- [Instalación desde el código fuente](#clonar)
+- [Configuración avanzada](#config-avanzada)
+- [Comparar con un portafolio (`diff` y `sync`)](#comparar-portafolio)
+- [Referencia de tools MCP](#tools)
+- [Variables de entorno](#variables)
+- [Arquitectura](#arquitectura)
+- [Pruebas y build](#pruebas)
+- [Problemas de desarrollo](#problemas-dev)
+- [Estado y roadmap](#estado)
+
+<a id="clonar"></a>
+
+## Instalación desde el código fuente
+
+Para **desarrollar, contribuir o auditar** el código. Si solo quieres usar el servidor, la
+[instalación paso a paso](#instalacion) es más corta. Sigue los pasos en orden; cada uno incluye una verificación para no avanzar con un entorno roto.
 
 ### Paso 0 - Prerrequisitos (todas las plataformas)
 
@@ -356,6 +649,8 @@ En Windows, el equivalente de `chmod` es
 - **macOS:** `/Users/TU_USUARIO/.cvlac-session.json`
 - **Windows:** `C:\\Users\\TU_USUARIO\\.cvlac-session.json`
 
+<a id="config-json"></a>
+
 ### Paso 4b - Configurar tus valores por defecto (`cvlac.config.json`)
 
 Varios formularios de CvLAC exigen campos que tu portafolio no tiene (municipio, intensidad horaria, idioma). Se declaran una vez aquí:
@@ -379,6 +674,8 @@ cp cvlac.config.example.json cvlac.config.json
 
 Todo es opcional. **Si un valor falta, el campo se deja vacío y la respuesta trae un warning** — el servidor no inventa datos para tu hoja de vida.
 
+<a id="portfolio-extra"></a>
+
 ### Paso 4c - Curar proyectos, software y eventos (`data/portfolio-extra.json`)
 
 Estas tres secciones no se pueden leer del portafolio: necesitan metadatos que solo existen en CvLAC (tipo de proyecto, código DANE, códigos de enum). Se mantienen a mano:
@@ -389,35 +686,11 @@ cp data/portfolio-extra.example.json data/portfolio-extra.json
 
 El archivo se valida al cargarse; si un ítem está mal formado, el servidor lo reporta y sigue con las demás secciones.
 
-### Paso 5 - Registrar el MCP en tu editor
+### Paso 5 - Registrar el MCP en tu app
 
-El servidor habla **MCP por stdio** y su entrypoint real es `dist/index.js`. Cualquier cliente
-que soporte MCP sirve; sólo cambia dónde vive el archivo de configuración.
-
-**El bloque base es el mismo en todos** (ajusta la ruta a tu sistema):
-
-```json
-{
-  "command": "node",
-  "args": ["/home/TU_USUARIO/dev/cvlac-mcp/dist/index.js"]
-}
-```
-
-Ruta de `args` según el SO:
-- **Linux:** `"/home/TU_USUARIO/dev/cvlac-mcp/dist/index.js"`
-- **macOS:** `"/Users/TU_USUARIO/dev/cvlac-mcp/dist/index.js"`
-- **Windows:** `"C:\\Users\\TU_USUARIO\\dev\\cvlac-mcp\\dist\\index.js"` (dobles barras invertidas en JSON)
-
-> **Deja las credenciales solo en `.env`.** Clonado, el servidor lo carga desde su propio directorio, así
-> que no hace falta repetirlas en la configuración del editor (instalado con `npx` es distinto: ahí sí
-> hace falta `CVLAC_ENV_FILE`, ver [la instalación rápida](#3-registra-el-mcp-en-tu-editor)) — y esos archivos suelen estar en tu
-> home sin permisos restringidos, o sincronizados entre máquinas. Si aun así las pones en un bloque
-> `env`, ganan sobre `.env`.
-
-#### Cursor
-
-Archivo: `~/.cursor/mcp.json` (global) · `<proyecto>/.cursor/mcp.json` (por proyecto) ·
-Windows: `%USERPROFILE%\.cursor\mcp.json`
+Igual que en la [instalación paso a paso](#instalacion), cambiando `npx` por `node` y la ruta a tu
+`dist/index.js`. No hace falta `CVLAC_ENV_FILE`: clonado, el servidor lee el `.env` de la raíz del
+repo.
 
 ```json
 {
@@ -430,93 +703,15 @@ Windows: `%USERPROFILE%\.cursor\mcp.json`
 }
 ```
 
-Reinicia Cursor y confirma en *Settings → MCP* que `cvlac-mcp` aparece activo y lista sus tools.
+- **macOS:** `"/Users/TU_USUARIO/dev/cvlac-mcp/dist/index.js"`
+- **Windows:** `"C:\\Users\\TU_USUARIO\\dev\\cvlac-mcp\\dist\\index.js"` (barras dobles en JSON; aquí no hace falta `cmd /c`,
+  porque `node` sí es un ejecutable)
+- **Claude Code:** `claude mcp add cvlac-mcp --scope user -- node /ruta/a/cvlac-mcp/dist/index.js`
+- **Dónde va el JSON en cada app:** [Otras apps de IA](#otras-apps).
 
-#### Claude Code (CLI)
-
-Una línea, sin editar JSON a mano:
-
-```bash
-claude mcp add cvlac-mcp --scope user -- node /home/TU_USUARIO/dev/cvlac-mcp/dist/index.js
-```
-
-`--scope user` lo deja disponible en todos tus proyectos; `--scope project` lo escribe en
-`.mcp.json` del repo actual (se versiona y lo comparte el equipo) y `--scope local` sólo para ti
-en ese proyecto. Verifica con `claude mcp list` y, dentro de una sesión, con `/mcp`.
-
-En **Windows** sin WSL, el comando es el mismo cambiando la ruta:
-
-```powershell
-claude mcp add cvlac-mcp --scope user -- node C:\Users\TU_USUARIO\dev\cvlac-mcp\dist\index.js
-```
-
-#### Claude Desktop
-
-Archivo `claude_desktop_config.json`:
-- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-- **Linux:** `~/.config/Claude/claude_desktop_config.json`
-
-Mismo formato que Cursor (`mcpServers`). Requiere **cerrar y reabrir** la app — no basta con
-recargar la ventana.
-
-#### VS Code (GitHub Copilot / modo agente)
-
-Archivo: `<proyecto>/.vscode/mcp.json` (por workspace) o el `mcp.json` de usuario
-(*Command Palette → MCP: Open User Configuration*). Ojo: la clave es **`servers`**, no `mcpServers`.
-
-```json
-{
-  "servers": {
-    "cvlac-mcp": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["/home/TU_USUARIO/dev/cvlac-mcp/dist/index.js"]
-    }
-  }
-}
-```
-
-Las tools aparecen en el selector de herramientas del chat en modo agente.
-
-#### Windsurf
-
-Archivo: `~/.codeium/windsurf/mcp_config.json`. Formato `mcpServers`, igual que Cursor.
-
-#### Zed
-
-Archivo `settings.json` de Zed. Los servidores MCP van bajo **`context_servers`** y el binario
-bajo `command`:
-
-```json
-{
-  "context_servers": {
-    "cvlac-mcp": {
-      "source": "custom",
-      "command": "node",
-      "args": ["/home/TU_USUARIO/dev/cvlac-mcp/dist/index.js"]
-    }
-  }
-}
-```
-
-#### JetBrains (IntelliJ, PyCharm, WebStorm…)
-
-Con el plugin de AI Assistant / Junie: *Settings → Tools → AI Assistant → Model Context Protocol
-(MCP) → Add*. Acepta pegar el mismo JSON de `mcpServers`, o llenar `command` = `node` y
-`arguments` = la ruta a `dist/index.js`.
-
-#### Otro cliente MCP
-
-Cualquiera que acepte un servidor stdio funciona. Lo único que necesita saber:
-ejecutable `node`, argumento la ruta absoluta a `dist/index.js`, sin argumentos extra ni puertos.
-
----
-
-### Paso 5b - ¿No quieres clonar?
-
-Existe la vía corta con `npx`, sin clonar ni compilar:
-**[Instalación rápida (npx)](#instalación-rápida-npx--5-minutos)**.
+> **Deja las credenciales solo en `.env`.** Los archivos de configuración de las apps suelen estar sin
+> permisos restringidos o sincronizados entre máquinas. Si aun así las pones en un bloque `env`, ganan
+> sobre el `.env`.
 
 ### Paso 6 - Verificar la instalación
 
@@ -539,12 +734,175 @@ Existe la vía corta con `npx`, sin clonar ni compilar:
 
 4. **Prueba funcional mínima** desde el chat de tu editor, en este orden:
    - `login` (debe autenticar y persistir sesión)
-   - `read_portfolio` (debe devolver datos del portafolio)
-   - `diff` (debe reportar `missing` / `upToDate`)
+   - `read_cvlac` con `section: "formacion"` (debe devolver lo que ya está en CvLAC)
+   - si configuraste un portafolio: `read_portfolio` y luego `diff`
 
-Si los tres responden sin error, el MCP quedó correctamente instalado y configurado.
+Si responden sin error, el MCP quedó correctamente instalado y configurado.
 
 ---
+
+<a id="config-avanzada"></a>
+
+## Configuración avanzada
+
+Nada de esto hace falta para usar el servidor. Instalado con `npx`, cada archivo se apunta con una
+variable en el mismo bloque `env` de la configuración de tu app, junto a `CVLAC_ENV_FILE`; clonado, se
+toman de la raíz del repo.
+
+| Variable | Qué apunta | Para qué |
+|---|---|---|
+| `CVLAC_CONFIG_PATH` | Tu `cvlac.config.json` | Valores por defecto que CvLAC exige y tu fuente no trae: municipio, institución de respaldo, horas semanales, idioma, país, URL del portafolio ([formato](#config-json)) |
+| `CVLAC_PORTFOLIO_EXTRA_PATH` | Tu `portfolio-extra.json` | Proyectos, software y eventos curados a mano, para que entren al `diff` ([formato](#portfolio-extra)) |
+
+Sugerido: guárdalos junto al `.env`, en `~/.config/cvlac-mcp/`. Si falta un valor por defecto, el
+campo queda vacío y la respuesta trae un warning: **el servidor nunca inventa un dato** para una hoja de
+vida.
+
+<a id="comparar-portafolio"></a>
+
+## Comparar con un portafolio (`diff` y `sync`)
+
+`diff` compara el CvLAC con un portafolio web y clasifica cada ítem en cuatro grupos: **faltantes**,
+**a actualizar**, **parecidos** (algo similar ya existe: decide una persona) y **al día**. `sync` aplica
+los faltantes y los de actualizar, y nunca los parecidos.
+
+**Limitación importante:** `read_portfolio` está hecho para un sitio concreto —una app React con la ruta
+`#/resume`, pestañas Experiencia, Educación y Cursos, y una sección "Logros Destacados"— y si no
+encuentra esa estructura devuelve listas vacías, con un warning en el log. Proyectos, software y eventos
+no salen del sitio sino de [`portfolio-extra.json`](#portfolio-extra). Tampoco entran al `diff`:
+experiencia profesional (los nombres de empresa difieren demasiado), idiomas, líneas ni demás trabajos.
+
+Separar la fuente del motor —que `diff` acepte un JSON normalizado de hoja de vida, venga de un PDF, de
+ORCID o del dictado— está en el [ROADMAP](https://github.com/stivenson/cvlac-mcp/blob/master/ROADMAP.md).
+
+Flujo recomendado:
+
+1. `login`
+2. `sync` con `dry_run: true`
+3. Revisar el reporte con una persona: faltantes, a actualizar, **parecidos** y al día
+4. Resolver los parecidos uno a uno — `update` sobre el existente, o `add` con `confirm_duplicate:true`
+5. Aplicar el resto: `sync` sin `dry_run`, o `update_section` por ítem revisando los `warnings`
+6. Verificar con `read_cvlac` de las secciones tocadas, o `read_cvlac_detail`
+
+```text
+read_portfolio ─┐
+                ├─► diff ─► sync (dry_run → apply) ─► update_section (add / update / delete)
+read_cvlac ─────┘
+```
+
+Si trabajas con Claude Code, la skill `cvlac-sync` del
+[workspace cliente](https://github.com/stivenson/cvlac-workspace) encapsula este flujo.
+
+<a id="tools"></a>
+
+## Referencia de tools MCP
+
+| Tool | Qué hace |
+|---|---|
+| `login` | Autentica en CvLAC y persiste la sesión. `force:true` vuelve a iniciar sesión. Un rechazo no se reintenta |
+| `read_cvlac` | Lee una sección o todas (`all`) |
+| `read_cvlac_detail` | Abre la ficha completa de un ítem (por sección y etiqueta) y devuelve sus pares campo/valor. Las listas muestran dos o tres columnas; esta es la forma de ver lo que realmente quedó guardado |
+| `read_profile` | Lee lo que CvLAC guarda como registro único: el texto de perfil, la tabla de redes académicas y las áreas de actuación. Nada de eso sale en `read_cvlac` |
+| `update_profile` | Escribe perfil, redes y/o áreas (detalles abajo) |
+| `read_portfolio` | Renderiza el portafolio de `PORTFOLIO_URL` y lo une con `portfolio-extra.json` |
+| `diff` | Compara CvLAC contra el portafolio: `missing`, `toUpdate`, `similar`, `upToDate` |
+| `update_section` | Aplica un cambio puntual: `add`, `update` o `delete` |
+| `sync` | `diff` + aplica `missing` y `toUpdate`. `dry_run:true` para previsualizar. Los `similar` nunca se aplican solos |
+| `screenshot` | Captura la `url` dada, o la última lista, ficha o formulario visitado, recargado tal como está ahora. Rechaza los enlaces de acción (borrar, guardar): en CvLAC abrir uno lo ejecuta |
+| `inspect_form` | Lista los campos reales (`input`/`select`/`textarea`) de una URL de CvLAC, con sus opciones y cuáles son obligatorios |
+
+Una tool que falla devuelve `isError: true`. `needs_confirmation` y `unverified` no son errores: piden
+que una persona decida o revise.
+
+### `update_section`
+
+Secciones: `formacion`, `formacionComple`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`,
+`software`, `eventos`, `idiomas`, `lineas`, `demasTrabajos`. El esquema de `data` de cada una está en
+[`src/schemas.ts`](https://github.com/stivenson/cvlac-mcp/blob/master/src/schemas.ts); un campo mal formado
+se rechaza nombrándolo, antes de abrir el navegador.
+
+| `status` | Significa |
+|---|---|
+| `ok` | Se guardó. Revisa los `warnings` de todos modos: traen los campos que no se llenaron |
+| `needs_confirmation` | **No se escribió nada.** Tres causas: ítems parecidos en `similar` (repetir con `confirm_duplicate:true` o hacer `update`); una institución ambigua con candidatos en `choices` (repetir con `data.institucionId`); o un `delete` sin `confirm_delete:true` |
+| `failed` | CvLAC rechazó el formulario. `message` trae su error, nombrando los campos |
+| `unverified` | **Se envió y no se pudo confirmar**, típicamente porque CvLAC se cayó a mitad. No reintentar a ciegas: verificar con `read_cvlac_detail` |
+
+Más detalles:
+
+- Un `update` que no logre cambiar ningún campo del formulario **no se envía**: devuelve `failed` con
+  los warnings.
+- Una institución con coincidencia exacta se resuelve sola. El catálogo tiene duplicados exactos —seis
+  "Universidad de los Andes"—, así que el nombre no siempre basta.
+- **formacionComple** usa el mismo formulario que `formacion`, con otro catálogo de niveles (`Y` Otros,
+  `8` Extensión, `F` Cursos de corta duración, `E` MBA) y `startMonth`. El `add` solo funciona con un
+  programa académico que CvLAC ya tenga registrado para esa institución y nivel.
+- **demasTrabajos**: `name`, `year`, `month`, `medio` (Papel, Internet u Otro), `finalidad`, y
+  opcionalmente `idioma` y `ciudad`. El formulario trae Enero y Papel preseleccionados: si faltan
+  `month` o `medio` se guardan esos, y lo avisa.
+- **idiomas**: `language` (nombre en español o código ISO de 2 letras) y los niveles
+  `read`/`write`/`speak`/`listen`, o un `level` que los fija todos: Deficiente, Aceptable o Bueno.
+- **lineas**: `name`, `active` (por defecto `true`, y lo avisa) y `objective`.
+- **experiencia**: el formulario de CvLAC no tiene campo de cargo; si el ítem trae `role`, se avisa que no
+  se escribió.
+
+### `update_profile`
+
+- `description` reemplaza el texto de perfil. **No se puede vaciar**: CvLAC lo marca obligatorio (máx.
+  3950 caracteres).
+- `networks` se **fusionan** con lo guardado: el formulario de CvLAC reescribe la tabla entera, así que
+  la tool la lee primero y reenvía todo. `url:null` quita una red y exige `confirm_delete:true`. Redes
+  aceptadas: `google_scholar`, `researchgate`, `ssr`, `ssrn`, `academia_edu`, `mendeley`, `linkedin`,
+  `repositorios_disciplinares`, `repositorios_institucionales`, `researcher_id`, `scopus_author_id`,
+  `orcid` y `otro` (con su nombre en `label`).
+- `areas` es la lista completa de áreas de actuación **en orden** —la primera es la principal—, por
+  nombre o por código de CvLAC (`0-1B01`). Reemplaza lo guardado: dejar una fuera es borrarla y exige
+  `confirm_delete:true`. El catálogo tiene 267 áreas en tres niveles; un nombre ambiguo vuelve en
+  `choices` en vez de adivinarse.
+
+<a id="variables"></a>
+
+## Variables de entorno
+
+Se definen en el `.env`, o en el bloque `env` de la configuración de la app, que tiene prioridad.
+
+| Variable | Descripción |
+|---|---|
+| `CVLAC_NOMBRE` | Primer nombre con el que inicias sesión en CvLAC |
+| `CVLAC_CEDULA` | Documento de identidad |
+| `CVLAC_PASSWORD` | Contraseña de CvLAC |
+| `CVLAC_ENV_FILE` | Ubicación del propio `.env`. Imprescindible instalado desde npm, donde el servidor corre desde la caché de `npx`. Va en la configuración de la app, no en el `.env` |
+| `CVLAC_SESSION_PATH` | Dónde se guarda la sesión. Por defecto, `.cvlac-session.json` en la carpeta de usuario |
+| `PORTFOLIO_URL` | Portafolio a comparar. También configurable como `portfolioUrl` en `cvlac.config.json` |
+| `CVLAC_CONFIG_PATH` | Ubicación de `cvlac.config.json` |
+| `CVLAC_PORTFOLIO_EXTRA_PATH` | Ubicación de `portfolio-extra.json` |
+| `CVLAC_HEADLESS` | `false` abre el navegador para ver qué hace |
+| `CVLAC_LOG_LEVEL` | `debug` \| `info` (default) \| `warn` \| `error` \| `silent`. Los logs van a stderr |
+| `CVLAC_LOG_FILE` | Además de stderr, agrega cada línea a este archivo |
+| `CVLAC_USER_AGENT` | Reemplaza el user-agent. Por defecto se usa el del Chromium real, que coincide con el sistema |
+
+Al arrancar, el servidor escribe en stderr qué `.env` leyó:
+`env file: <ruta> (found, 3 vars)`, o `NOT FOUND`, o `read as utf16le` / `read as latin1` si no estaba en
+UTF-8.
+
+### Ritmo de las peticiones
+
+CvLAC empieza a responder 5xx cuando las peticiones llegan pegadas. El servidor espacía cada navegación,
+reintenta con backoff y, si el sitio rechaza varias seguidas, deja de insistir hasta que pase un
+enfriamiento. Los valores por defecto sirven para un `sync` normal; súbelos si notas 503 seguidos:
+
+| Variable | Default | Descripción |
+|---|---|---|
+| `CVLAC_MIN_REQUEST_GAP_MS` | `900` | Espera mínima entre dos peticiones |
+| `CVLAC_REQUEST_JITTER_MS` | `700` | Aleatorio que se suma a esa espera, para no tener un ritmo de máquina |
+| `CVLAC_NAV_TIMEOUT_MS` | `30000` | Cuánto esperar a que cargue una página |
+| `CVLAC_NAV_MAX_ATTEMPTS` | `3` | Intentos por navegación (5xx o timeout). `1` desactiva reintentos |
+| `CVLAC_BACKOFF_BASE_MS` | `2000` | Espera tras el primer fallo; se duplica en cada intento |
+| `CVLAC_BACKOFF_CAP_MS` | `30000` | Techo de esa espera |
+| `CVLAC_OUTAGE_THRESHOLD` | `3` | Navegaciones fallidas seguidas antes de cortar el tráfico |
+| `CVLAC_OUTAGE_COOLDOWN_MS` | `120000` | Cuánto se queda quieto tras cortar |
+
+<a id="arquitectura"></a>
 
 ## Arquitectura
 
@@ -553,7 +911,7 @@ src/
 ├── index.ts                  # Entry point: subcomandos, carga del .env, stdio transport
 ├── cli.ts                    # install-browser, --version, --help
 ├── env.ts                    # Ubicación y lectura del .env (UTF-8, UTF-16 o ANSI)
-├── server.ts                 # Registro de tools MCP
+├── server.ts                 # Registro de tools MCP, isError
 ├── types.ts                  # Tipos de portfolio/CvLAC/diff/update
 ├── schemas.ts                # Un schema zod por sección
 ├── config.ts                 # cvlac.config.json
@@ -567,296 +925,78 @@ src/
 │   ├── availability.ts       # Distingue "CvLAC caído" de un error propio
 │   └── catalogue.ts          # Catálogos de CvLAC (municipios, instituciones)
 ├── tools/
-│   ├── login.ts
-│   ├── read-cvlac.ts
-│   ├── read-cvlac-detail.ts  # Ficha completa de un ítem
-│   ├── read-portfolio.ts
-│   ├── diff.ts
+│   ├── login.ts  read-cvlac.ts  read-cvlac-detail.ts  read-portfolio.ts  diff.ts  sync.ts
 │   ├── update-section.ts     # add/update/delete por sección
 │   ├── write-verdict.ts      # ¿Se guardó? saved / rejected / unverified
 │   ├── profile.ts            # Perfil y redes académicas
 │   ├── areas.ts              # Áreas de actuación
-│   ├── sync.ts
 │   └── screenshot.ts
 └── extractors/
-    ├── portfolio.ts
-    └── cvlac/
-        formacion.ts experiencia.ts cursos.ts reconocimientos.ts
-        proyectos.ts software.ts eventos.ts
+    ├── portfolio.ts          # Renderiza el portafolio + portfolio-extra.json
+    └── cvlac/                # Un extractor por sección, sobre rows.ts
 ```
 
----
+Las decisiones de diseño y las trampas de CvLAC que ya costaron un bug están en
+[`CLAUDE.md`](https://github.com/stivenson/cvlac-mcp/blob/master/CLAUDE.md), y las URLs, columnas y
+nombres de campos verificados en vivo, en
+[`docs/cvlac-findings.md`](https://github.com/stivenson/cvlac-mcp/blob/master/docs/cvlac-findings.md).
 
-## Tools MCP disponibles
-
-- `login`: autentica en CvLAC y persiste sesión.
-- `read_cvlac`: lee una sección o todas (`all`) desde CvLAC.
-- `read_cvlac_detail`: abre la ficha completa de un ítem (por sección y etiqueta) y devuelve sus pares campo/valor. Las listas solo muestran dos o tres columnas; esta es la única forma de ver lo que realmente quedó guardado.
-- `read_profile`: lee las tres cosas que CvLAC guarda como **un solo registro** en vez de una lista: el texto de perfil del investigador (`txt_desc_perfil`), la tabla de redes sociales académicas y las áreas de actuación. Ninguna sale en `read_cvlac`.
-- `update_profile`: escribe el texto de perfil y/o las redes académicas. Las redes se **fusionan** sobre lo guardado: `ReRedSocialIdent/insert.do` reescribe la tabla completa con lo que reciba, así que la tool la lee primero y reenvía todo. `url:null` elimina una red, y eso exige `confirm_delete:true`. El texto de perfil **no se puede vaciar**: CvLAC lo marca `required` (máx. 3950 caracteres), así que solo se reemplaza.
-
-  `areas` es la lista completa de áreas de actuación **en orden** —la primera es la principal—, por nombre o por código de CvLAC. Reemplaza lo guardado, así que dejar una fuera es borrarla y exige `confirm_delete:true`. Un nombre ambiguo vuelve en `choices` en vez de adivinarse. El catálogo tiene 267 áreas en tres niveles y viaja completo dentro de la página del popup, no una petición por nivel. Una red que CvLAC no lista va en `otro`, con su nombre en `label`.
-- `read_portfolio`: **renderiza** el portafolio con Playwright y lee el DOM de su ruta `#/resume` (pestañas Experiencia, Educación y Cursos). Antes descargaba `assets/index-*.js` y sacaba los datos del bundle con regex; el sitio se reescribió como app React de rutas hash cuyo contenido es JSX, así que esos objetos dejaron de existir y todo volvía vacío **sin error**. Usa un navegador aparte: la sesión de CvLAC no debe llevar sus cookies a un sitio de terceros.
-
-  Los logros salen de la sección "Logros Destacados" del dashboard (`#/`), buscada por su título: otras secciones usan la misma tarjeta. Las habilidades conservan los grupos del propio sitio ("Lenguajes", "Cloud & DevOps"…).
-
-`diff` busca cada formación del portafolio **en formación académica y complementaria a la vez**, y propone la que falte para la sección que le toca (diplomados, cursos y talleres → complementaria). Un reconocimiento con otra redacción cuenta como `similar` si comparte una palabra del título del portafolio (el tipo de premio) y otra de su descripción (por qué fue): los títulos solos casi nunca coinciden.
-- `diff`: compara CvLAC vs portafolio y reporta cuatro grupos: `missing`, `toUpdate`, `similar` (parecidos a algo existente) y `upToDate`.
-- `update_section`: aplica cambio puntual (`add`, `update`, `delete`). Devuelve `status` (`ok`, `failed`, `needs_confirmation` o `unverified` — se envió pero CvLAC no dejó confirmarlo, típicamente porque se cayó a mitad), `warnings` por campo y, si detecta un posible duplicado, `needs_confirmation` con los candidatos. `confirm_duplicate:true` fuerza la creación. **Un combobox ambiguo tampoco escribe:** si el nombre de institución coincide con varias filas del catálogo de CvLAC, devuelve `needs_confirmation` con los candidatos en `choices` (`{id, label}`) y no escribe nada. Se resuelve repitiendo con `data.institucionId`. Un nombre con coincidencia exacta se resuelve solo, sin preguntar. **Un `delete` tampoco borra a la primera:** devuelve `needs_confirmation` y hay que repetirlo con `confirm_delete:true`. El CvLAC no tiene deshacer.
-- `sync`: ejecuta diff + aplica `missing` y `toUpdate` (con `dry_run` opcional). Los `similar` nunca se aplican solos.
-- `screenshot`: captura la página que le pases en `url`, o la última lista, ficha o formulario que abrió una tool, recargada tal como está ahora. Rechaza los enlaces de acción (borrar, guardar): en CvLAC abrir uno lo ejecuta.
-- `inspect_form`: inspecciona campos reales (`input/select/textarea`) de una URL CvLAC.
-
-Secciones soportadas:
-`formacion`, `formacionComple`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`, `software`, `eventos`, `idiomas`, `lineas`, `demasTrabajos`.
-
-- **demasTrabajos** — `name`, `year`, `month`, `medio` (Papel, Internet u Otro), `finalidad`, y opcionalmente `idioma` y `ciudad` (por defecto, los de `cvlac.config.json`). El formulario trae Enero y Papel preseleccionados: si faltan `month` o `medio` se guardan esos, y lo avisa. No entra al diff.
-
-- **formacionComple** — formación complementaria. Mismo formulario que `formacion` (es el mismo módulo con `isTrayectoria=FC`), con dos diferencias: el catálogo de niveles es otro (`Y` Otros, `8` Extensión, `F` Cursos de corta duración, `E` MBA) y pide `startMonth`. Se puede forzar el nivel con `nivel`; si no, se infiere del nombre. Tampoco entra al `diff`: los cursos del portafolio ya se mapean a `cursos`.
-
-`idiomas` y `lineas` no entran al `diff`: el portafolio no lleva ni idiomas ni líneas de investigación, así que cada fila del CvLAC se leería como un sobrante inexplicable. Se gestionan con `update_section` directamente.
-
-- **idiomas** — `language` (nombre en español o código ISO de 2 letras) y los cuatro niveles `read`/`write`/`speak`/`listen`, o un `level` que los fija todos. Valores: Deficiente, Aceptable, Bueno.
-- **lineas** — `name`, `active` (por defecto `true`, y lo avisa) y `objective`.
-
-Un `update` que no logre cambiar ningún campo del formulario **no se envía**: devuelve `failed` con los warnings. Salir del formulario es el redirect normal de un guardado, así que reenviar los valores almacenados se veía exactamente igual que guardar.
-
-La suite e2e (`tests/e2e/live-crud.mjs`) acepta además `--sections=perfil`, que ejercita el CRUD de `read_profile`/`update_profile`: toma un snapshot, escribe en una fila de red que nadie use, la edita, la borra y restaura lo que había. Comprueba explícitamente que las redes preexistentes sobrevivan a la escritura — el `insert.do` de CvLAC reescribe la tabla entera.
-
-Redes académicas aceptadas por `update_profile` (`network`):
-`google_scholar`, `researchgate`, `ssr`, `ssrn`, `academia_edu`, `mendeley`, `linkedin`,
-`repositorios_disciplinares`, `repositorios_institucionales`, `researcher_id`,
-`scopus_author_id`, `orcid`, `otro`.
-
----
-
-## Variables de entorno
-
-Definidas en `.env` (ver [Paso 4](#paso-4---configurar-variables-de-entorno-env)), o en el bloque
-`env` de la configuración de tu editor, que tiene prioridad sobre el archivo:
-
-| Variable | Descripción |
-|---|---|
-| `CVLAC_NOMBRE` | Nombre con el que inicias sesión en CvLAC |
-| `CVLAC_CEDULA` | Documento de identidad |
-| `CVLAC_PASSWORD` | Contraseña de CvLAC |
-| `CVLAC_SESSION_PATH` | Ruta donde se guarda `storageState` para reusar sesión. Por defecto, `.cvlac-session.json` en tu carpeta de usuario |
-| `PORTFOLIO_URL` | Portafolio a comparar. También configurable como `portfolioUrl` en `cvlac.config.json` |
-
-Opcionales:
-
-| Variable | Descripción |
-|---|---|
-| `CVLAC_HEADLESS` | `false` abre el navegador para ver qué hace |
-| `CVLAC_LOG_LEVEL` | `debug` \| `info` (default) \| `warn` \| `error` \| `silent`. Los logs van a stderr |
-| `CVLAC_LOG_FILE` | Además de stderr, agrega cada línea a este archivo |
-| `CVLAC_USER_AGENT` | Reemplaza el user-agent del navegador. Por defecto se usa el del Chromium real, que coincide con tu sistema |
-| `CVLAC_ENV_FILE` | Ubicación alterna del propio `.env`. Imprescindible al instalar desde npm, donde el servidor corre desde la caché de `npx` |
-| `CVLAC_CONFIG_PATH` | Ubicación alterna de `cvlac.config.json` |
-| `CVLAC_PORTFOLIO_EXTRA_PATH` | Ubicación alterna de `portfolio-extra.json` |
-
-### Ritmo de las peticiones
-
-CvLAC empieza a responder 5xx cuando las peticiones llegan pegadas. El servidor espacía
-cada navegación, reintenta con backoff y, si el sitio rechaza varias seguidas, deja de
-insistir hasta que pase un enfriamiento. Los valores por defecto sirven para un sync
-normal; súbelos si notas 503 seguidos:
-
-| Variable | Default | Descripción |
-|---|---|---|
-| `CVLAC_MIN_REQUEST_GAP_MS` | `900` | Espera mínima entre dos peticiones |
-| `CVLAC_REQUEST_JITTER_MS` | `700` | Aleatorio que se suma a esa espera, para no tener un ritmo de máquina |
-| `CVLAC_NAV_TIMEOUT_MS` | `30000` | Cuánto esperar a que cargue una página |
-| `CVLAC_NAV_MAX_ATTEMPTS` | `3` | Intentos por navegación (5xx o timeout). `1` desactiva reintentos |
-| `CVLAC_BACKOFF_BASE_MS` | `2000` | Espera tras el primer fallo; se duplica en cada intento |
-| `CVLAC_BACKOFF_CAP_MS` | `30000` | Techo de esa espera |
-| `CVLAC_OUTAGE_THRESHOLD` | `3` | Navegaciones fallidas seguidas antes de cortar el tráfico |
-| `CVLAC_OUTAGE_COOLDOWN_MS` | `120000` | Cuánto se queda quieto tras cortar |
-
----
-
-## Uso local
-
-### Modo desarrollo (sin compilar)
-
-```bash
-npm run dev
-```
-
-### Modo producción local (compilado)
-
-```bash
-npm run build
-npm start
-```
-
----
-
-## Flujo recomendado
-
-1. `login`
-2. `sync` con `dry_run: true`
-3. Revisar el reporte con una persona: faltantes, a actualizar, **parecidos** y al día
-4. Resolver los parecidos uno a uno — `update` sobre el existente, o `add` con `confirm_duplicate:true`
-5. Aplicar el resto: `sync` sin `dry_run`, o `update_section` por ítem revisando los `warnings`
-6. Verificar con `read_cvlac` de las secciones tocadas, o `screenshot`
-
-Si trabajas con Claude Code, la skill `cvlac-sync` del [workspace cliente](https://github.com/stivenson/cvlac-workspace) encapsula este flujo.
-
-### Diagrama
-
-```mermaid
-flowchart LR
-  portfolio["read_portfolio"] --> diffEngine
-  cvlacRead["read_cvlac"] --> diffEngine["diff"]
-  diffEngine --> syncTool["sync (dry_run / apply)"]
-  syncTool --> updateSection["update_section add/update/delete"]
-```
-
----
+<a id="pruebas"></a>
 
 ## Pruebas y build
 
 ```bash
-npm test        # suite completa: sin red, sin credenciales, sin CvLAC
-npm run build
+npm test          # suite completa: sin red, sin credenciales, sin CvLAC
+npm run build     # compila src/ a dist/, que es lo que ejecuta la app
+npm run dev       # corre src/ con tsx, sin compilar
+npm run test:watch
 ```
 
-Los tests cubren extractores (contra fixtures HTML anonimizados), el motor de diff, los schemas, la carga de configuración, la redacción de secretos en logs, el reporte de `sync`, el borde MCP y la lectura de fichas de detalle. Los fixtures llevan datos ficticios a propósito: si capturas HTML real para uno nuevo, anonimízalo antes de commitear.
+Los tests cubren extractores (contra fixtures HTML anonimizados), el motor de diff, los schemas, la carga
+de configuración y del `.env`, la redacción de secretos en logs, el reporte de `sync`, el borde MCP y la
+lectura de fichas de detalle. Los fixtures llevan datos ficticios a propósito: si capturas HTML real para
+uno nuevo, anonimízalo antes de commitear.
+
+El workflow [`smoke`](https://github.com/stivenson/cvlac-mcp/actions/workflows/smoke.yml) corre en Linux,
+Windows y macOS: compila, corre los tests, instala Chromium con `install-browser` y ejecuta
+`scripts/smoke.mjs`, que comprueba el arranque, el protocolo MCP, las tools registradas, el mensaje sin
+credenciales y que el navegador abra. Otro job escribe el `.env` en PowerShell 5.1 y 7 de las tres formas
+habituales y verifica que el servidor lo lea. Lanzado a mano, prueba además el paquete tal como se
+instala desde npm.
 
 ### Suite en vivo (opcional, escribe en tu CvLAC real)
 
 ```bash
-CVLAC_E2E=1 npm run test:e2e:live                      # las 7 secciones
+CVLAC_E2E=1 npm run test:e2e:live                      # las secciones con lista
 CVLAC_E2E=1 npm run test:e2e:live -- --sections=cursos  # solo una
+CVLAC_E2E=1 npm run test:e2e:live -- --sections=perfil  # perfil y redes
 ```
 
-Recorre el CRUD completo por sección contra tu cuenta real: lista → `add` → lista → `read_cvlac_detail` → `add` repetido (debe devolver `needs_confirmation`) → `update` → detalle para comprobar el cambio → `delete` → lista final. Cada ítem que crea lleva el prefijo `ZZ PRUEBA MCP`, siempre intenta borrarlo y, si algo sobrevive, lo reporta al final para que lo borres a mano.
+Recorre el CRUD completo por sección contra tu cuenta real: lista → `add` → lista → `read_cvlac_detail` →
+`add` repetido (debe devolver `needs_confirmation`) → `update` → detalle para comprobar el cambio →
+`delete` → lista final. Cada ítem que crea lleva el prefijo `ZZ PRUEBA MCP`, siempre intenta borrarlo y,
+si algo sobrevive, lo reporta al final para que lo borres a mano. `--sections=perfil` toma un snapshot,
+escribe en una red que nadie use, la edita, la borra y restaura lo que había.
 
-Es la única suite que toca datos reales, por eso exige `CVLAC_E2E=1` y no corre con `npm test`. Deja el reporte en `tests/e2e/report-<fecha>.json` (gitignored).
+Es la única suite que toca datos reales: por eso exige `CVLAC_E2E=1` y no corre con `npm test`. Habla con
+`dist/index.js`, así que va después de `npm run build`. Deja el reporte en
+`tests/e2e/report-<fecha>.json` (gitignored).
 
-Comandos disponibles:
+<a id="problemas-dev"></a>
 
-```bash
-npm run dev
-npm run test:watch
-npm start
-```
+## Problemas de desarrollo
 
----
+- **La app usa una versión vieja del código:** ejecuta `npm run build` tras cambiar `src/`. La app corre
+  `dist/index.js`, no `src/index.ts`.
+- **No aparece en la app (instalación clonada):** revisa la ruta absoluta a `dist/index.js` en `args`, con
+  barras dobles en Windows, y reinicia la app.
+- **Un formulario no guarda un campo:** varios campos de CvLAC son `readonly` y se llenan por JS. Usa
+  `inspect_form` para ver los nombres reales, `CVLAC_HEADLESS=false` para ver el navegador y
+  `CVLAC_LOG_LEVEL=debug` para el detalle de cada campo.
+- **Falsos faltantes en `diff`:** `nameMatches()` normaliza tildes y sufijos (`(Platzi)`,
+  ` - Aprobado ...`); la experiencia está fuera del diff a propósito.
 
-## Troubleshooting
-
-### El MCP usa una versión vieja del código
-
-- Asegúrate de ejecutar `npm run build` tras cambiar `src/`.
-- El cliente MCP ejecuta `dist/index.js`, no `src/index.ts`.
-
-### `cvlac-mcp` no aparece en Cursor
-
-- Verifica la ruta absoluta en `args` del `mcp.json` (Paso 5) y que `dist/index.js` exista.
-- En Windows, usa dobles barras invertidas (`\\`) en las rutas dentro del JSON.
-- Reinicia/recarga Cursor tras editar `mcp.json`.
-
-### Errores de Playwright al iniciar el navegador
-
-- `UNABLE_TO_VERIFY_LEAF_SIGNATURE` al descargarlo: un antivirus o proxy intercepta el tráfico. Ver
-  [el paso 1](#1-node-20-y-el-navegador) (`NODE_OPTIONS=--use-system-ca`).
-- `Executable doesn't exist at ...` significa que falta el navegador, o que el instalado pertenece a
-  otra versión de Playwright. Las dos se arreglan igual: `npx -y cvlac-mcp@1 install-browser`, que usa el
-  CLI empaquetado y baja el build correcto. `npx playwright install chromium` resuelve a la última
-  versión publicada y puede dejarte justo en este error.
-- En Linux, si el navegador existe pero no arranca, faltan librerías del sistema:
-  `npx playwright install-deps chromium`.
-- Para ver el navegador y entender dónde se traba: `CVLAC_HEADLESS=false`.
-
-### "Faltan credenciales" aunque las escribiste
-
-Al arrancar, el servidor deja en su log (stderr) una línea como
-`env file: C:\Users\...\.env (found, 3 vars)`. El error de `login` dice además qué variables faltan y
-qué ruta leyó:
-
-- `NOT FOUND` / "no existe": la ruta de `CVLAC_ENV_FILE` en la configuración del editor está mal.
-- "no encontré ninguna variable": el archivo existe pero está vacío o mal escrito. Cada línea es
-  `NOMBRE='valor'`.
-- `read as utf16le` o `read as latin1`: el archivo no estaba en UTF-8. El servidor lo leyó igual, pero
-  conviene reescribirlo como indica el [paso 2](#2-guarda-tus-credenciales-en-un-archivo-aparte).
-
-### CvLAC rechazó el inicio de sesión
-
-El servidor lo intenta **una sola vez** y no reintenta, para no bloquear tu cuenta. Revisa `CVLAC_NOMBRE`
-(tu primer nombre, con tildes), `CVLAC_CEDULA` y `CVLAC_PASSWORD`, y prueba entrar a mano en la web de
-CvLAC con esos mismos datos antes de volver a intentarlo.
-
-### Redirección inesperada a login
-
-- La sesión pudo expirar. Ejecuta `login` nuevamente.
-- Verifica que `.env` (o el `env` del `mcp.json`) tenga credenciales correctas.
-
-### Cambios no aplican en formularios
-
-- Algunos campos de CvLAC son `readonly` y se setean por JS.
-- Usa `inspect_form` y `screenshot` para validar nombres de campo reales.
-- Revisa [`docs/cvlac-findings.md`](https://github.com/stivenson/cvlac-mcp/blob/master/docs/cvlac-findings.md) como fuente de verdad.
-
-### Falsos faltantes en `diff`
-
-- `nameMatches()` normaliza acentos y sufijos (ej. `(Platzi)`, ` - Aprobado ...`).
-- `experiencia` está intencionalmente fuera del diff automático.
-
----
-
-## Seguridad y privacidad
-
-### Credenciales y privacidad
-
-Este servidor pide las credenciales con las que entras a CvLAC. Qué pasa con ellas, en concreto:
-
-- **No salen de tu máquina.** Viven en tu `.env` local. El proceso las lee al arrancar y las escribe
-  únicamente en el formulario de login de `scienti.minciencias.gov.co`.
-- **No hay servidor intermedio, ni cuenta, ni telemetría, ni analítica.** El MCP corre como proceso local
-  y habla por stdio con tu editor. Las únicas conexiones de red que abre son a **CvLAC** y, si usas
-  `read_portfolio`, a **la URL de portafolio que tú configuras**.
-- **La sesión vale tanto como la clave.** Las cookies del login se cachean en texto plano en
-  `CVLAC_SESSION_PATH` (por defecto `~/.cvlac-session.json`). Mientras la sesión siga vigente, quien copie
-  ese archivo entra a tu CvLAC **y puede escribir en él** sin tu clave. El servidor lo crea legible solo
-  por ti en Linux y macOS; en Windows hereda los permisos de tu carpeta de usuario (tú, administradores y
-  SYSTEM). Para restringirlo a mano:
-  `chmod 600 ~/.config/cvlac-mcp/.env ~/.cvlac-session.json` (Linux/macOS) o
-  `icacls "$HOME\.cvlac-session.json" /inheritance:r /grant:r "${env:USERNAME}:(R,W)"` (Windows).
-- **Ni el `.env` ni la sesión en carpetas sincronizadas.** En Windows, Escritorio y Documentos suelen ir a
-  OneDrive; Google Drive y Dropbox hacen lo mismo con las suyas. Las rutas por defecto de esta guía no lo
-  están.
-- **Cerrar la sesión:** borra el archivo de sesión. El servidor volverá a iniciar sesión la próxima vez.
-- **Los logs no muestran secretos.** Con `CVLAC_LOG_LEVEL=debug` y `CVLAC_LOG_FILE`, lo primero que se
-  activa para depurar, los valores de claves como password, cédula, cookie o token salen como `***`.
-- **Tu modelo de IA sí ve los datos.** No las credenciales —el servidor nunca las devuelve como
-  resultado— pero sí lo que las tools leen de tu CvLAC y de tu portafolio, porque eso viaja al chat de tu
-  editor. Si tu hoja de vida tiene datos sensibles, tenlo en cuenta al elegir el proveedor del modelo.
-- **Los screenshots pueden tener datos personales.** La tool `screenshot` guarda la pantalla tal cual,
-  sesión iniciada incluida. No los adjuntes a un issue sin revisarlos.
-- **Nunca pongas las credenciales en el JSON del editor** ni en el repo. Usa `CVLAC_ENV_FILE` apuntando a
-  un archivo fuera del proyecto. El `.gitignore` ya excluye `.env`, sesiones, screenshots y logs, pero esa
-  red de seguridad solo cubre este repo.
-- Si sospechas que se filtró algo, cambia la clave en CvLAC y borra el archivo de sesión.
-
-### Uso responsable y términos
-
-- Esto automatiza un sitio del Estado colombiano **con tu propia cuenta y tus propios datos**. No evade
-  autenticación, no accede a hojas de vida ajenas y no expone ninguna API no pública: hace lo mismo que
-  harías tú con el navegador, más rápido.
-- **Revisa los términos de uso de ScienTI/MinCiencias** y las políticas de tu institución antes de usarlo.
-  Este proyecto es independiente y no está avalado por MinCiencias.
-- **Supervisión humana siempre.** Corre `sync` con `dry_run` primero, lee lo que va a escribir y solo
-  entonces aplícalo. No lo dejes corriendo sin mirar ni lo agendes.
-- El servidor espacia sus peticiones a propósito para no golpear el servidor de CvLAC
-  ([Ritmo de las peticiones](#ritmo-de-las-peticiones)). No subas ese ritmo ni lo corras en paralelo
-  sobre varias cuentas.
-- **La responsabilidad de lo que quede en tu hoja de vida es tuya.** Es una declaración con efectos ante
-  convocatorias y procesos de evaluación: verifica en CvLAC lo que el servidor haya escrito.
-- Para probar escrituras reales, usa ítems dummy y bórralos después.
-
----
+<a id="estado"></a>
 
 ## Estado y roadmap
 
@@ -864,8 +1004,5 @@ Las 11 secciones con datos, el perfil, las redes académicas y las áreas de act
 (`add`/`update`/`delete`), con CRUD verificado contra el CvLAC real. El diff y el bloqueo de duplicados
 también.
 
-Detalle completo, limitaciones conocidas y lo que sigue: **[ROADMAP.md](https://github.com/stivenson/cvlac-mcp/blob/master/ROADMAP.md)**.
-
-Hallazgos de navegación en vivo (URLs, columnas de tabla, nombres de campos, comportamiento de la sesión): **[docs/cvlac-findings.md](https://github.com/stivenson/cvlac-mcp/blob/master/docs/cvlac-findings.md)**.
-
-Para detalles operativos de desarrollo interno, ver [`CLAUDE.md`](https://github.com/stivenson/cvlac-mcp/blob/master/CLAUDE.md).
+Detalle completo, limitaciones conocidas y lo que sigue:
+**[ROADMAP](https://github.com/stivenson/cvlac-mcp/blob/master/ROADMAP.md)**.

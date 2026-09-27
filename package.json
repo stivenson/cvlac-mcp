@@ -1,7 +1,7 @@
 {
   "name": "cvlac-mcp",
-  "version": "1.0.1",
-  "description": "Actualiza tu hoja de vida de CvLAC (MinCiencias) desde el chat de tu editor, sin llenar formularios a mano. Servidor MCP con Playwright.",
+  "version": "1.0.2",
+  "description": "Actualiza tu hoja de vida de CvLAC (MinCiencias) conversando con tu asistente de IA, sin llenar formularios a mano. Servidor MCP con Playwright.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {

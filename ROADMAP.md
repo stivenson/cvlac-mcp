@@ -110,6 +110,14 @@ El repo **ya está público**. Queda lo que sigue pendiente de todos modos.
 
 ## Historial
 
+- **2026-09-27 (1.0.2)** — README reescrito para investigadores sin perfil técnico, sin perder la
+  referencia técnica. Abre con qué es y un ejemplo de conversación; dice qué puede hacer y **qué no**
+  (producción bibliográfica, tesis, jurados, cuentas extranjeras) y que el `diff` solo sirve con un
+  portafolio de estructura concreta —antes prometía fuentes que no usaba—. La instalación va con Claude
+  Desktop primero, el `.env` en Windows con el Bloc de notas, y la prueba con frases para el chat en vez de
+  nombres de tools. Los detalles técnicos quedan plegados, y todo lo de desarrollo pasa a una segunda
+  parte. Anclas explícitas sin tildes para que los enlaces internos funcionen también en npm, y el
+  diagrama `mermaid` pasa a texto, porque npm no lo dibuja.
 - **2026-09-27 (noche)** — Bloque 1.0.1 del reporte de prueba en Windows. **Un login rechazado ya no
   se reintenta**: el error salía dentro de `withRetry`, así que una clave equivocada se enviaba tres
   veces contra la cuenta real; ahora es un `LoginRejectedError` que atraviesa el retry. **El `.env` se
