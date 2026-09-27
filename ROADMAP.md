@@ -26,7 +26,7 @@ Un recorrido de las **86 entradas** del menú de CvLAC (2026-09-16) encontró qu
 | Configuración personal fuera del código | ✅ |
 | Logging con redacción de secretos | ✅ |
 | Lectura de la ficha de detalle de un ítem | ✅ `read_cvlac_detail`, genérica |
-| Tests | ✅ 421 unitarios sin red, + suite e2e en vivo opt-in |
+| Tests | ✅ 456 unitarios sin red, + suite e2e en vivo opt-in |
 
 ## Limitaciones conocidas
 
@@ -110,6 +110,23 @@ El repo **ya está público**. Queda lo que sigue pendiente de todos modos.
 
 ## Historial
 
+- **2026-09-27 (noche)** — Bloque 1.0.1 del reporte de prueba en Windows. **Un login rechazado ya no
+  se reintenta**: el error salía dentro de `withRetry`, así que una clave equivocada se enviaba tres
+  veces contra la cuenta real; ahora es un `LoginRejectedError` que atraviesa el retry. **El `.env` se
+  lee aunque no esté en UTF-8**: `env.ts` detecta UTF-16 (`Out-File`) y ANSI (`Set-Content`), lo
+  decodifica y lo deja en el log al arrancar (`env file: <ruta> (found, N vars)`), y el error de
+  credenciales dice qué variables faltan y qué ruta leyó. `CVLAC_SESSION_PATH` y `CVLAC_USER_AGENT` se
+  resuelven al usarse: como constantes de módulo se evaluaban antes de cargar el `.env` y se ignoraban.
+  Sin user-agent fijo (decía Linux y Chrome 124 desde Windows), y el archivo de sesión se crea `0600`.
+  **Las tools marcan `isError`** cuando fallan, no solo con `"success": false` en el texto.
+  `screenshot` recarga la última lista, ficha o formulario visitado (o la `url` que se le pase) en vez de
+  capturar una página en blanco, y rechaza los enlaces de acción, porque en CvLAC un borrado es un GET.
+  El reporte de `sync` sugería `confirmDuplicate`, un parámetro que no existe: un test cruza ahora los
+  nombres que citan los mensajes contra los esquemas. README: sección Windows con `cmd /c`,
+  `MSYS_NO_PATHCONV` y `--%`, `--use-system-ca`, valores entre comillas simples, `icacls`, la sesión
+  como credencial, versión mayor fijada (`cvlac-mcp@1`) y enlaces absolutos para que se vean en npm.
+  El job de CI de Windows ahora prueba el lector con los tres modos de escribir el `.env`. Tests de 433
+  a 456.
 - **2026-09-27 (tarde)** — Auditoría del paquete publicado, con tres arreglos de portabilidad.
   `install-browser` descarga Chromium con el CLI de Playwright que trae el paquete, no con el último
   publicado: un build de navegador pertenece a una versión de la librería, y `npx playwright install`

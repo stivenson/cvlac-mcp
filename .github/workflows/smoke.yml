@@ -61,24 +61,45 @@ jobs:
 
       - run: npm ci
 
-      - name: write the .env exactly as the README says to
-        shell: ${{ matrix.shell }}
-        run: |
-          $contenido = @"
-          CVLAC_NOMBRE=José
-          CVLAC_CEDULA=1090123456
-          CVLAC_PASSWORD=clavé con acentó
-          "@
-          [IO.File]::WriteAllText("$env:RUNNER_TEMP\cvlac.env", $contenido)
+      - run: npm run build
 
-      # Out-File would leave this file in UTF-16, where the reader finds no
-      # variables at all and the server reports credentials the user did write
-      # as missing. Accents catch the other half: an ANSI file parses but
-      # corrupts the name.
-      - name: the reader sees every value, accents intact
+      - name: write the .env exactly as the README says to, and the two ways people get wrong
         shell: ${{ matrix.shell }}
         run: |
-          node -e "const p=process.env.RUNNER_TEMP+'\\cvlac.env';require('dotenv').config({path:p,quiet:true});const n=process.env.CVLAC_NOMBRE,c=process.env.CVLAC_CEDULA;if(n!=='José'){console.error('CVLAC_NOMBRE llegó como '+JSON.stringify(n));process.exit(1)}if(c!=='1090123456'){console.error('CVLAC_CEDULA llegó como '+JSON.stringify(c));process.exit(1)}console.log('ok: '+n)"
+          $contenido = @'
+          CVLAC_NOMBRE='José'
+          CVLAC_CEDULA='1090123456'
+          CVLAC_PASSWORD='cl$vé#1'
+          '@
+          [IO.File]::WriteAllText("$env:RUNNER_TEMP\readme.env", $contenido)
+          $contenido | Out-File "$env:RUNNER_TEMP\outfile.env"
+          $contenido | Set-Content "$env:RUNNER_TEMP\setcontent.env"
+
+      # README way: UTF-8. Out-File in 5.1: UTF-16, where a plain dotenv read finds
+      # no variables and the server blamed credentials the user did write.
+      # Set-Content in 5.1: ANSI, which corrupted the accents. The server's own
+      # reader has to get every value back from all three.
+      - name: the server's reader sees every value, accents and symbols intact
+        shell: ${{ matrix.shell }}
+        run: |
+          # ASCII only, with the accents as escapes: a console code page cannot mangle it.
+          @'
+          import { loadEnvFile } from './dist/env.js';
+          const want = { CVLAC_NOMBRE: 'Jos\u00e9', CVLAC_CEDULA: '1090123456', CVLAC_PASSWORD: 'cl$v\u00e9#1' };
+          const env = {};
+          const status = loadEnvFile(process.argv[2], env);
+          for (const [key, value] of Object.entries(want)) {
+            if (env[key] !== value) {
+              console.error(`${process.argv[2]}: ${key} lleg\u00f3 como ${JSON.stringify(env[key])}`);
+              process.exit(1);
+            }
+          }
+          console.log(`ok (${status.encoding}): ${process.argv[2]}`);
+          '@ | Set-Content -Encoding ascii check-env.mjs
+          foreach ($f in 'readme', 'outfile', 'setcontent') {
+            node check-env.mjs "$env:RUNNER_TEMP\$f.env"
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
 
   published:
     name: published package on ${{ matrix.os }}

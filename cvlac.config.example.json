@@ -3,7 +3,7 @@
 
   "portfolioUrl": "https://tu-usuario.github.io",
 
-  "_ownerNamePattern": "Fragmento del nombre del titular del CV. Sirve para elegir el bloque correcto cuando el bundle del portafolio contiene varios objetos {name,title,location}.",
+  "_ownerNamePattern": "Ya no se usa: servía para elegir el bloque del titular dentro del bundle JS del portafolio, y el portafolio ahora se lee renderizando la página. Se acepta para no romper configuraciones existentes; puedes quitarlo.",
   "ownerNamePattern": "Tu Nombre",
 
   "defaults": {
