@@ -55,7 +55,7 @@ import { loadConfig } from '../config.js';
 import { createLogger } from '../logger.js';
 import { classifyMatch } from '../diff.js';
 import { collectListPages, visitListPages, type ListNavigator } from '../browser/jmesa.js';
-import { pickRow } from './row-match.js';
+import { pickRow, exactLabelCount } from './row-match.js';
 
 const log = createLogger('update-section');
 
@@ -1479,8 +1479,23 @@ export async function rowActionHrefAt(page: Page, index: number, linkText: strin
   );
 }
 
+/**
+ * A navigator that keeps re-logging in through the same `pageRef` — the shape
+ * `collectListPages`/`visitListPages` need, shared by every helper here that
+ * walks a section's list.
+ */
+function relLoginGo(pageRef: { page: Page }): ListNavigator {
+  return async (url: string): Promise<Page> => {
+    await gotoFormWithRelogin(pageRef, url);
+    return pageRef.page;
+  };
+}
+
 /** What looking a row up by label across every page of a list found. */
-export type RowLookup = { kind: 'found'; href: string | null } | { kind: 'many'; labels: string[] } | { kind: 'none' };
+export type RowLookup =
+  | { kind: 'found'; href: string | null; label: string }
+  | { kind: 'many'; labels: string[] }
+  | { kind: 'none' };
 
 /**
  * Finds the one row `label` means across every page of the section's list, and
@@ -1500,10 +1515,7 @@ export async function lookupRow(
   label: string,
   linkText: string
 ): Promise<RowLookup> {
-  const go: ListNavigator = async (url: string): Promise<Page> => {
-    await gotoFormWithRelogin(pageRef, url);
-    return pageRef.page;
-  };
+  const go = relLoginGo(pageRef);
   const labels = await collectListPages(cfg.listUrl, go, (p) => listRowLabels(p, cfg.matchCellIndex));
   const pick = pickRow(labels, label);
   if (pick.kind !== 'one') return pick;
@@ -1514,7 +1526,79 @@ export async function lookupRow(
     const i = onPage.indexOf(wanted);
     return i < 0 ? undefined : { href: await rowActionHrefAt(p, i, linkText) };
   });
-  return { kind: 'found', href: href?.href ?? null };
+  return { kind: 'found', href: href?.href ?? null, label: wanted };
+}
+
+/**
+ * Normalizes an action href for identity comparison — resolved against
+ * BASE_URL (so a relative and an absolute form of the same link compare
+ * equal) with its query parameters sorted (CvLAC does not promise an order).
+ * CvLAC embeds the record's own id in these hrefs (`id=`, `cod_producto=`,
+ * `cod_linea=`, `sgl_idioma=`…), so two hrefs that normalize the same name
+ * the same record — unlike two labels, which can merely look alike.
+ */
+export function normalizeActionHref(href: string): string {
+  const url = new URL(href, BASE_URL);
+  const params = [...url.searchParams.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return `${url.pathname}?${params.map(([k, v]) => `${k}=${v}`).join('&')}`;
+}
+
+/** Whether an action href carries anything this server can key a record by. */
+function hasStableId(href: string): boolean {
+  return new URL(href, BASE_URL).searchParams.size > 0;
+}
+
+/** The `linkText` action href of every data row on the page, aligned by position. */
+async function rowActionHrefsOnPage(page: Page, linkText: string): Promise<Array<string | null>> {
+  return page.evaluate((link) => {
+    const norm = (s: string | null | undefined): string =>
+      (s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+    const linkN = norm(link);
+    return Array.from(document.querySelectorAll('tr.odd, tr.even')).map((row) => {
+      const a = Array.from(row.querySelectorAll('a')).find((el) => norm(el.textContent).includes(linkN));
+      return a ? a.getAttribute('href') : null;
+    });
+  }, linkText);
+}
+
+/**
+ * Whether the exact record `wantedHref` names is still in the section's list,
+ * decided by comparing every row's `linkText` action href — never by label.
+ *
+ * A label match is not identity: deleting "Deep learning for crop yield"
+ * leaves "Deep learning for crop yield in Colombia" behind, whose label
+ * partially matches the one just deleted but is a different record with its
+ * own id. Only the href — which carries that id — can tell them apart.
+ */
+export async function recordStillListed(
+  pageRef: { page: Page },
+  cfg: { listUrl: string; matchCellIndex: number },
+  wantedHref: string,
+  linkText: string
+): Promise<boolean> {
+  const go = relLoginGo(pageRef);
+  const wanted = normalizeActionHref(wantedHref);
+  const hrefs = await collectListPages(cfg.listUrl, go, (p) => rowActionHrefsOnPage(p, linkText));
+  return hrefs.some((h) => h !== null && normalizeActionHref(h) === wanted);
+}
+
+/**
+ * How many rows across every page of the section's list have exactly `label`.
+ *
+ * The fallback identity check for add/delete: used directly when a section's
+ * action hrefs carry no id `recordStillListed` could compare by, and to tell a
+ * genuine save on an outage page apart from a mere neighbour in `addItem`
+ * (`exactLabelCount`, never a partial match, since a partial one is exactly
+ * what let a neighbour masquerade as the record just added).
+ */
+export async function labelExactCount(
+  pageRef: { page: Page },
+  cfg: { listUrl: string; matchCellIndex: number },
+  label: string
+): Promise<number> {
+  const go = relLoginGo(pageRef);
+  const labels = await collectListPages(cfg.listUrl, go, (p) => listRowLabels(p, cfg.matchCellIndex));
+  return exactLabelCount(labels, label);
 }
 
 /** The answer when a label matches more than one row: nothing is touched. */
@@ -1659,10 +1743,7 @@ export async function findSimilarRows(
   cfg: SectionConfig,
   label: string
 ): Promise<SimilarCandidate[]> {
-  const go: ListNavigator = async (url: string): Promise<Page> => {
-    await gotoFormWithRelogin(pageRef, url);
-    return pageRef.page;
-  };
+  const go = relLoginGo(pageRef);
   const rows = await collectListPages(cfg.listUrl, go, (p) => listRowLabels(p, cfg.matchCellIndex));
   const out: SimilarCandidate[] = [];
   for (const row of rows) {
@@ -1672,7 +1753,7 @@ export async function findSimilarRows(
   return out;
 }
 
-async function addItem(
+export async function addItem(
   pageRef: { page: Page },
   cfg: SectionConfig,
   data: unknown,
@@ -1680,6 +1761,13 @@ async function addItem(
   confirmDuplicate: boolean
 ): Promise<UpdateResult> {
   const report: FillReport = { warnings: [] };
+
+  // How many rows have exactly `label` before anything is submitted — needed
+  // later to tell a genuine save on an outage page apart from a mere
+  // neighbour. Established once, up front, so the duplicate guard (when it
+  // runs) and the outage recovery agree on the same number instead of two
+  // different reads of the list disagreeing under load.
+  let beforeCount: number;
 
   // Duplicate guard: CvLAC has no unique constraints and removing a duplicate by
   // hand is tedious, so an ambiguous add stops here and asks.
@@ -1696,6 +1784,13 @@ async function addItem(
         similar,
       };
     }
+    // No similar rows at all (not even 'similar'/'same') rules out an exact
+    // match too — no need for a second walk of the list just to count zero.
+    beforeCount = 0;
+  } else {
+    // The guard was skipped by request, so nothing above already read the
+    // list — read it now, before the create form changes anything.
+    beforeCount = await labelExactCount(pageRef, cfg, label);
   }
 
   await gotoFormWithRelogin(pageRef, cfg.createUrl);
@@ -1725,10 +1820,14 @@ async function addItem(
   }
 
   // An outage page is not the redirect that follows a save. The list is the only
-  // thing that can say whether the row exists, so ask it.
+  // thing that can say whether the row exists, so ask it — by an exact count,
+  // never a partial match: a pre-existing neighbour ("Deep learning for crop
+  // yield in Colombia") must not make a failed add of "Deep learning for crop
+  // yield" read as created just because something similar is listed.
   if (await landedOnOutage(pageRef.page)) {
     log.warn('add landed on the outage page; checking the list', { label });
-    const created = (await lookupRow(pageRef, cfg, label, 'Eliminar')).kind !== 'none';
+    const afterCount = await labelExactCount(pageRef, cfg, label);
+    const created = afterCount > beforeCount;
     if (!created) {
       return failed(
         `CvLAC respondió con su página de "Server Unavailable" al guardar "${label}", y la fila no aparece en la lista: no se creó.`,
@@ -1853,7 +1952,7 @@ async function updateItem(
   return ok(`Updated: ${label}`, report, screenshotBase64);
 }
 
-async function deleteItem(pageRef: { page: Page }, cfg: SectionConfig, label: string): Promise<UpdateResult> {
+export async function deleteItem(pageRef: { page: Page }, cfg: SectionConfig, label: string): Promise<UpdateResult> {
   const report: FillReport = { warnings: [] };
   const row = await lookupRow(pageRef, cfg, label, 'Eliminar');
   if (row.kind === 'many') return manyRows(label, row.labels);
@@ -1878,7 +1977,16 @@ async function deleteItem(pageRef: { page: Page }, cfg: SectionConfig, label: st
   const deleteStatus = await gotoFormWithRelogin(pageRef, BASE_URL + deleteHref, {
     tolerateUnavailable: true,
   });
-  const still = (await lookupRow(pageRef, cfg, label, 'Eliminar')).kind === 'found';
+  // Identity, not label: a surviving near-namesake ("Deep learning for crop
+  // yield in Colombia" once "Deep learning for crop yield" is gone) must never
+  // read as "still present" — lookupRow's own pickRow would partially match it
+  // and say so. `confirmHref` is this exact record's Eliminar link, captured
+  // before it was deleted, so compare by that instead. Most CvLAC action hrefs
+  // carry the record's own id (`id=`, `cod_producto=`…); the rare one that
+  // does not falls back to an exact (never partial) count of the label.
+  const still = hasStableId(confirmHref)
+    ? await recordStillListed(pageRef, cfg, confirmHref, 'Eliminar')
+    : (await labelExactCount(pageRef, cfg, row.label)) > 0;
   const screenshotBase64 = await shot(pageRef.page);
   if (still) {
     const why =

@@ -11,6 +11,11 @@ import {
   rowActionHrefAt,
   lookupRow,
   findSimilarRows,
+  normalizeActionHref,
+  recordStillListed,
+  labelExactCount,
+  deleteItem,
+  addItem,
   inferNivel,
   parsePeriod,
   inferParticipacionProy,
@@ -288,7 +293,7 @@ describe('lookupRow and findSimilarRows across every list page', () => {
       })
     );
     const result = await lookupRow({ page }, guardCfg(LIST_URL), 'Item dos', 'Eliminar');
-    expect(result).toEqual({ kind: 'found', href: '/cvlac/EnGuard/confirm.do?id=2' });
+    expect(result).toEqual({ kind: 'found', href: '/cvlac/EnGuard/confirm.do?id=2', label: 'Item dos' });
   });
 
   it('lookupRow reports several matches instead of picking one, the neighbour risk the old lookup had', async () => {
@@ -351,4 +356,290 @@ describe('lookupRow and findSimilarRows across every list page', () => {
       IncompleteListError
     );
   });
+});
+
+describe('normalizeActionHref', () => {
+  it('resolves a relative and an absolute form of the same link to the same value', () => {
+    expect(normalizeActionHref('/cvlac/EnFake/confirm.do?id=2')).toBe(
+      normalizeActionHref('https://scienti.minciencias.gov.co/cvlac/EnFake/confirm.do?id=2')
+    );
+  });
+
+  it('ignores query-parameter order', () => {
+    expect(normalizeActionHref('/cvlac/EnProdTecnica/confirm.do?cod_producto=15&cod_rh=0')).toBe(
+      normalizeActionHref('/cvlac/EnProdTecnica/confirm.do?cod_rh=0&cod_producto=15')
+    );
+  });
+
+  it('tells two different records apart', () => {
+    expect(normalizeActionHref('/cvlac/EnFake/confirm.do?id=1')).not.toBe(
+      normalizeActionHref('/cvlac/EnFake/confirm.do?id=2')
+    );
+  });
+});
+
+// recordStillListed and labelExactCount are the identity checks that replace
+// lookupRow (and its partial-match pickRow) for "is this exact record still
+// there" — the bug the spec review found: a surviving near-namesake used to
+// read as "still present" and fail a delete that had actually worked.
+describe('recordStillListed', () => {
+  process.env.CVLAC_MIN_REQUEST_GAP_MS = '0';
+  process.env.CVLAC_REQUEST_JITTER_MS = '0';
+
+  function idCfg(listUrl: string) {
+    return { listUrl, matchCellIndex: 1 } as unknown as Parameters<typeof lookupRow>[1];
+  }
+
+  it('is false when only a differently-identified near-namesake remains', async () => {
+    const LIST_URL = 'https://scienti.minciencias.gov.co/cvlac/EnStillA/all.do';
+    // "Deep learning for crop yield" (id=1) was deleted; only its longer
+    // namesake (id=2) is left.
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnStillA/**', (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body:
+          `<table class="table" id="still_all"><tbody>` +
+          `<tr class="odd"><td>1</td><td>Deep learning for crop yield in Colombia</td>` +
+          `<td><a href="/cvlac/EnFake/confirm.do?id=2">Eliminar</a></td></tr>` +
+          `</tbody></table>`,
+      })
+    );
+    const stillThere = await recordStillListed(
+      { page },
+      idCfg(LIST_URL),
+      '/cvlac/EnFake/confirm.do?id=1',
+      'Eliminar'
+    );
+    expect(stillThere).toBe(false);
+  });
+
+  it('is true when the exact same record (by href) is still listed', async () => {
+    const LIST_URL = 'https://scienti.minciencias.gov.co/cvlac/EnStillB/all.do';
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnStillB/**', (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body:
+          `<table class="table" id="still_all"><tbody>` +
+          `<tr class="odd"><td>1</td><td>Deep learning for crop yield</td>` +
+          `<td><a href="/cvlac/EnFake/confirm.do?id=1">Eliminar</a></td></tr>` +
+          `</tbody></table>`,
+      })
+    );
+    const stillThere = await recordStillListed(
+      { page },
+      idCfg(LIST_URL),
+      '/cvlac/EnFake/confirm.do?id=1',
+      'Eliminar'
+    );
+    expect(stillThere).toBe(true);
+  });
+});
+
+describe('labelExactCount', () => {
+  process.env.CVLAC_MIN_REQUEST_GAP_MS = '0';
+  process.env.CVLAC_REQUEST_JITTER_MS = '0';
+
+  function idCfg(listUrl: string) {
+    return { listUrl, matchCellIndex: 1 } as unknown as Parameters<typeof lookupRow>[1];
+  }
+
+  it('is 0 when only a partially-matching neighbour is listed', async () => {
+    const LIST_URL = 'https://scienti.minciencias.gov.co/cvlac/EnCountA/all.do';
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnCountA/**', (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body:
+          '<table class="table" id="count_all"><tbody>' +
+          '<tr class="odd"><td>1</td><td>Deep learning for crop yield in Colombia</td></tr>' +
+          '</tbody></table>',
+      })
+    );
+    expect(await labelExactCount({ page }, idCfg(LIST_URL), 'Deep learning for crop yield')).toBe(0);
+  });
+
+  it('counts the exact row when it is listed', async () => {
+    const LIST_URL = 'https://scienti.minciencias.gov.co/cvlac/EnCountB/all.do';
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnCountB/**', (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body:
+          '<table class="table" id="count_all"><tbody>' +
+          '<tr class="odd"><td>1</td><td>Deep learning for crop yield</td></tr>' +
+          '</tbody></table>',
+      })
+    );
+    expect(await labelExactCount({ page }, idCfg(LIST_URL), 'Deep learning for crop yield')).toBe(1);
+  });
+});
+
+// Wiring tests for the fix itself: deleteItem's post-delete check and
+// addItem's outage recovery must key off identity/exact-count, never a
+// partial label match, so a near-namesake can neither hide a real delete nor
+// masquerade as a save that never happened.
+describe('deleteItem identifies the exact record, not a similar title', () => {
+  process.env.CVLAC_MIN_REQUEST_GAP_MS = '0';
+  process.env.CVLAC_REQUEST_JITTER_MS = '0';
+
+  function cfgFor(listUrl: string) {
+    return { listUrl, matchCellIndex: 1 } as unknown as Parameters<typeof deleteItem>[1];
+  }
+
+  it('reports deleted when only a longer namesake remains, not "still present"', async () => {
+    const root = 'https://scienti.minciencias.gov.co/cvlac/EnDelNamesake';
+    const path = new URL(root).pathname; // hrefs in real CvLAC markup are relative, not absolute
+    const LIST_URL = `${root}/all.do`;
+    let deleted = false;
+    await page.route(`${root}/**`, (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname.endsWith('/confirm.do')) {
+        return route.fulfill({
+          contentType: 'text/html',
+          body: `<a href="${path}/delete.do?id=1">Borrar</a>`,
+        });
+      }
+      if (url.pathname.endsWith('/delete.do')) {
+        deleted = true;
+        return route.fulfill({ contentType: 'text/html', body: 'Eliminado' });
+      }
+      // all.do: both rows before the delete; only the longer namesake after.
+      const rows = deleted
+        ? `<tr class="odd"><td>2</td><td>Deep learning for crop yield in Colombia</td>` +
+          `<td><a href="${path}/confirm.do?id=2">Eliminar</a></td></tr>`
+        : `<tr class="odd"><td>1</td><td>Deep learning for crop yield</td>` +
+          `<td><a href="${path}/confirm.do?id=1">Eliminar</a></td></tr>` +
+          `<tr class="even"><td>2</td><td>Deep learning for crop yield in Colombia</td>` +
+          `<td><a href="${path}/confirm.do?id=2">Eliminar</a></td></tr>`;
+      return route.fulfill({
+        contentType: 'text/html',
+        body: `<table class="table" id="del_all"><tbody>${rows}</tbody></table>`,
+      });
+    });
+
+    const result = await deleteItem({ page }, cfgFor(LIST_URL), 'Deep learning for crop yield');
+    expect(result.success).toBe(true);
+    expect(result.status).toBe('ok');
+    expect(result.message).toContain('Deleted');
+  }, 20000);
+
+  it('reports still present when the exact same record (by href) is still listed', async () => {
+    const root = 'https://scienti.minciencias.gov.co/cvlac/EnDelStuck';
+    const path = new URL(root).pathname;
+    const LIST_URL = `${root}/all.do`;
+    await page.route(`${root}/**`, (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname.endsWith('/confirm.do')) {
+        return route.fulfill({
+          contentType: 'text/html',
+          body: `<a href="${path}/delete.do?id=1">Borrar</a>`,
+        });
+      }
+      if (url.pathname.endsWith('/delete.do')) {
+        // The delete link is followed, but the row never actually leaves the list.
+        return route.fulfill({ contentType: 'text/html', body: 'Eliminado' });
+      }
+      return route.fulfill({
+        contentType: 'text/html',
+        body:
+          `<table class="table" id="del_all"><tbody>` +
+          `<tr class="odd"><td>1</td><td>Deep learning for crop yield</td>` +
+          `<td><a href="${path}/confirm.do?id=1">Eliminar</a></td></tr>` +
+          `</tbody></table>`,
+      });
+    });
+
+    const result = await deleteItem({ page }, cfgFor(LIST_URL), 'Deep learning for crop yield');
+    expect(result.success).toBe(false);
+    expect(result.status).toBe('failed');
+    expect(result.message).toMatch(/still (present|listed)/i);
+  }, 20000);
+});
+
+describe('addItem outage recovery counts the exact label, not a similar title', () => {
+  process.env.CVLAC_MIN_REQUEST_GAP_MS = '0';
+  process.env.CVLAC_REQUEST_JITTER_MS = '0';
+
+  function cfgFor(root: string) {
+    return {
+      listUrl: `${root}/all.do`,
+      matchCellIndex: 1,
+      createUrl: `${root}/create.do`,
+      labelOf: (d: { label: string }) => d.label,
+      fill: async () => {},
+    } as unknown as Parameters<typeof addItem>[1];
+  }
+
+  it('reports not created when only a neighbour is listed after the outage page', async () => {
+    const root = 'https://scienti.minciencias.gov.co/cvlac/EnAddNeighbour';
+    await page.route(`${root}/**`, (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname.endsWith('/create.do')) {
+        return route.fulfill({
+          contentType: 'text/html',
+          body: `<form method="get" action="${root}/outage.do"><button type="submit">Guardar</button></form>`,
+        });
+      }
+      if (url.pathname.endsWith('/outage.do')) {
+        return route.fulfill({ contentType: 'text/html', body: '<html><body>Server Unavailable</body></html>' });
+      }
+      // all.do — only the longer namesake is listed, before and after: the
+      // exact title being added never actually appears.
+      return route.fulfill({
+        contentType: 'text/html',
+        body:
+          '<table class="table" id="add_all"><tbody>' +
+          '<tr class="odd"><td>1</td><td>Deep learning for crop yield in Colombia</td></tr>' +
+          '</tbody></table>',
+      });
+    });
+
+    const result = await addItem(
+      { page },
+      cfgFor(root),
+      { label: 'Deep learning for crop yield' },
+      'Deep learning for crop yield',
+      true // confirmDuplicate: skips the guard, which would otherwise block on the neighbour
+    );
+    expect(result.success).toBe(false);
+    expect(result.status).toBe('failed');
+    expect(result.message).toMatch(/no se cre/i);
+  }, 20000);
+
+  it('reports created when the exact row appears in the list after the outage page', async () => {
+    const root = 'https://scienti.minciencias.gov.co/cvlac/EnAddExact';
+    let listFetches = 0;
+    await page.route(`${root}/**`, (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname.endsWith('/create.do')) {
+        return route.fulfill({
+          contentType: 'text/html',
+          body: `<form method="get" action="${root}/outage.do"><button type="submit">Guardar</button></form>`,
+        });
+      }
+      if (url.pathname.endsWith('/outage.do')) {
+        return route.fulfill({ contentType: 'text/html', body: '<html><body>Server Unavailable</body></html>' });
+      }
+      listFetches++;
+      // First read (the duplicate guard, before anything is submitted) sees an
+      // empty list; every read after the outage page sees the row that was,
+      // in fact, saved.
+      const body =
+        listFetches === 1
+          ? '<div>Ningún dato disponible en esta tabla</div>'
+          : '<table class="table" id="add_all"><tbody>' +
+            '<tr class="odd"><td>1</td><td>Deep learning for crop yield</td></tr>' +
+            '</tbody></table>';
+      return route.fulfill({ contentType: 'text/html', body });
+    });
+
+    const result = await addItem(
+      { page },
+      cfgFor(root),
+      { label: 'Deep learning for crop yield' },
+      'Deep learning for crop yield',
+      false // guard runs, finds nothing on the (empty) list, and lets the add through
+    );
+    expect(result.success).toBe(true);
+    expect(result.status).toBe('ok');
+    expect(result.warnings?.some((w) => w.includes('Server Unavailable'))).toBe(true);
+  }, 20000);
 });

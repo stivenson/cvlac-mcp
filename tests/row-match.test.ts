@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pickRow } from '../src/tools/row-match.js';
+import { pickRow, exactLabelCount } from '../src/tools/row-match.js';
 
 describe('pickRow', () => {
   const rows = [
@@ -32,5 +32,37 @@ describe('pickRow', () => {
   it('says none when nothing matches', () => {
     expect(pickRow(rows, 'Otra cosa')).toEqual({ kind: 'none' });
     expect(pickRow(rows, '')).toEqual({ kind: 'none' });
+  });
+});
+
+describe('exactLabelCount', () => {
+  const rows = [
+    'Deep learning for crop yield',
+    'Deep learning for crop yield in Colombia',
+    'Redes neuronales aplicadas',
+  ];
+
+  it('counts only the exact title, never a row that merely contains it', () => {
+    // pickRow would resolve "Deep learning for crop yield" against these same
+    // rows just fine (index 0 is the only exact match); exactLabelCount must
+    // agree it is exactly one, not two — the longer title is a different record.
+    expect(exactLabelCount(rows, 'Deep learning for crop yield')).toBe(1);
+  });
+
+  it('ignores case, accents and punctuation like pickRow does', () => {
+    expect(exactLabelCount(rows, 'REDES NEURONALES APLICADAS.')).toBe(1);
+  });
+
+  it('counts every row sharing the exact same normalized title', () => {
+    expect(exactLabelCount(['A', 'A', 'B'], 'A')).toBe(2);
+  });
+
+  it('is zero when only a neighbour matches partially', () => {
+    expect(exactLabelCount(rows, 'Deep learning')).toBe(0);
+  });
+
+  it('is zero for an empty list or an empty label', () => {
+    expect(exactLabelCount([], 'A')).toBe(0);
+    expect(exactLabelCount(rows, '')).toBe(0);
   });
 });

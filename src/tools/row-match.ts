@@ -10,7 +10,8 @@
 
 export type RowPick = { kind: 'one'; index: number } | { kind: 'many'; labels: string[] } | { kind: 'none' };
 
-const norm = (s: string): string =>
+/** Lowercase, unaccented, punctuation-stripped — shared by every exact/partial comparison here. */
+export const normalizeLabel = (s: string): string =>
   (s ?? '')
     .toLowerCase()
     .normalize('NFD')
@@ -18,6 +19,8 @@ const norm = (s: string): string =>
     .replace(/[^a-z0-9\s]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+
+const norm = normalizeLabel;
 
 export function pickRow(labels: string[], wanted: string): RowPick {
   const target = norm(wanted);
@@ -33,4 +36,19 @@ export function pickRow(labels: string[], wanted: string): RowPick {
   if (partial.length === 1) return { kind: 'one', index: partial[0][1] };
   if (partial.length > 1) return { kind: 'many', labels: partial.map(([, i]) => labels[i]) };
   return { kind: 'none' };
+}
+
+/**
+ * How many rows have exactly `label`, normalized — never a partial match.
+ *
+ * Used to tell "this exact record was created/is gone" apart from "a
+ * differently-worded neighbour happens to exist": a partial match (the same
+ * one `pickRow` uses to resolve an unambiguous search) is the wrong tool here,
+ * because a near-namesake ("Deep learning for crop yield in Colombia") must
+ * not count as the record ("Deep learning for crop yield") whose presence is
+ * actually being decided.
+ */
+export function exactLabelCount(labels: string[], label: string): number {
+  const target = normalizeLabel(label);
+  return labels.filter((l) => normalizeLabel(l) === target).length;
 }
