@@ -51,6 +51,10 @@ jobs:
         # they get if they installed it themselves. They differ in the encoding
         # their file-writing cmdlets default to, which is the whole point here.
         shell: [powershell, pwsh]
+    # A step's own `shell:` cannot read the matrix; the job default can.
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
     steps:
       - uses: actions/checkout@v4
 
@@ -64,7 +68,6 @@ jobs:
       - run: npm run build
 
       - name: write the .env exactly as the README says to, and the two ways people get wrong
-        shell: ${{ matrix.shell }}
         run: |
           $contenido = @'
           CVLAC_NOMBRE='José'
@@ -80,7 +83,6 @@ jobs:
       # Set-Content in 5.1: ANSI, which corrupted the accents. The server's own
       # reader has to get every value back from all three.
       - name: the server's reader sees every value, accents and symbols intact
-        shell: ${{ matrix.shell }}
         run: |
           # ASCII only, with the accents as escapes: a console code page cannot mangle it.
           @'
