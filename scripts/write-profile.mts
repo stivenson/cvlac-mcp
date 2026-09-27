@@ -4,7 +4,7 @@
  * Kept as a script because it writes to the real CvLAC, which has no undo. Run
  * it yourself, read what it prints, and delete it when the profile is set:
  *
- *   cd ~/dev/cvlac-mcp && npx tsx scripts/write-profile.mts <archivo-con-el-texto>
+ *   cd ~/projects/cvlac-mcp && npx tsx scripts/write-profile.mts <archivo-con-el-texto>
  *
  * The profile text is read from the file given as the argument, so the text a
  * human approved is the text that gets written — nothing is embedded here.
