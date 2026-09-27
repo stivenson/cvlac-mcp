@@ -31,12 +31,13 @@ jobs:
 
       - run: npm run build
 
-      - run: npm test
-
       # The pinned Chromium, through the packaged CLI — the same command the
-      # README gives a first-time user.
+      # README gives a first-time user. Before the tests: many of them render
+      # fixtures in it.
       - name: install the browser
         run: node dist/index.js install-browser
+
+      - run: npm test
 
       - name: smoke
         run: node scripts/smoke.mjs --browser
@@ -68,12 +69,15 @@ jobs:
       - run: npm run build
 
       - name: write the .env exactly as the README says to, and the two ways people get wrong
+        # The é is built with [char]: Windows PowerShell 5.1 reads this step's
+        # script file as ANSI, so a literal é would be mangled before any .env is
+        # written — a CI artifact, not something a person typing hits.
         run: |
           $contenido = @'
-          CVLAC_NOMBRE='José'
+          CVLAC_NOMBRE='Jos{0}'
           CVLAC_CEDULA='1090123456'
-          CVLAC_PASSWORD='cl$vé#1'
-          '@
+          CVLAC_PASSWORD='cl$v{0}#1'
+          '@ -f [char]0xE9
           [IO.File]::WriteAllText("$env:RUNNER_TEMP\readme.env", $contenido)
           $contenido | Out-File "$env:RUNNER_TEMP\outfile.env"
           $contenido | Set-Content "$env:RUNNER_TEMP\setcontent.env"
