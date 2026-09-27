@@ -8,10 +8,14 @@ import {
   readFormValues,
   listRowLabels,
   findRowActionHref,
+  rowActionHrefAt,
+  lookupRow,
+  findSimilarRows,
   inferNivel,
   parsePeriod,
   inferParticipacionProy,
 } from '../src/tools/update-section.js';
+import { IncompleteListError } from '../src/browser/jmesa.js';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'cvlac');
 
@@ -239,5 +243,112 @@ describe('findRowActionHref', () => {
   it('returns null when no row matches', async () => {
     await page.setContent(readFileSync(join(FIXTURES, 'cursos.html'), 'utf-8'));
     expect(await findRowActionHref(page, 1, 'Curso inexistente', 'Editar')).toBeNull();
+  });
+});
+
+describe('rowActionHrefAt', () => {
+  it('returns the link of the row at a position among the data rows', async () => {
+    await page.setContent(readFileSync(join(FIXTURES, 'lista-demas-trabajos.html'), 'utf8'));
+    expect(await rowActionHrefAt(page, 1, 'Eliminar')).toContain('cod_producto=16');
+    expect(await rowActionHrefAt(page, 0, 'Editar')).toContain('cod_producto=15');
+  });
+
+  it('returns null for a row that has no such link', async () => {
+    await page.setContent('<table><tr class="odd"><td>1</td><td>X</td><td><a href="/q">Detalles</a></td></tr></table>');
+    expect(await rowActionHrefAt(page, 0, 'Eliminar')).toBeNull();
+  });
+});
+
+// lookupRow and findSimilarRows drive collectListPages/visitListPages under the
+// hood, so they need a live navigation rather than page.setContent — hence the
+// route mocks and the pacing env vars, same as tests/jmesa.test.ts.
+describe('lookupRow and findSimilarRows across every list page', () => {
+  process.env.CVLAC_MIN_REQUEST_GAP_MS = '0';
+  process.env.CVLAC_REQUEST_JITTER_MS = '0';
+
+  /** A minimal SectionConfig — lookupRow/findSimilarRows only read listUrl and matchCellIndex. */
+  function guardCfg(listUrl: string) {
+    return { listUrl, matchCellIndex: 1 } as unknown as Parameters<typeof lookupRow>[1];
+  }
+
+  function guardRow(n: number, title: string): string {
+    return (
+      `<tr class="${n % 2 ? 'odd' : 'even'}"><td>${n}</td><td>${title}</td>` +
+      `<td><a href="/cvlac/EnGuard/edit.do?id=${n}">Editar</a></td>` +
+      `<td><a href="/cvlac/EnGuard/confirm.do?id=${n}">Eliminar</a></td></tr>`
+    );
+  }
+
+  it('lookupRow finds the one row an exact label means and its action href', async () => {
+    const LIST_URL = 'https://scienti.minciencias.gov.co/cvlac/EnGuardFound/all.do';
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnGuardFound/**', (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body: `<table class="table" id="guard_all"><tbody>${guardRow(1, 'Item uno')}${guardRow(2, 'Item dos')}</tbody></table>`,
+      })
+    );
+    const result = await lookupRow({ page }, guardCfg(LIST_URL), 'Item dos', 'Eliminar');
+    expect(result).toEqual({ kind: 'found', href: '/cvlac/EnGuard/confirm.do?id=2' });
+  });
+
+  it('lookupRow reports several matches instead of picking one, the neighbour risk the old lookup had', async () => {
+    const LIST_URL = 'https://scienti.minciencias.gov.co/cvlac/EnGuardMany/all.do';
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnGuardMany/**', (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body:
+          `<table class="table" id="guard_all"><tbody>` +
+          `${guardRow(1, 'Deep learning for crop yield')}${guardRow(2, 'Deep learning for crop yield in Colombia')}` +
+          `</tbody></table>`,
+      })
+    );
+    const result = await lookupRow({ page }, guardCfg(LIST_URL), 'Deep learning', 'Eliminar');
+    expect(result).toEqual({
+      kind: 'many',
+      labels: ['Deep learning for crop yield', 'Deep learning for crop yield in Colombia'],
+    });
+  });
+
+  it('lookupRow says none when nothing matches', async () => {
+    const LIST_URL = 'https://scienti.minciencias.gov.co/cvlac/EnGuardNone/all.do';
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnGuardNone/**', (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body: `<table class="table" id="guard_all"><tbody>${guardRow(1, 'Otra cosa')}</tbody></table>`,
+      })
+    );
+    const result = await lookupRow({ page }, guardCfg(LIST_URL), 'No existe', 'Eliminar');
+    expect(result).toEqual({ kind: 'none' });
+  });
+
+  // A server that ignores `_mr_`/`_p_` and always answers the same first page
+  // never lets the walk finish. Both lookups must throw IncompleteListError
+  // here instead of reporting "not found" (update/delete would then act on the
+  // wrong row, or not at all) or "no similar rows" (a repeated add would go
+  // through as a duplicate CvLAC has no way to reject on its own).
+  function stuckOnFirstPage(route: import('playwright').Route): Promise<void> {
+    const rows = Array.from({ length: 15 }, (_, i) => guardRow(i + 1, `Item ${i + 1}`)).join('');
+    return route.fulfill({
+      contentType: 'text/html',
+      body:
+        `<table class="table" id="guard_all"><tbody>${rows}</tbody>` +
+        `<tbody><tr class="statusBar"><td>Resultados 1 - 15 de 30.</td></tr></tbody></table>`,
+    });
+  }
+
+  it('lookupRow throws IncompleteListError rather than "not found" when the list walk cannot finish', async () => {
+    const LIST_URL = 'https://scienti.minciencias.gov.co/cvlac/EnGuardBroken/all.do';
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnGuardBroken/**', stuckOnFirstPage);
+    await expect(lookupRow({ page }, guardCfg(LIST_URL), 'Item 20', 'Eliminar')).rejects.toThrow(
+      IncompleteListError
+    );
+  });
+
+  it('findSimilarRows — the add duplicate guard — throws rather than reporting no similar rows on the same partial read', async () => {
+    const LIST_URL = 'https://scienti.minciencias.gov.co/cvlac/EnGuardBroken2/all.do';
+    await page.route('https://scienti.minciencias.gov.co/cvlac/EnGuardBroken2/**', stuckOnFirstPage);
+    await expect(findSimilarRows({ page }, guardCfg(LIST_URL), 'Item 1')).rejects.toThrow(
+      IncompleteListError
+    );
   });
 });

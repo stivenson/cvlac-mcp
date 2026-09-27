@@ -54,6 +54,8 @@ import {
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logger.js';
 import { classifyMatch } from '../diff.js';
+import { collectListPages, visitListPages, type ListNavigator } from '../browser/jmesa.js';
+import { pickRow } from './row-match.js';
 
 const log = createLogger('update-section');
 
@@ -1462,6 +1464,71 @@ export async function findRowActionHref(
   );
 }
 
+/** The action link (Detalles/Editar/Eliminar) of the `index`-th data row on the page. */
+export async function rowActionHrefAt(page: Page, index: number, linkText: string): Promise<string | null> {
+  return page.evaluate(
+    ({ i, link }) => {
+      const norm = (s: string | null | undefined): string =>
+        (s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+      const row = Array.from(document.querySelectorAll('tr.odd, tr.even'))[i];
+      if (!row) return null;
+      const a = Array.from(row.querySelectorAll('a')).find((el) => norm(el.textContent).includes(norm(link)));
+      return a ? a.getAttribute('href') : null;
+    },
+    { i: index, link: linkText }
+  );
+}
+
+/** What looking a row up by label across every page of a list found. */
+export type RowLookup = { kind: 'found'; href: string | null } | { kind: 'many'; labels: string[] } | { kind: 'none' };
+
+/**
+ * Finds the one row `label` means across every page of the section's list, and
+ * the href of its `linkText` action. `found` with a null href means the row is
+ * there but has no such link — CvLAC drops Eliminar on records it locks.
+ *
+ * Reads the whole list twice (once to pick the row among every label, once
+ * more to land on the page that holds it) rather than remembering a page
+ * number from the first pass: `visitListPages` reopens each page from a fresh
+ * `go()` call, and a row's position can only be trusted against a page it is
+ * being read from right then — not one fetched moments earlier under a
+ * possibly different `_mr_`/`_p_`.
+ */
+export async function lookupRow(
+  pageRef: { page: Page },
+  cfg: { listUrl: string; matchCellIndex: number },
+  label: string,
+  linkText: string
+): Promise<RowLookup> {
+  const go: ListNavigator = async (url: string): Promise<Page> => {
+    await gotoFormWithRelogin(pageRef, url);
+    return pageRef.page;
+  };
+  const labels = await collectListPages(cfg.listUrl, go, (p) => listRowLabels(p, cfg.matchCellIndex));
+  const pick = pickRow(labels, label);
+  if (pick.kind !== 'one') return pick;
+
+  const wanted = labels[pick.index];
+  const href = await visitListPages(cfg.listUrl, go, async (p) => {
+    const onPage = await listRowLabels(p, cfg.matchCellIndex);
+    const i = onPage.indexOf(wanted);
+    return i < 0 ? undefined : { href: await rowActionHrefAt(p, i, linkText) };
+  });
+  return { kind: 'found', href: href?.href ?? null };
+}
+
+/** The answer when a label matches more than one row: nothing is touched. */
+function manyRows(label: string, labels: string[]): UpdateResult {
+  return {
+    success: false,
+    status: 'needs_confirmation',
+    message:
+      `${labels.length} filas coinciden con "${label}" y no se tocó ninguna. ` +
+      'Repite con el título exacto de la fila que quieres.',
+    similar: labels.map((l) => ({ label: l, matchType: 'similar' as const })),
+  };
+}
+
 /**
  * Copies what a filler set into the hidden twins that share the field's name.
  *
@@ -1583,12 +1650,20 @@ async function describeRejection(page: Page, action: string, label: string): Pro
  * Existing CvLAC rows close enough to `label` that adding would risk a duplicate.
  * Assumes the page is already on the section's list.
  */
-async function findSimilarRows(
-  page: Page,
+/**
+ * Exported so its one job — never mistaking a partial list read for "no
+ * similar rows" — can be tested directly against a mocked, paginating list.
+ */
+export async function findSimilarRows(
+  pageRef: { page: Page },
   cfg: SectionConfig,
   label: string
 ): Promise<SimilarCandidate[]> {
-  const rows = await listRowLabels(page, cfg.matchCellIndex);
+  const go: ListNavigator = async (url: string): Promise<Page> => {
+    await gotoFormWithRelogin(pageRef, url);
+    return pageRef.page;
+  };
+  const rows = await collectListPages(cfg.listUrl, go, (p) => listRowLabels(p, cfg.matchCellIndex));
   const out: SimilarCandidate[] = [];
   for (const row of rows) {
     const match = classifyMatch(label, row);
@@ -1609,8 +1684,7 @@ async function addItem(
   // Duplicate guard: CvLAC has no unique constraints and removing a duplicate by
   // hand is tedious, so an ambiguous add stops here and asks.
   if (!confirmDuplicate) {
-    await gotoFormWithRelogin(pageRef, cfg.listUrl);
-    const similar = await findSimilarRows(pageRef.page, cfg, label);
+    const similar = await findSimilarRows(pageRef, cfg, label);
     if (similar.length > 0) {
       log.info('add blocked by existing similar items', { label, count: similar.length });
       return {
@@ -1654,8 +1728,7 @@ async function addItem(
   // thing that can say whether the row exists, so ask it.
   if (await landedOnOutage(pageRef.page)) {
     log.warn('add landed on the outage page; checking the list', { label });
-    await gotoFormWithRelogin(pageRef, cfg.listUrl);
-    const created = await findRowActionHref(pageRef.page, cfg.matchCellIndex, label, 'Eliminar');
+    const created = (await lookupRow(pageRef, cfg, label, 'Eliminar')).kind !== 'none';
     if (!created) {
       return failed(
         `CvLAC respondió con su página de "Server Unavailable" al guardar "${label}", y la fila no aparece en la lista: no se creó.`,
@@ -1679,8 +1752,9 @@ async function updateItem(
   label: string
 ): Promise<UpdateResult> {
   const report: FillReport = { warnings: [] };
-  await gotoFormWithRelogin(pageRef, cfg.listUrl);
-  const editHref = await findRowActionHref(pageRef.page, cfg.matchCellIndex, label, 'Editar');
+  const row = await lookupRow(pageRef, cfg, label, 'Editar');
+  if (row.kind === 'many') return manyRows(label, row.labels);
+  const editHref = row.kind === 'found' ? row.href : null;
   if (!editHref) {
     return failed(`No existing item matching "${label}" to update`, report);
   }
@@ -1781,14 +1855,13 @@ async function updateItem(
 
 async function deleteItem(pageRef: { page: Page }, cfg: SectionConfig, label: string): Promise<UpdateResult> {
   const report: FillReport = { warnings: [] };
-  await gotoFormWithRelogin(pageRef, cfg.listUrl);
-  const confirmHref = await findRowActionHref(pageRef.page, cfg.matchCellIndex, label, 'Eliminar');
-  if (!confirmHref) {
-    // The row may be there and simply locked: CvLAC drops the Eliminar link on
-    // records it will not let go of, and "not found" would be a lie.
-    const exists = await findRowActionHref(pageRef.page, cfg.matchCellIndex, label, 'Detalles');
-    return exists ? undeletableRefusal(label) : failed(`No item matching "${label}" to delete`, report);
-  }
+  const row = await lookupRow(pageRef, cfg, label, 'Eliminar');
+  if (row.kind === 'many') return manyRows(label, row.labels);
+  if (row.kind === 'none') return failed(`No item matching "${label}" to delete`, report);
+  // The row may be there and simply locked: CvLAC drops the Eliminar link on
+  // records it will not let go of, and "not found" would be a lie.
+  if (!row.href) return undeletableRefusal(label);
+  const confirmHref = row.href;
   await gotoFormWithRelogin(pageRef, BASE_URL + confirmHref);
   const deleteHref = await pageRef.page.evaluate(() => {
     const a = Array.from(document.querySelectorAll('a')).find(
@@ -1805,8 +1878,7 @@ async function deleteItem(pageRef: { page: Page }, cfg: SectionConfig, label: st
   const deleteStatus = await gotoFormWithRelogin(pageRef, BASE_URL + deleteHref, {
     tolerateUnavailable: true,
   });
-  await gotoFormWithRelogin(pageRef, cfg.listUrl);
-  const still = await findRowActionHref(pageRef.page, cfg.matchCellIndex, label, 'Eliminar');
+  const still = (await lookupRow(pageRef, cfg, label, 'Eliminar')).kind === 'found';
   const screenshotBase64 = await shot(pageRef.page);
   if (still) {
     const why =

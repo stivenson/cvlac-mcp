@@ -2,7 +2,7 @@ import type { Page } from 'playwright';
 import { session } from '../browser/session.js';
 import { BASE_URL, SECTION_LIST } from '../browser/navigation.js';
 import { navigate } from '../browser/navigate.js';
-import { findRowActionHref } from './update-section.js';
+import { lookupRow } from './update-section.js';
 import { createLogger } from '../logger.js';
 import type { CvLACSectionName, CvLACDetail, CvLACDetailField } from '../types.js';
 
@@ -102,12 +102,25 @@ export async function readCvlacDetailTool(
   }
 
   await session.login();
-  const page = await session.getPage();
+  const pageRef = { page: await session.getPage() };
   try {
-    await navigate(page, cfg.listUrl);
-
-    const href = await findRowActionHref(page, cfg.matchCellIndex, label, 'Detalles');
-    if (!href) {
+    // Reads every page of the list, not just the one it opens on: the row this
+    // asks about could be past row 15, and a miss there used to read as "no
+    // such item" rather than "did not look far enough".
+    const row = await lookupRow(pageRef, cfg, label, 'Detalles');
+    if (row.kind === 'many') {
+      log.info('label matched several rows', { section, label, count: row.labels.length });
+      return {
+        section,
+        label,
+        found: false,
+        fields: [],
+        message:
+          `${row.labels.length} filas de ${section} coinciden con "${label}" y no se pudo elegir una. ` +
+          `Candidatas: ${row.labels.join(' | ')}`,
+      };
+    }
+    if (row.kind === 'none' || !row.href) {
       log.info('no row matched', { section, label });
       return {
         section,
@@ -118,10 +131,10 @@ export async function readCvlacDetailTool(
       };
     }
 
-    const url = href.startsWith('http') ? href : BASE_URL + href;
-    await navigate(page, url);
+    const url = row.href.startsWith('http') ? row.href : BASE_URL + row.href;
+    await navigate(pageRef.page, url);
 
-    const fields = await extractDetailFields(page);
+    const fields = await extractDetailFields(pageRef.page);
     log.info('detail read', { section, label, fields: fields.length });
     return {
       section,
@@ -131,9 +144,9 @@ export async function readCvlacDetailTool(
       fields,
       // Only when pairing found nothing: otherwise this doubles the payload of
       // every successful read for no gain.
-      text: fields.length === 0 ? await readDetailText(page) : undefined,
+      text: fields.length === 0 ? await readDetailText(pageRef.page) : undefined,
     };
   } finally {
-    await page.close();
+    await pageRef.page.close();
   }
 }
