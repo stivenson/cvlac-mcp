@@ -1015,8 +1015,10 @@ Es la única suite que toca datos reales: por eso exige `CVLAC_E2E=1` y no corre
 
 Las 11 secciones originales, el perfil, las redes académicas y las áreas de actuación se leen y escriben
 (`add`/`update`/`delete`), con CRUD verificado contra el CvLAC real. También están implementadas las
-secciones de artículos, libros, capítulos, tesis, jurados y producción técnica; su CRUD real queda
-pendiente de una corrida e2e autorizada. El diff y el bloqueo de duplicados también cubren las listas
+secciones de artículos, libros, capítulos, tesis, jurados y producción técnica. El CRUD real se verificó
+completo en artículos; en informes técnicos y consultorías se verificaron altas, listado, detalle,
+bloqueo de duplicados y borrado. Algunos campos de edición dependen de variaciones del formulario real
+y quedan documentados en el roadmap. El diff y el bloqueo de duplicados también cubren las listas
 completas mediante paginación JMesa.
 
 Detalle completo, limitaciones conocidas y lo que sigue:
