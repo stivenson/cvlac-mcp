@@ -1,6 +1,6 @@
 # Roadmap
 
-Dónde está `cvlac-mcp` y qué falta. Actualizado: **2026-09-27**.
+Dónde está `cvlac-mcp` y qué falta. Actualizado: **2026-09-29**.
 
 ## Estado actual
 
@@ -26,8 +26,8 @@ Un recorrido de las **86 entradas** del menú de CvLAC (2026-09-16) encontró qu
 | Configuración personal fuera del código | ✅ |
 | Logging con redacción de secretos | ✅ |
 | Lectura de la ficha de detalle de un ítem | ✅ `read_cvlac_detail`, genérica |
-| Tests | ✅ 580 pruebas locales sin red, + suite e2e en vivo opt-in |
-| Producción bibliográfica, tesis, jurados y cinco familias técnicas | ✅ Implementada; 580 pruebas locales pasan; CRUD real verificado en artículos y altas/bajas de informes y consultorías |
+| Tests | ✅ 600 pruebas locales sin red, + suite e2e en vivo opt-in |
+| Producción bibliográfica, tesis, jurados y cinco familias técnicas | ✅ Implementada; 600 pruebas locales pasan; CRUD real verificado en artículos y altas/bajas de informes y consultorías |
 | Borrador de artículo desde DOI | ✅ `lookup_doi`, solo lectura contra Crossref |
 
 ## Limitaciones conocidas
@@ -131,6 +131,14 @@ El repo **ya está público**. Queda lo que sigue pendiente de todos modos.
 - [x] Cambiar el repo a público.
 
 ## Historial
+
+- **2026-09-29 (hardening de seguridad)** — Navegación autenticada limitada a HTTPS y al origen de
+  CvLAC; `inspect_form` rechaza destinos externos, enlaces de acción y valores sensibles; `sync` queda
+  en preview por defecto y valida con zod los datos antes de escribir; los borrados exigen resolver una
+  coincidencia exacta antes de pedir confirmación. Se conservó el sandbox de Chromium, se protegió el
+  ciclo de vida de sesiones concurrentes, se evitó reintentar credenciales rechazadas, se cerraron páginas
+  en errores, Crossref tiene timeout, los logs quedan en `0600`, y las capturas salen como imágenes MCP.
+  Añadidos regresiones de seguridad: **600 pruebas locales** y build TypeScript en verde.
 
 - **2026-09-29 (1.0.4)** — Añadida la carga de certificados PDF de libros mediante
   `certificateCLCDO` y `certificateCLRI`, con validación local de firma, existencia y límite de 2 MiB.

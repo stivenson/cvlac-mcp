@@ -484,8 +484,14 @@ Qué pasa con tus datos, en concreto:
 - **Para cerrar la sesión,** borra `.cvlac-session.json`. La próxima vez, cvlac-mcp inicia sesión de
   nuevo.
 - **Los registros no muestran secretos.** Aunque actives el modo detallado para depurar, la clave, la
-  cédula y las cookies aparecen como `***`.
+  cédula y las cookies aparecen como `***`. Si configuras `CVLAC_LOG_FILE`, el archivo se crea con
+  permisos solo para tu usuario (`0600`).
 - **Las capturas de pantalla pueden tener datos personales.** Revísalas antes de compartirlas.
+- **La navegación autenticada está limitada a CvLAC.** `inspect_form`, `screenshot` y los enlaces
+  internos solo aceptan HTTPS en `scienti.minciencias.gov.co`; se rechazan `file://`, otros hosts y
+  enlaces de acción como borrar/guardar.
+- **El navegador conserva el sandbox de Chromium por defecto.** Solo entornos que no puedan iniciarlo
+  así deben configurar explícitamente `CVLAC_NO_SANDBOX=true`, entendiendo el riesgo adicional.
 - **Si sospechas que se filtró algo,** cambia tu clave en CvLAC y borra el archivo de sesión.
 
 ### Uso responsable
@@ -774,8 +780,9 @@ vida.
 ## Comparar con un portafolio (`diff` y `sync`)
 
 `diff` compara el CvLAC con un portafolio web y clasifica cada ítem en cuatro grupos: **faltantes**,
-**a actualizar**, **parecidos** (algo similar ya existe: decide una persona) y **al día**. `sync` aplica
-los faltantes y los de actualizar, y nunca los parecidos.
+**a actualizar**, **parecidos** (algo similar ya existe: decide una persona) y **al día**. `sync`
+previsualiza por defecto; solo aplica los faltantes y los de actualizar cuando se llama con
+`dry_run: false`, y nunca los parecidos.
 
 **Limitación importante:** `read_portfolio` está hecho para un sitio concreto —una app React con la ruta
 `#/resume`, pestañas Experiencia, Educación y Cursos, y una sección "Logros Destacados"— y si no
@@ -792,7 +799,7 @@ Flujo recomendado:
 2. `sync` con `dry_run: true`
 3. Revisar el reporte con una persona: faltantes, a actualizar, **parecidos** y al día
 4. Resolver los parecidos uno a uno — `update` sobre el existente, o `add` con `confirm_duplicate:true`
-5. Aplicar el resto: `sync` sin `dry_run`, o `update_section` por ítem revisando los `warnings`
+5. Aplicar el resto: `sync` con `dry_run: false`, o `update_section` por ítem revisando los `warnings`
 6. Verificar con `read_cvlac` de las secciones tocadas, o `read_cvlac_detail`
 
 ```text
@@ -820,9 +827,9 @@ Si trabajas con Claude Code, la skill `cvlac-sync` del
 | `lookup_doi` | Consulta Crossref sin escribir y devuelve un borrador de artículo para revisar |
 | `complete_product` | Completa la segunda fase de un producto existente: reemplaza y ordena palabras clave, áreas, coautores y reconocimientos; en tesis vincula estudiantes con su participación. `dry_run:true` previsualiza; retirar valores requiere `confirm_delete:true` |
 | `update_section` | Aplica un cambio puntual: `add`, `update` o `delete` |
-| `sync` | `diff` + aplica `missing` y `toUpdate`. `dry_run:true` para previsualizar. Los `similar` nunca se aplican solos |
+| `sync` | `diff` + previsualiza por defecto; `dry_run:false` aplica `missing` y `toUpdate`. Los `similar` nunca se aplican solos |
 | `screenshot` | Captura la `url` dada, o la última lista, ficha o formulario visitado, recargado tal como está ahora. Rechaza los enlaces de acción (borrar, guardar): en CvLAC abrir uno lo ejecuta |
-| `inspect_form` | Lista los campos reales (`input`/`select`/`textarea`) de una URL de CvLAC, con sus opciones y cuáles son obligatorios |
+| `inspect_form` | Lista los campos reales (`input`/`select`/`textarea`) de una página segura de CvLAC, con sus opciones y cuáles son obligatorios; no abre otros hosts ni enlaces de acción |
 
 Una tool que falla devuelve `isError: true`. `needs_confirmation` y `unverified` no son errores: piden
 que una persona decida o revise.
@@ -914,6 +921,7 @@ Se definen en el `.env`, o en el bloque `env` de la configuración de la app, qu
 | `CVLAC_CONFIG_PATH` | Ubicación de `cvlac.config.json` |
 | `CVLAC_PORTFOLIO_EXTRA_PATH` | Ubicación de `portfolio-extra.json` |
 | `CVLAC_HEADLESS` | `false` abre el navegador para ver qué hace |
+| `CVLAC_NO_SANDBOX` | `true` desactiva el sandbox de Chromium solo en entornos que no puedan iniciarlo; no recomendado |
 | `CVLAC_LOG_LEVEL` | `debug` \| `info` (default) \| `warn` \| `error` \| `silent`. Los logs van a stderr |
 | `CVLAC_LOG_FILE` | Además de stderr, agrega cada línea a este archivo |
 | `CVLAC_USER_AGENT` | Reemplaza el user-agent. Por defecto se usa el del Chromium real, que coincide con el sistema |
