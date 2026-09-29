@@ -14,11 +14,14 @@ import { SECTION_SCHEMAS, formatIssues } from './schemas.js';
 import { createLogger } from './logger.js';
 import { SECTION_NAMES, type CvLACSectionName } from './types.js';
 import { lookupDoi } from './tools/crossref.js';
+import { completeProductTool, PRODUCT_COMPLETION_SECTIONS } from './tools/complete-product.js';
+import type { CompleteProductRequest } from './types.js';
 
 const log = createLogger('server');
 
 const sectionSchema = z.enum(SECTION_NAMES);
 const sectionAllSchema = z.enum([...SECTION_NAMES, 'all'] as [string, ...string[]]);
+const productCompletionSectionSchema = z.enum(PRODUCT_COMPLETION_SECTIONS);
 
 const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
 
@@ -198,6 +201,52 @@ export function createServer(): McpServer {
       inputSchema: { doi: z.string().min(1).describe('DOI, doi:... or https://doi.org/...') },
     },
     async ({ doi }) => jsonResult(await lookupDoi(doi))
+  );
+
+  server.registerTool(
+    'complete_product',
+    {
+      description:
+        'Complete the post-save CvLAC phase for an existing product. The first version manages ordered keywords and knowledge areas. ' +
+        'It reads the current lists, resolves catalogue names, and never removes an existing value without confirm_delete:true. ' +
+        'Use dry_run:true to preview catalogue resolution and removals without writing.',
+      inputSchema: {
+        section: productCompletionSectionSchema.describe('Product section containing the existing item'),
+        label: z.string().min(1).describe('Exact title as shown in the section list'),
+        keywords: z
+          .array(z.string().min(1))
+          .optional()
+          .describe('Complete ordered replacement list of product keywords'),
+        areas: z
+          .array(z.string().min(1))
+          .optional()
+          .describe('Complete ordered replacement list of product knowledge areas, by code or name'),
+        dry_run: z.boolean().optional().describe('Preview without creating keywords or submitting lists'),
+        confirm_delete: z
+          .boolean()
+          .optional()
+          .describe('Required when the replacement drops existing keywords or areas'),
+      },
+    },
+    async ({ section, label, keywords, areas, dry_run, confirm_delete }) => {
+      if (keywords === undefined && areas === undefined) {
+        return jsonResult({
+          success: false,
+          status: 'failed',
+          message: 'Pasa keywords, areas o ambos; no hay nada que completar.',
+        });
+      }
+      return jsonResult(
+        await completeProductTool({
+          section: section as CompleteProductRequest['section'],
+          label,
+          keywords,
+          areas,
+          dryRun: dry_run,
+          confirmDelete: confirm_delete,
+        })
+      );
+    }
   );
 
   server.registerTool(

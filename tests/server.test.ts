@@ -44,6 +44,7 @@ const EXPECTED = [
   'screenshot',
   'inspect_form',
   'lookup_doi',
+  'complete_product',
 ];
 
 describe('tool registration', () => {
@@ -66,6 +67,17 @@ describe('tool registration', () => {
     expect(schema.properties.action.enum.sort()).toEqual(['add', 'delete', 'update']);
     expect(schema.required).toContain('section');
     expect(schema.required).toContain('action');
+  });
+
+  it('requires at least one second-phase list for complete_product', async () => {
+    const res: any = await client.callTool({
+      name: 'complete_product',
+      arguments: { section: 'articulos', label: 'Artículo de prueba' },
+    });
+    const body = JSON.parse(res.content[0].text);
+    expect(res.isError).toBe(true);
+    expect(body.status).toBe('failed');
+    expect(body.message).toMatch(/keywords|areas/i);
   });
 
   it('tells the model how to answer catalogue choices for products', async () => {

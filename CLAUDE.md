@@ -67,7 +67,7 @@ Flujo de datos: `index.ts` → `server.ts` (router) → `tools/*` → `browser/s
 
 ## Tools MCP (registradas en `server.ts`)
 
-`login`, `read_cvlac`, `read_cvlac_detail`, `read_profile`, `update_profile`, `read_portfolio`, `diff`, `update_section`, `sync`, `screenshot`, `inspect_form`, `lookup_doi`.
+`login`, `read_cvlac`, `read_cvlac_detail`, `read_profile`, `update_profile`, `read_portfolio`, `diff`, `update_section`, `sync`, `screenshot`, `inspect_form`, `lookup_doi`, `complete_product`.
 
 **Secciones:** `formacion`, `formacionComple`, `experiencia`, `cursos`, `reconocimientos`, `proyectos`, `software`, `eventos`, `idiomas`, `lineas`, `demasTrabajos`, `articulos`, `libros`, `capitulos`, `tesis`, `jurados`, `informesTecnicos`, `innovacionesProceso`, `productosTecnologicos`, `consultorias`, `prototipos`.
 
@@ -78,7 +78,9 @@ Las secciones de producción tampoco entran al diff del portafolio. Se gestionan
 si hay varias opciones, la respuesta trae `choices` y se repite con el campo correspondiente terminado
 en `Id` (`revistaId`, `libroId`, `editorialId`, `programaId`, `areaId` o `institucionId`). Las listas
 JMesa se recorren completas, y update/delete solo actúan cuando hay una fila candidata única.
-Coautores, palabras clave, certificados y estudiantes vinculados se completan desde la web.
+`complete_product` gestiona palabras clave y áreas ordenadas para productos existentes; coautores,
+reconocimientos, certificados y estudiantes vinculados siguen pendientes. La operación reemplaza la
+lista completa, exige `confirm_delete` si retira valores y admite `dry_run` para previsualizar.
 
 `lookup_doi` es de solo lectura: consulta `api.crossref.org` y devuelve un borrador de `ArticleInput`
 para revisar antes de pasarlo a `update_section`.

@@ -89,8 +89,9 @@ son ficticios.
 
 **Todavía no puede:**
 
-- **Completar automáticamente la segunda fase de un producto:** coautores, palabras clave, áreas,
-  reconocimientos, certificados de libros y estudiantes vinculados en tesis se completan desde la web.
+- **Completar automáticamente toda la segunda fase de un producto:** `complete_product` ya gestiona
+  palabras clave y áreas, pero coautores, reconocimientos, certificados de libros y estudiantes
+  vinculados en tesis todavía requieren completarse desde la web.
 - **Crear revistas, libros, editoriales, programas o áreas que no existan en los catálogos de CvLAC.**
   Si un catálogo devuelve varias opciones, te las muestra para que elijas.
 - **Iniciar sesión con una cuenta de nacionalidad extranjera.** Por ahora el inicio de sesión asume
@@ -817,6 +818,7 @@ Si trabajas con Claude Code, la skill `cvlac-sync` del
 | `read_portfolio` | Renderiza el portafolio de `PORTFOLIO_URL` y lo une con `portfolio-extra.json` |
 | `diff` | Compara CvLAC contra el portafolio: `missing`, `toUpdate`, `similar`, `upToDate` |
 | `lookup_doi` | Consulta Crossref sin escribir y devuelve un borrador de artículo para revisar |
+| `complete_product` | Completa la segunda fase de un producto existente: reemplaza y ordena palabras clave y áreas. `dry_run:true` previsualiza; retirar valores requiere `confirm_delete:true` |
 | `update_section` | Aplica un cambio puntual: `add`, `update` o `delete` |
 | `sync` | `diff` + aplica `missing` y `toUpdate`. `dry_run:true` para previsualizar. Los `similar` nunca se aplican solos |
 | `screenshot` | Captura la `url` dada, o la última lista, ficha o formulario visitado, recargado tal como está ahora. Rechaza los enlaces de acción (borrar, guardar): en CvLAC abrir uno lo ejecuta |
@@ -1020,6 +1022,9 @@ completo en artículos; en informes técnicos y consultorías se verificaron alt
 bloqueo de duplicados y borrado. Algunos campos de edición dependen de variaciones del formulario real
 y quedan documentados en el roadmap. El diff y el bloqueo de duplicados también cubren las listas
 completas mediante paginación JMesa.
+
+`complete_product` ya completa palabras clave y áreas de productos existentes, con verificación e2e
+en un artículo; coautores, reconocimientos, certificados y estudiantes vinculados siguen pendientes.
 
 Detalle completo, limitaciones conocidas y lo que sigue:
 **[ROADMAP](https://github.com/stivenson/cvlac-mcp/blob/master/ROADMAP.md)**.

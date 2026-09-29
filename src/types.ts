@@ -489,7 +489,37 @@ export interface UpdateResult {
   similar?: SimilarCandidate[];
   /** Pickers that matched several rows; set when status is 'needs_confirmation'. */
   choices?: AmbiguousChoice[];
+  /** Existing second-phase values that would be removed from a product. */
+  removed?: string[];
   screenshotBase64?: string;
+}
+
+/** Product modules that expose CvLAC's post-save completion screens. */
+export type ProductCompletionSection =
+  | 'articulos'
+  | 'libros'
+  | 'capitulos'
+  | 'tesis'
+  | 'jurados'
+  | 'informesTecnicos'
+  | 'innovacionesProceso'
+  | 'productosTecnologicos'
+  | 'consultorias'
+  | 'prototipos';
+
+/** What the complete_product MCP tool receives. */
+export interface CompleteProductRequest {
+  section: ProductCompletionSection;
+  /** Exact title as shown in the section list. */
+  label: string;
+  /** Replaces the product's ordered keyword list when present. */
+  keywords?: string[];
+  /** Replaces the product's ordered knowledge-area list when present. */
+  areas?: string[];
+  /** Preview catalogue resolution and removals without writing. */
+  dryRun?: boolean;
+  /** Required when the replacement drops existing keywords or areas. */
+  confirmDelete?: boolean;
 }
 
 // ── Detail types ─────────────────────────────────────────────────────────────
