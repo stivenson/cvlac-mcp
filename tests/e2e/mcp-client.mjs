@@ -29,10 +29,9 @@ export async function connect({ logFile } = {}) {
 /**
  * Calls a tool and returns its parsed payload, screenshot included.
  *
- * Every tool answers with a JSON string in a text block. The base64 screenshot
- * used to be deleted here to keep the report readable, which also meant a
- * rejected form left nothing to look at; the runner now writes it to a file and
- * keeps only the path.
+ * Screenshots are MCP image blocks, not JSON fields. The live runner folds the
+ * image back into its private payload so keepScreenshot() can save it next to
+ * the report without putting base64 into model context.
  */
 export async function call(client, name, args = {}, timeoutMs = 300000) {
   // A write walks a dozen CvLAC pages with human-like pauses; the SDK's 60s
@@ -46,6 +45,10 @@ export async function call(client, name, args = {}, timeoutMs = 300000) {
     data = JSON.parse(text);
   } catch {
     data = { raw: text };
+  }
+  const image = (res.content ?? []).find((c) => c.type === 'image');
+  if (image?.type === 'image' && data && typeof data === 'object') {
+    data.screenshotBase64 = image.data;
   }
   return data;
 }

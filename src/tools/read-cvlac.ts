@@ -20,55 +20,58 @@ export async function readCvlacTool(
   await session.login();
 
   const page = await session.getPage();
-  const target = section ?? 'all';
-  const result: Partial<CvLACData> = {};
+  try {
+    const target = section ?? 'all';
+    const result: Partial<CvLACData> = {};
 
-  if (target === 'formacion' || target === 'all') {
+    if (target === 'formacion' || target === 'all') {
     result.formacion = await extractFormacion(page);
   }
-  if (target === 'experiencia' || target === 'all') {
+    if (target === 'experiencia' || target === 'all') {
     result.experiencia = await extractExperiencia(page);
   }
-  if (target === 'cursos' || target === 'all') {
+    if (target === 'cursos' || target === 'all') {
     result.cursos = await extractCursos(page);
   }
-  if (target === 'reconocimientos' || target === 'all') {
+    if (target === 'reconocimientos' || target === 'all') {
     result.reconocimientos = await extractReconocimientos(page);
   }
-  if (target === 'proyectos' || target === 'all') {
+    if (target === 'proyectos' || target === 'all') {
     result.proyectos = await extractProyectos(page);
   }
-  if (target === 'software' || target === 'all') {
+    if (target === 'software' || target === 'all') {
     result.software = await extractSoftware(page);
   }
-  if (target === 'eventos' || target === 'all') {
+    if (target === 'eventos' || target === 'all') {
     result.eventos = await extractEventos(page);
   }
-  if (target === 'formacionComple' || target === 'all') {
+    if (target === 'formacionComple' || target === 'all') {
     result.formacionComple = await extractFormacionComple(page);
   }
-  if (target === 'idiomas' || target === 'all') {
+    if (target === 'idiomas' || target === 'all') {
     result.idiomas = await extractIdiomas(page);
   }
-  if (target === 'lineas' || target === 'all') {
+    if (target === 'lineas' || target === 'all') {
     result.lineas = await extractLineas(page);
   }
-  if (target === 'demasTrabajos' || target === 'all') {
+    if (target === 'demasTrabajos' || target === 'all') {
     result.demasTrabajos = await extractDemasTrabajos(page);
   }
-  if (target === 'articulos' || target === 'all') {
+    if (target === 'articulos' || target === 'all') {
     result.articulos = await extractArticulos(page);
   }
-  if (target === 'jurados' || target === 'all') result.jurados = await extractJurados(page);
-  if (target === 'tesis' || target === 'all') result.tesis = await extractTesis(page);
-  if (target === 'capitulos' || target === 'all') result.capitulos = await extractCapitulos(page);
-  if (target === 'libros' || target === 'all') result.libros = await extractLibros(page);
-  if (target === 'informesTecnicos' || target === 'all') result.informesTecnicos = await extractTecnica(page, 'informesTecnicos', URLS.informesTecnicos);
-  if (target === 'innovacionesProceso' || target === 'all') result.innovacionesProceso = await extractTecnica(page, 'innovacionesProceso', URLS.innovacionesProceso);
-  if (target === 'productosTecnologicos' || target === 'all') result.productosTecnologicos = await extractTecnica(page, 'productosTecnologicos', URLS.productosTecnologicos);
-  if (target === 'consultorias' || target === 'all') result.consultorias = await extractTecnica(page, 'consultorias', URLS.consultorias);
-  if (target === 'prototipos' || target === 'all') result.prototipos = await extractTecnica(page, 'prototipos', URLS.prototipos);
+    if (target === 'jurados' || target === 'all') result.jurados = await extractJurados(page);
+    if (target === 'tesis' || target === 'all') result.tesis = await extractTesis(page);
+    if (target === 'capitulos' || target === 'all') result.capitulos = await extractCapitulos(page);
+    if (target === 'libros' || target === 'all') result.libros = await extractLibros(page);
+    if (target === 'informesTecnicos' || target === 'all') result.informesTecnicos = await extractTecnica(page, 'informesTecnicos', URLS.informesTecnicos);
+    if (target === 'innovacionesProceso' || target === 'all') result.innovacionesProceso = await extractTecnica(page, 'innovacionesProceso', URLS.innovacionesProceso);
+    if (target === 'productosTecnologicos' || target === 'all') result.productosTecnologicos = await extractTecnica(page, 'productosTecnologicos', URLS.productosTecnologicos);
+    if (target === 'consultorias' || target === 'all') result.consultorias = await extractTecnica(page, 'consultorias', URLS.consultorias);
+    if (target === 'prototipos' || target === 'all') result.prototipos = await extractTecnica(page, 'prototipos', URLS.prototipos);
 
-  await page.close();
-  return result;
+    return result;
+  } finally {
+    await page.close();
+  }
 }

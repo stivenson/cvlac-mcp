@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync, existsSync } from 'fs';
+import { mkdtempSync, readFileSync, rmSync, existsSync, statSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { createLogger, redact } from '../src/logger.js';
@@ -114,6 +114,7 @@ describe('createLogger', () => {
     const contents = readFileSync(file, 'utf-8');
     expect(contents).toContain('primera');
     expect(contents).toContain('segunda');
+    expect(statSync(file).mode & 0o777).toBe(0o600);
     rmSync(dir, { recursive: true, force: true });
   });
 

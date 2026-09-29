@@ -1,4 +1,4 @@
-import { appendFileSync } from 'fs';
+import { appendFileSync, chmodSync, existsSync } from 'fs';
 
 /**
  * Logging for an MCP stdio server.
@@ -55,7 +55,12 @@ function emit(level: LogLevel, scope: string, message: string, ctx?: Record<stri
   const file = process.env.CVLAC_LOG_FILE;
   if (file && !fileLoggingBroken) {
     try {
-      appendFileSync(file, line + '\n');
+      if (!existsSync(file)) {
+        appendFileSync(file, line + '\n', { mode: 0o600 });
+      } else {
+        chmodSync(file, 0o600);
+        appendFileSync(file, line + '\n');
+      }
     } catch {
       fileLoggingBroken = true;
       process.stderr.write(

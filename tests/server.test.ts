@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { createServer, isFailure } from '../src/server.js';
+import { createServer, isFailure, jsonResultWithScreenshot } from '../src/server.js';
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { createRequire } from 'module';
@@ -59,6 +59,23 @@ describe('tool registration', () => {
       expect(tool.description, tool.name).toBeTruthy();
       expect(tool.description!.length, tool.name).toBeGreaterThan(20);
     }
+  });
+
+  it('publishes read/write safety hints for MCP clients', async () => {
+    const { tools } = await client.listTools();
+    const read = tools.find((tool) => tool.name === 'read_cvlac') as any;
+    const write = tools.find((tool) => tool.name === 'update_section') as any;
+    expect(read.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+    expect(write.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+  });
+
+  it('returns screenshots as MCP image blocks, not base64 inside JSON', () => {
+    const result = jsonResultWithScreenshot({ success: true, status: 'ok', message: 'saved', screenshotBase64: 'abc' });
+    expect(result.content[0]).toEqual({
+      type: 'text',
+      text: JSON.stringify({ success: true, status: 'ok', message: 'saved' }, null, 2),
+    });
+    expect(result.content[1]).toEqual({ type: 'image', data: 'abc', mimeType: 'image/png' });
   });
 
   it('offers the three write actions on update_section', async () => {
@@ -157,6 +174,15 @@ describe('argument validation, before anything reaches CvLAC', () => {
     const res: any = await client.callTool({ name: 'borrar_todo', arguments: {} });
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toContain('not found');
+  });
+
+  it('refuses inspect_form destinations outside safe CvLAC pages before login', async () => {
+    const res: any = await client.callTool({
+      name: 'inspect_form',
+      arguments: { url: 'file:///tmp/.env' },
+    });
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toMatch(/solo acepta páginas HTTPS de CvLAC/i);
   });
 });
 

@@ -44,6 +44,7 @@ export async function lookupDoi(doi: string): Promise<ArticleInput> {
   const bare = doi.trim().replace(/^(https?:\/\/(dx\.)?doi\.org\/|doi:\s*)/i, '');
   const response = await fetch(`https://api.crossref.org/works/${encodeURIComponent(bare)}`, {
     headers: { 'User-Agent': 'cvlac-mcp (https://github.com/stivenson/cvlac-mcp)' },
+    signal: AbortSignal.timeout(15000),
   });
   if (response.status === 404) throw new Error(`Crossref no conoce el DOI ${bare}`);
   if (!response.ok) throw new Error(`Crossref respondió ${response.status}`);

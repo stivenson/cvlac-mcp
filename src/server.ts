@@ -16,6 +16,7 @@ import { SECTION_NAMES, type CvLACSectionName } from './types.js';
 import { lookupDoi } from './tools/crossref.js';
 import { completeProductTool, PRODUCT_COMPLETION_SECTIONS } from './tools/complete-product.js';
 import type { CompleteProductRequest } from './types.js';
+import { isSafeToReload } from './browser/navigation.js';
 
 const log = createLogger('server');
 
@@ -41,6 +42,25 @@ export function jsonResult(result: unknown): {
   return isFailure(result) ? { content, isError: true } : { content };
 }
 
+/** Keep binary evidence out of the model's JSON context; MCP can carry it as an image block. */
+export function jsonResultWithScreenshot(result: unknown): {
+  content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: 'image/png' }>;
+  isError?: true;
+} {
+  if (!result || typeof result !== 'object' || typeof (result as { screenshotBase64?: unknown }).screenshotBase64 !== 'string') {
+    return jsonResult(result);
+  }
+  const { screenshotBase64, ...withoutScreenshot } = result as Record<string, unknown>;
+  const response = jsonResult(withoutScreenshot);
+  return {
+    ...response,
+    content: [
+      ...response.content,
+      { type: 'image', data: screenshotBase64 as string, mimeType: 'image/png' },
+    ],
+  };
+}
+
 export function isFailure(result: unknown): boolean {
   if (!result || typeof result !== 'object') return false;
   const { status, success } = result as { status?: unknown; success?: unknown };
@@ -55,6 +75,7 @@ export function createServer(): McpServer {
     'login',
     {
       description: 'Authenticate in CvLAC and persist the browser session.',
+      annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         force: z.boolean().optional().describe('Force re-login even if session is valid'),
       },
@@ -71,6 +92,7 @@ export function createServer(): McpServer {
       description:
         'Read current CvLAC sections, including articles, books, chapters, theses, juries and five kinds of technical production. ' +
         'Returns existing items for comparison; list results include every JMesa page.',
+      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         section: sectionAllSchema
           .optional()
@@ -90,6 +112,7 @@ export function createServer(): McpServer {
         "Read the full record page of one CvLAC item. The list views only show a couple of " +
         "columns, so this is the only way to see the fields a write actually stored " +
         "(role, dates, institution, financing). Finds the row by label, case- and accent-insensitive.",
+      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         section: sectionSchema,
         label: z
@@ -108,6 +131,7 @@ export function createServer(): McpServer {
     {
       description:
         'Read and parse the configured portfolio site (PORTFOLIO_URL), merged with the curated proyectos/software/eventos from data/portfolio-extra.json.',
+      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {},
     },
     async () => {
@@ -122,6 +146,7 @@ export function createServer(): McpServer {
       description:
         'Compare CvLAC vs portfolio. Returns four buckets: missing, toUpdate, similar ' +
         '(close to an existing entry — a human decides) and upToDate.',
+      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         section: sectionAllSchema
           .optional()
@@ -151,6 +176,7 @@ export function createServer(): McpServer {
         'Catalogue choices are answered by repeating the call with revistaId, libroId, editorialId, programaId, areaId ' +
         'or institucionId in data. Coauthors, keywords, recognitions and linked thesis students are completed from the CvLAC website.' +
         ' For books, certificateCLCDO and certificateCLRI accept local PDF paths (maximum 2 MiB each).',
+      annotations: { readOnlyHint: false, destructiveHint: true },
       inputSchema: {
         section: sectionSchema,
         action: z.enum(['add', 'update', 'delete']),
@@ -190,7 +216,7 @@ export function createServer(): McpServer {
         confirmDuplicate: confirm_duplicate,
         confirmDelete: confirm_delete,
       });
-      return jsonResult(result);
+      return jsonResultWithScreenshot(result);
     }
   );
 
@@ -199,6 +225,7 @@ export function createServer(): McpServer {
     {
       description:
         'Read-only: look up a DOI in Crossref and return an article draft. Review it, then pass it to update_section with section:"articulos"; this tool does not write to CvLAC.',
+      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: { doi: z.string().min(1).describe('DOI, doi:... or https://doi.org/...') },
     },
     async ({ doi }) => jsonResult(await lookupDoi(doi))
@@ -211,6 +238,7 @@ export function createServer(): McpServer {
         'Complete the post-save CvLAC phase for an existing product. It manages ordered keywords, knowledge areas, coauthors and recognitions; ' +
         'for theses it also links students with their participation. It reads current values, resolves catalogue names, and never removes an existing value without confirm_delete:true. ' +
         'Use dry_run:true to preview catalogue resolution and removals without writing.',
+      annotations: { readOnlyHint: false, destructiveHint: true },
       inputSchema: {
         section: productCompletionSectionSchema.describe('Product section containing the existing item'),
         label: z.string().min(1).describe('Exact title as shown in the section list'),
@@ -261,7 +289,7 @@ export function createServer(): McpServer {
           message: 'Pasa keywords, areas, coauthors, recognitions, students o una combinación; no hay nada que completar.',
         });
       }
-      return jsonResult(
+      return jsonResultWithScreenshot(
         await completeProductTool({
           section: section as CompleteProductRequest['section'],
           label,
@@ -289,6 +317,7 @@ export function createServer(): McpServer {
         "profile text (txt_desc_perfil), the table of academic social networks " +
         "(Google Scholar, ORCID, LinkedIn, Scopus...) and the áreas de actuación. " +
         "None of them appears in read_cvlac.",
+      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {},
     },
     async () => {
@@ -307,6 +336,7 @@ export function createServer(): McpServer {
         "CvLAC does not list goes in \"otro\" with its name in \"label\". Removing one needs " +
         "confirm_delete:true. The profile text cannot be blanked: CvLAC marks it required. " +
         "The areas list is replaced whole, so dropping one also needs confirm_delete:true.",
+      annotations: { readOnlyHint: false, destructiveHint: true },
       inputSchema: {
         description: z
           .string()
@@ -351,7 +381,7 @@ export function createServer(): McpServer {
         areas,
         confirmDelete: confirm_delete,
       });
-      return jsonResult(result);
+      return jsonResultWithScreenshot(result);
     }
   );
 
@@ -361,12 +391,13 @@ export function createServer(): McpServer {
       description:
         'Run a full diff and apply the unambiguous items (missing + toUpdate). Items that ' +
         'resemble existing CvLAC entries are never written; they are listed for a human to ' +
-        'resolve. Use dry_run:true to preview.',
+        'resolve. It previews by default; pass dry_run:false to apply changes explicitly.',
+      annotations: { readOnlyHint: false, destructiveHint: true },
       inputSchema: {
         dry_run: z
           .boolean()
           .optional()
-          .describe('Preview changes without applying them'),
+          .describe('Preview changes without applying them. Defaults to true; use false to write.'),
         sections: z
           .array(sectionSchema)
           .optional()
@@ -374,7 +405,7 @@ export function createServer(): McpServer {
       },
     },
     async ({ dry_run, sections }) => {
-      const result = await syncTool({ dryRun: dry_run, sections });
+      const result = await syncTool({ dryRun: dry_run ?? true, sections });
       const content = [{ type: 'text' as const, text: result.report }];
       // Partial success is still success; only a run that wrote nothing it tried to is an error.
       return result.errors.length > 0 && result.applied === 0 ? { content, isError: true } : { content };
@@ -388,6 +419,7 @@ export function createServer(): McpServer {
         'Capture a CvLAC page for debugging: the given url, or else the last list, record or ' +
         'form page a tool visited, reloaded as it is now. Action links (delete, save) are refused, ' +
         'because in CvLAC opening one performs it.',
+      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         url: z
           .string()
@@ -411,11 +443,23 @@ export function createServer(): McpServer {
     'inspect_form',
     {
       description: 'Navigate to a CvLAC URL and return the HTML of all form inputs/selects/textareas for debugging field names.',
+      annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         url: z.string().describe('The CvLAC URL to inspect'),
       },
     },
     async ({ url }) => {
+      if (!isSafeToReload(url)) {
+        return {
+          isError: true,
+          content: [{
+            type: 'text' as const,
+            text:
+              'inspect_form solo acepta páginas HTTPS de CvLAC que sean listas, fichas o formularios. ' +
+              'Se rechazó el destino antes de abrirlo con la sesión autenticada.',
+          }],
+        };
+      }
       const { session } = await import('./browser/session.js');
       await session.login();
       const page = await session.getPage();
@@ -436,7 +480,11 @@ export function createServer(): McpServer {
                   ']'
                 : '';
             const required = e.closest('td,tr')?.textContent?.includes('*') ? ' (*)' : '';
-            return `${e.tagName} name="${e.name}" id="${e.id}" type="${e.type}" value="${e.value}"${required}${options}`;
+            const sensitive = /password|contrasena|contraseña|cedula|documento|token|secret/i.test(
+              `${e.name} ${e.id} ${e.type}`
+            );
+            const value = sensitive ? '[redacted]' : e.value;
+            return `${e.tagName} name="${e.name}" id="${e.id}" type="${e.type}" value="${value}"${required}${options}`;
           });
         });
         const screenshot = await session.takeScreenshot(page);
