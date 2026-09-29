@@ -132,6 +132,10 @@ El repo **ya está público**. Queda lo que sigue pendiente de todos modos.
 
 ## Historial
 
+- **2026-09-29 (1.0.4)** — Añadida la carga de certificados PDF de libros mediante
+  `certificateCLCDO` y `certificateCLRI`, con validación local de firma, existencia y límite de 2 MiB.
+  Corregido el campo actual `cod_editorial_otro` y la confirmación de altas cuando CvLAC vuelve a
+  mostrar el formulario vacío. Verificado con CRUD real temporal y 593 pruebas locales.
 - **2026-09-28 (1.0.3)** — Ampliado el CRUD MCP para artículos, libros, capítulos, tesis, jurados y
   producción técnica; añadido `lookup_doi` con Crossref, catálogos y manejo robusto de formularios.
   Publicado con 580 pruebas locales pasando, README actualizado y dependencias de producción corregidas
