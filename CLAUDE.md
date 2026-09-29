@@ -78,9 +78,10 @@ Las secciones de producción tampoco entran al diff del portafolio. Se gestionan
 si hay varias opciones, la respuesta trae `choices` y se repite con el campo correspondiente terminado
 en `Id` (`revistaId`, `libroId`, `editorialId`, `programaId`, `areaId` o `institucionId`). Las listas
 JMesa se recorren completas, y update/delete solo actúan cuando hay una fila candidata única.
-`complete_product` gestiona palabras clave y áreas ordenadas para productos existentes; coautores,
-reconocimientos, certificados y estudiantes vinculados siguen pendientes. La operación reemplaza la
-lista completa, exige `confirm_delete` si retira valores y admite `dry_run` para previsualizar.
+`complete_product` gestiona palabras clave, áreas y coautores ordenados para productos existentes; en
+tesis también vincula estudiantes con `TUT`, `ASE`, `COT` u `ORI`. Reconocimientos y certificados siguen
+pendientes. La operación reemplaza la lista completa, exige `confirm_delete` si retira valores y admite
+`dry_run` para previsualizar; el propietario se conserva en coautores y tesis.
 
 `lookup_doi` es de solo lectura: consulta `api.crossref.org` y devuelve un borrador de `ArticleInput`
 para revisar antes de pasarlo a `update_section`.

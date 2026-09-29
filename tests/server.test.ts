@@ -80,6 +80,15 @@ describe('tool registration', () => {
     expect(body.message).toMatch(/keywords|areas/i);
   });
 
+  it('exposes coauthors and thesis students in complete_product', async () => {
+    const { tools } = await client.listTools();
+    const schema = tools.find((tool) => tool.name === 'complete_product')!.inputSchema as any;
+    expect(schema.properties.coauthors).toBeTruthy();
+    expect(schema.properties.students).toBeTruthy();
+    expect(schema.properties.students.items.properties.name).toBeTruthy();
+    expect(schema.properties.students.items.properties.participation).toBeTruthy();
+  });
+
   it('tells the model how to answer catalogue choices for products', async () => {
     const { tools } = await client.listTools();
     const description = tools.find((tool) => tool.name === 'update_section')?.description ?? '';

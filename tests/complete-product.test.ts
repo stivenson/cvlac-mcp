@@ -2,6 +2,9 @@ import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
 import {
   parseKeywordValue,
+  parseCoauthorCatalogue,
+  parseCoauthorValue,
+  parseStudentResponse,
   readKeywordState,
   removedValues,
   sameOrderedCodes,
@@ -28,6 +31,41 @@ describe('complete_product value helpers', () => {
         [{ code: '2', name: 'Segunda' }]
       )
     ).toEqual(['Primera']);
+  });
+
+  it('parses ordered coauthor values and the previously registered catalogue', () => {
+    expect(parseCoauthorValue('2.1', '2. Olga marina Vega  Angarita')).toEqual({
+      code: '1',
+      name: 'Olga marina Vega Angarita',
+    });
+    expect(
+      parseCoauthorCatalogue([
+        { href: "javascript:addRh('1', 'Olga marina Vega  Angarita' )", text: 'Olga marina Vega Angarita' },
+        { href: "javascript:addRh('0', 'Stivenson Rincon Mora' )", text: 'Stivenson Rincon Mora' },
+        { href: 'javascript:searchRh()', text: '' },
+      ])
+    ).toEqual([
+      { code: '1', name: 'Olga marina Vega Angarita' },
+      { code: '0', name: 'Stivenson Rincon Mora' },
+    ]);
+  });
+
+  it('parses linked thesis students and their participation types', () => {
+    expect(
+      parseStudentResponse({
+        tiposParticipacion: { ORI: 'Orientado' },
+        coautores: [
+          { codRh: '0', txtTotalNames: 'Stivenson Rincon Mora', tpoParticipacion: 'TUT', nmeParticipacion: 'Tutor' },
+          { codRh: '123', txtTotalNames: 'Ana María Pérez', tpoParticipacion: 'ORI' },
+        ],
+      })
+    ).toEqual({
+      types: { ORI: 'Orientado' },
+      students: [
+        { code: '0', name: 'Stivenson Rincon Mora', participation: 'TUT', participationName: 'Tutor' },
+        { code: '123', name: 'Ana María Pérez', participation: 'ORI', participationName: 'Orientado' },
+      ],
+    });
   });
 });
 

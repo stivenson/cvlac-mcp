@@ -12,6 +12,7 @@ import { createLogger } from '../logger.js';
 import type {
   AmbiguousChoice,
   CompleteProductRequest,
+  ProductStudentInput,
   ProductCompletionSection,
   UpdateResult,
 } from '../types.js';
@@ -31,7 +32,7 @@ export const PRODUCT_COMPLETION_SECTIONS = [
   'prototipos',
 ] as const satisfies readonly ProductCompletionSection[];
 
-type Phase = 'keywords' | 'coauthors' | 'areas' | 'recognitions';
+type Phase = 'keywords' | 'coauthors' | 'areas' | 'students' | 'recognitions';
 
 interface KeywordValue {
   code: string;
@@ -41,6 +42,21 @@ interface KeywordValue {
 interface KeywordState {
   selected: KeywordValue[];
   personal: KeywordValue[];
+}
+
+export interface PersonValue {
+  code: string;
+  name: string;
+}
+
+export interface StudentValue extends PersonValue {
+  participation: string;
+  participationName: string;
+}
+
+export interface StudentState {
+  types: Record<string, string>;
+  students: StudentValue[];
 }
 
 interface ResolvedArea extends Area {
@@ -63,6 +79,46 @@ export function parseKeywordValue(value: string, label: string): KeywordValue | 
   const code = stripPosition(value);
   const name = stripLabelPosition(label);
   return code && name ? { code, name } : null;
+}
+
+export function parseCoauthorValue(value: string, label: string): PersonValue | null {
+  const code = value.replace(/^\d+\./, '').trim();
+  const name = stripLabelPosition(label);
+  return code && name ? { code, name } : null;
+}
+
+export function parseCoauthorCatalogue(
+  links: Array<{ href: string | null; text: string | null }>
+): PersonValue[] {
+  const out: PersonValue[] = [];
+  const seen = new Set<string>();
+  for (const link of links) {
+    const match = (link.href ?? '').match(/addRh\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]*)/);
+    if (!match) continue;
+    const code = match[1].trim();
+    const name = (link.text || match[2]).replace(/\s+/g, ' ').trim();
+    if (!code || !name || seen.has(code)) continue;
+    seen.add(code);
+    out.push({ code, name });
+  }
+  return out;
+}
+
+export function parseStudentResponse(payload: unknown): StudentState {
+  const body = (payload ?? {}) as {
+    tiposParticipacion?: Record<string, string>;
+    coautores?: Array<{ codRh?: string; txtTotalNames?: string; tpoParticipacion?: string; nmeParticipacion?: string }>;
+  };
+  const types = body.tiposParticipacion ?? {};
+  const students = (body.coautores ?? [])
+    .map((row) => ({
+      code: String(row.codRh ?? '').trim(),
+      name: String(row.txtTotalNames ?? '').replace(/\s+/g, ' ').trim(),
+      participation: String(row.tpoParticipacion ?? '').trim(),
+      participationName: String(row.nmeParticipacion ?? types[row.tpoParticipacion ?? ''] ?? '').trim(),
+    }))
+    .filter((row) => row.code && row.name && row.participation);
+  return { types, students };
 }
 
 /** Reads both the product's current keywords and the user's reusable catalogue. */
@@ -101,10 +157,26 @@ export function removedValues<T extends { code: string; name: string }>(
 }
 
 async function phaseUrl(page: Page, phase: Phase): Promise<string | null> {
+  if (phase === 'students') {
+    const url = await page.evaluate(() => {
+      const link = Array.from(document.querySelectorAll<HTMLAnchorElement>('a')).find((candidate) =>
+        /registrar personas/i.test(candidate.textContent ?? '')
+      );
+      if (!link) return null;
+      const productId = new URL(location.href).searchParams.get('cod_producto');
+      const scriptText = Array.from(document.scripts).map((script) => script.textContent ?? '').join('\n');
+      const type = scriptText.match(/codTipoProducto\s*=\s*['"]([^'"]+)['"]/i)?.[1];
+      return productId && type
+        ? `/cvlac/exclude/ReProductoRecursoHumano/all.do?cod_producto=${encodeURIComponent(productId)}&cod_tipo_producto=${encodeURIComponent(type)}`
+        : null;
+    });
+    return url ? absolute(url) : null;
+  }
   const patterns: Record<Phase, RegExp> = {
     keywords: /palabra/i,
     coauthors: /coautor/i,
     areas: /gran área|area y disciplina|área y disciplina/i,
+    students: /persona|estudiante/i,
     recognitions: /reconocimiento/i,
   };
   return page.evaluate((patternSource) => {
@@ -118,6 +190,247 @@ async function phaseUrl(page: Page, phase: Phase): Promise<string | null> {
     if (quoted) return quoted[1];
     return null;
   }, patterns[phase].source).then((url) => (url ? absolute(url) : null));
+}
+
+async function readCoauthorState(page: Page): Promise<PersonValue[]> {
+  const raw = await page.$$eval('select[name="cod_rh_otro"] option', (options) =>
+    options.map((option) => {
+      const item = option as HTMLOptionElement;
+      return { value: item.value, text: item.text };
+    })
+  );
+  return raw.map((item) => parseCoauthorValue(item.value, item.text)).filter((item): item is PersonValue => item !== null);
+}
+
+async function readCoauthorCatalogue(page: Page, coauthorUrl: string): Promise<PersonValue[]> {
+  const query = new URL(coauthorUrl).searchParams;
+  const codRh = query.get('cod_rh') ?? '';
+  if (!codRh) return [];
+  const cataloguePage = await session.getPage();
+  try {
+    await navigate(
+      cataloguePage,
+      `${BASE_URL}/cvlac/popup/ReProductoRecursoHumOtro/rhOtroAll.do?cod_rh_crea=${encodeURIComponent(codRh)}`
+    );
+    const links = await cataloguePage.$$eval('a', (anchors) =>
+      anchors.map((anchor) => ({ href: anchor.getAttribute('href'), text: anchor.textContent }))
+    );
+    return parseCoauthorCatalogue(links);
+  } finally {
+    await cataloguePage.close();
+  }
+}
+
+async function resolveCoauthors(
+  page: Page,
+  coauthorUrl: string,
+  wanted: string[],
+  choices: AmbiguousChoice[],
+  blockers: string[],
+  warnings: string[]
+): Promise<{ current: PersonValue[]; desired: PersonValue[] }> {
+  await navigate(page, coauthorUrl);
+  const current = await readCoauthorState(page);
+  const catalogue = await readCoauthorCatalogue(page, coauthorUrl);
+  const desired: PersonValue[] = [];
+  const seen = new Set<string>();
+  const owner = current.find((person) => person.code === '0') ?? catalogue.find((person) => person.code === '0');
+  if (owner) {
+    desired.push(owner);
+    seen.add(owner.code);
+  }
+
+  for (const raw of wanted) {
+    const name = raw.trim();
+    if (!name) continue;
+    const matches = catalogue.filter((person) => normStr(person.name) === normStr(name));
+    if (matches.length === 0) {
+      const partial = catalogue.filter((person) => {
+        const candidate = normStr(person.name);
+        const target = normStr(name);
+        return candidate.includes(target) || target.includes(candidate);
+      });
+      if (partial.length === 1) matches.push(partial[0]);
+      else if (partial.length > 1) {
+        choices.push({
+          field: 'coautor',
+          value: name,
+          options: partial.slice(0, 10).map((person) => ({ id: person.code, label: person.name })),
+        });
+        continue;
+      }
+    }
+    if (matches.length === 0) {
+      blockers.push(`coautor: "${name}" no existe en el catálogo de coautores previamente registrados de CvLAC`);
+      continue;
+    }
+    const person = matches[0];
+    if (seen.has(person.code)) {
+      warnings.push(`coautores: se ignoró la persona repetida "${name}"`);
+      continue;
+    }
+    seen.add(person.code);
+    desired.push(person);
+  }
+  return { current, desired };
+}
+
+async function setCoauthorList(page: Page, coauthorUrl: string, desired: PersonValue[]): Promise<PersonValue[]> {
+  await navigate(page, coauthorUrl);
+  await page.evaluate((people) => {
+    const select = document.querySelector<HTMLSelectElement>('select[name="cod_rh_otro"]');
+    if (!select) throw new Error('CvLAC no mostró la lista de coautores');
+    select.innerHTML = '';
+    people.forEach((person, index) => {
+      const option = new Option(`${index + 1}. ${person.name}`, `${index + 1}.${person.code}`);
+      option.selected = true;
+      select.add(option);
+    });
+  }, desired);
+  await submitAndWait(page, 'form[name="reProductoRecursoHumOtroUpdateForm"] input[type="button"]');
+  await navigate(page, coauthorUrl);
+  return readCoauthorState(page);
+}
+
+async function readStudentState(page: Page, studentUrl: string): Promise<StudentState> {
+  const query = new URL(studentUrl).searchParams;
+  const productId = query.get('cod_producto') ?? '';
+  const productType = query.get('cod_tipo_producto') ?? '';
+  const apiUrl = `${BASE_URL}/cvlac/json/ReProductoRecursoHumano/buscar.do?cod_producto=${encodeURIComponent(productId)}&cod_tipo_producto=${encodeURIComponent(productType)}`;
+  const response = await page.evaluate(async (url) => {
+    const res = await fetch(url, { credentials: 'include' });
+    const text = new TextDecoder('latin1').decode(await res.arrayBuffer());
+    let body: unknown = null;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = null;
+    }
+    return { ok: res.ok, status: res.status, body };
+  }, apiUrl);
+  if (!response.ok || !response.body) throw new Error(`CvLAC no devolvió las personas vinculadas (${response.status})`);
+  return parseStudentResponse(response.body);
+}
+
+async function searchPeople(page: Page, name: string): Promise<PersonValue[]> {
+  const url = `${BASE_URL}/cvlac/json/EnRecursoHumano/buscar.do?identificacion=&nombres=${encodeURIComponent(name)}`;
+  const response = await page.evaluate(async (fetchUrl) => {
+    const res = await fetch(fetchUrl, { credentials: 'include' });
+    const text = new TextDecoder('latin1').decode(await res.arrayBuffer());
+    try {
+      return { ok: res.ok, status: res.status, body: JSON.parse(text) as unknown };
+    } catch {
+      return { ok: res.ok, status: res.status, body: null };
+    }
+  }, url);
+  if (!response.ok || !Array.isArray(response.body)) return [];
+  return response.body
+    .map((person) => {
+      const row = person as { codRh?: string; txtTotalNames?: string };
+      return { code: String(row.codRh ?? '').trim(), name: String(row.txtTotalNames ?? '').replace(/\s+/g, ' ').trim() };
+    })
+    .filter((person) => person.code && person.name);
+}
+
+function resolveParticipation(value: string | undefined, types: Record<string, string>): { code: string; name: string } | null {
+  const wanted = normStr(value ?? 'ORI');
+  const match = Object.entries(types).find(([code, name]) => normStr(code) === wanted || normStr(name) === wanted);
+  return match ? { code: match[0], name: match[1] } : null;
+}
+
+async function resolveStudents(
+  page: Page,
+  studentUrl: string,
+  wanted: ProductStudentInput[],
+  choices: AmbiguousChoice[],
+  blockers: string[],
+  warnings: string[]
+): Promise<{ current: StudentValue[]; desired: StudentValue[] }> {
+  const state = await readStudentState(page, studentUrl);
+  const desired: StudentValue[] = [];
+  const seen = new Set<string>();
+  const owner = state.students.find((student) => student.code === '0');
+  if (owner) {
+    desired.push(owner);
+    seen.add(owner.code);
+  }
+  for (const input of wanted) {
+    const name = input.name.trim();
+    const participation = resolveParticipation(input.participation, state.types);
+    if (!participation) {
+      blockers.push(`estudiante: participación "${input.participation}" no es válida (${Object.keys(state.types).join(', ')})`);
+      continue;
+    }
+    let person: PersonValue | undefined;
+    if (input.personId) {
+      person = { code: input.personId, name };
+    } else {
+      const candidates = await searchPeople(page, name);
+      const exact = candidates.filter((candidate) => normStr(candidate.name) === normStr(name));
+      if (exact.length === 1) person = exact[0];
+      else if (exact.length > 1 || candidates.length > 1) {
+        const options = (exact.length ? exact : candidates).slice(0, 10);
+        choices.push({ field: 'estudiante', value: name, options: options.map((candidate) => ({ id: candidate.code, label: candidate.name })) });
+        continue;
+      }
+    }
+    if (!person) {
+      blockers.push(`estudiante: "${name}" no se encontró en el catálogo de personas de CvLAC`);
+      continue;
+    }
+    if (seen.has(person.code)) {
+      warnings.push(`estudiantes: se ignoró la persona repetida "${name}"`);
+      continue;
+    }
+    seen.add(person.code);
+    desired.push({ ...person, participation: participation.code, participationName: participation.name });
+  }
+  return { current: state.students, desired };
+}
+
+async function studentMutation(
+  page: Page,
+  action: 'insert' | 'update' | 'delete',
+  productId: string,
+  personId: string,
+  participation?: string
+): Promise<void> {
+  const url = new URL(`${BASE_URL}/cvlac/json/ReProductoRecursoHumano/${action}.do`);
+  url.searchParams.set('cod_producto', productId);
+  url.searchParams.set('cod_rh_otro', personId);
+  if (participation) url.searchParams.set('tpo_participacion', participation);
+  const response = await page.evaluate(async (fetchUrl) => {
+    const res = await fetch(fetchUrl, { credentials: 'include' });
+    return { ok: res.ok, status: res.status, text: (await res.text()).slice(0, 300) };
+  }, url.toString());
+  if (!response.ok) throw new Error(`CvLAC rechazó ${action} de la persona (${response.status})`);
+}
+
+function sameStudents(left: StudentValue[], right: StudentValue[]): boolean {
+  const key = (student: StudentValue): string => `${student.code}|${student.participation}`;
+  const a = left.map(key).sort();
+  const b = right.map(key).sort();
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+async function setStudentList(page: Page, studentUrl: string, current: StudentValue[], desired: StudentValue[]): Promise<StudentState> {
+  const productId = new URL(studentUrl).searchParams.get('cod_producto') ?? '';
+  const currentByCode = new Map(current.map((student) => [student.code, student]));
+  const desiredByCode = new Map(desired.map((student) => [student.code, student]));
+  for (const student of current) {
+    if (student.code !== '0' && !desiredByCode.has(student.code)) {
+      await studentMutation(page, 'delete', productId, student.code);
+    }
+  }
+  for (const student of desired) {
+    if (student.code === '0') continue;
+    const existing = currentByCode.get(student.code);
+    if (!existing) await studentMutation(page, 'insert', productId, student.code, student.participation);
+    else if (existing.participation !== student.participation) {
+      await studentMutation(page, 'update', productId, student.code, student.participation);
+    }
+  }
+  return readStudentState(page, studentUrl);
 }
 
 async function submitAndWait(page: Page, selector: string): Promise<void> {
@@ -275,11 +588,11 @@ function confirmation(message: string, removed: string[]): UpdateResult {
 }
 
 export async function completeProductTool(req: CompleteProductRequest): Promise<UpdateResult> {
-  if (req.keywords === undefined && req.areas === undefined) {
+  if (req.keywords === undefined && req.areas === undefined && req.coauthors === undefined && req.students === undefined) {
     return {
       success: false,
       status: 'failed',
-      message: 'Pasa keywords, areas o ambos; no hay nada que completar.',
+      message: 'Pasa keywords, areas, coauthors, students o una combinación; no hay nada que completar.',
     };
   }
 
@@ -312,7 +625,7 @@ export async function completeProductTool(req: CompleteProductRequest): Promise<
 
     await navigate(page, absolute(row.href));
     const phaseUrls: Partial<Record<Phase, string>> = {};
-    for (const phase of ['keywords', 'areas'] as const) {
+    for (const phase of ['keywords', 'areas', 'coauthors', 'students'] as const) {
       const url = await phaseUrl(page, phase);
       if (url) phaseUrls[phase] = url;
     }
@@ -337,6 +650,31 @@ export async function completeProductTool(req: CompleteProductRequest): Promise<
         const plan = await resolveAreas(page, phaseUrls.areas, req.areas, choices, blockers);
         areaPlan = { url: phaseUrls.areas, ...plan };
         removed.push(...removedValues(plan.current, plan.desired).map((name) => `área: ${name}`));
+      }
+    }
+
+    let coauthorPlan: { url: string; current: PersonValue[]; desired: PersonValue[] } | undefined;
+    if (req.coauthors !== undefined) {
+      if (!phaseUrls.coauthors) blockers.push('CvLAC no mostró la acción para registrar coautores');
+      else {
+        const plan = await resolveCoauthors(page, phaseUrls.coauthors, req.coauthors, choices, blockers, warnings);
+        coauthorPlan = { url: phaseUrls.coauthors, ...plan };
+        removed.push(...removedValues(plan.current, plan.desired).map((name) => `coautor: ${name}`));
+      }
+    }
+
+    let studentPlan: { url: string; current: StudentValue[]; desired: StudentValue[] } | undefined;
+    if (req.students !== undefined) {
+      if (req.section !== 'tesis') blockers.push('students solo está disponible para productos de tesis');
+      else if (!phaseUrls.students) blockers.push('CvLAC no mostró la acción para registrar personas vinculadas');
+      else {
+        const plan = await resolveStudents(page, phaseUrls.students, req.students, choices, blockers, warnings);
+        studentPlan = { url: phaseUrls.students, ...plan };
+        removed.push(...
+          plan.current
+            .filter((student) => student.code !== '0' && !plan.desired.some((wanted) => wanted.code === student.code))
+            .map((student) => `estudiante: ${student.name}`)
+        );
       }
     }
 
@@ -371,6 +709,20 @@ export async function completeProductTool(req: CompleteProductRequest): Promise<
         return { success: false, status: 'failed', message: `CvLAC no confirmó las áreas de "${req.label}"`, warnings };
       }
       changed.push('áreas de conocimiento');
+    }
+    if (coauthorPlan && !sameOrderedCodes(coauthorPlan.current, coauthorPlan.desired)) {
+      const stored = await setCoauthorList(page, coauthorPlan.url, coauthorPlan.desired);
+      if (!sameOrderedCodes(stored, coauthorPlan.desired)) {
+        return { success: false, status: 'failed', message: `CvLAC no confirmó los coautores de "${req.label}"`, warnings };
+      }
+      changed.push('coautores');
+    }
+    if (studentPlan && !sameStudents(studentPlan.current, studentPlan.desired)) {
+      const stored = await setStudentList(page, studentPlan.url, studentPlan.current, studentPlan.desired);
+      if (!sameStudents(stored.students, studentPlan.desired)) {
+        return { success: false, status: 'failed', message: `CvLAC no confirmó los estudiantes de "${req.label}"`, warnings };
+      }
+      changed.push('estudiantes');
     }
 
     log.info('product completion applied', { section: req.section, label: req.label, changed });

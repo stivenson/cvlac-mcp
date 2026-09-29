@@ -149,7 +149,7 @@ export function createServer(): McpServer {
         'for theses provide title, tipo, year, institution and programme; for juries provide title, nivel, year, ' +
         'orientado, institution and programme; technical sections require title and year, with section-specific fields. ' +
         'Catalogue choices are answered by repeating the call with revistaId, libroId, editorialId, programaId, areaId ' +
-        'or institucionId in data. Coauthors, keywords, certificates and linked thesis students are completed from the CvLAC website.',
+        'or institucionId in data. Coauthors, keywords and linked thesis students are completed from the CvLAC website; certificates remain pending.',
       inputSchema: {
         section: sectionSchema,
         action: z.enum(['add', 'update', 'delete']),
@@ -207,8 +207,8 @@ export function createServer(): McpServer {
     'complete_product',
     {
       description:
-        'Complete the post-save CvLAC phase for an existing product. The first version manages ordered keywords and knowledge areas. ' +
-        'It reads the current lists, resolves catalogue names, and never removes an existing value without confirm_delete:true. ' +
+        'Complete the post-save CvLAC phase for an existing product. It manages ordered keywords, knowledge areas and coauthors; ' +
+        'for theses it also links students with their participation. It reads current values, resolves catalogue names, and never removes an existing value without confirm_delete:true. ' +
         'Use dry_run:true to preview catalogue resolution and removals without writing.',
       inputSchema: {
         section: productCompletionSectionSchema.describe('Product section containing the existing item'),
@@ -221,6 +221,20 @@ export function createServer(): McpServer {
           .array(z.string().min(1))
           .optional()
           .describe('Complete ordered replacement list of product knowledge areas, by code or name'),
+        coauthors: z
+          .array(z.string().min(1))
+          .optional()
+          .describe('Complete ordered replacement list of coauthor names; the CvLAC owner is preserved'),
+        students: z
+          .array(
+            z.object({
+              name: z.string().min(1),
+              participation: z.string().min(1).optional(),
+              person_id: z.string().min(1).optional(),
+            })
+          )
+          .optional()
+          .describe('Complete thesis student list; each item may use participation TUT, ASE, COT or ORI'),
         dry_run: z.boolean().optional().describe('Preview without creating keywords or submitting lists'),
         confirm_delete: z
           .boolean()
@@ -228,12 +242,12 @@ export function createServer(): McpServer {
           .describe('Required when the replacement drops existing keywords or areas'),
       },
     },
-    async ({ section, label, keywords, areas, dry_run, confirm_delete }) => {
-      if (keywords === undefined && areas === undefined) {
+    async ({ section, label, keywords, areas, coauthors, students, dry_run, confirm_delete }) => {
+      if (keywords === undefined && areas === undefined && coauthors === undefined && students === undefined) {
         return jsonResult({
           success: false,
           status: 'failed',
-          message: 'Pasa keywords, areas o ambos; no hay nada que completar.',
+          message: 'Pasa keywords, areas, coauthors, students o una combinación; no hay nada que completar.',
         });
       }
       return jsonResult(
@@ -242,6 +256,12 @@ export function createServer(): McpServer {
           label,
           keywords,
           areas,
+          coauthors,
+          students: students?.map((student) => ({
+            name: student.name,
+            participation: student.participation,
+            personId: student.person_id,
+          })),
           dryRun: dry_run,
           confirmDelete: confirm_delete,
         })

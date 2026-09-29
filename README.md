@@ -90,8 +90,8 @@ son ficticios.
 **Todavía no puede:**
 
 - **Completar automáticamente toda la segunda fase de un producto:** `complete_product` ya gestiona
-  palabras clave y áreas, pero coautores, reconocimientos, certificados de libros y estudiantes
-  vinculados en tesis todavía requieren completarse desde la web.
+  palabras clave, áreas, coautores y estudiantes vinculados en tesis. Reconocimientos y certificados
+  de libros todavía requieren completarse desde la web.
 - **Crear revistas, libros, editoriales, programas o áreas que no existan en los catálogos de CvLAC.**
   Si un catálogo devuelve varias opciones, te las muestra para que elijas.
 - **Iniciar sesión con una cuenta de nacionalidad extranjera.** Por ahora el inicio de sesión asume
@@ -818,7 +818,7 @@ Si trabajas con Claude Code, la skill `cvlac-sync` del
 | `read_portfolio` | Renderiza el portafolio de `PORTFOLIO_URL` y lo une con `portfolio-extra.json` |
 | `diff` | Compara CvLAC contra el portafolio: `missing`, `toUpdate`, `similar`, `upToDate` |
 | `lookup_doi` | Consulta Crossref sin escribir y devuelve un borrador de artículo para revisar |
-| `complete_product` | Completa la segunda fase de un producto existente: reemplaza y ordena palabras clave y áreas. `dry_run:true` previsualiza; retirar valores requiere `confirm_delete:true` |
+| `complete_product` | Completa la segunda fase de un producto existente: reemplaza y ordena palabras clave, áreas y coautores; en tesis vincula estudiantes con su participación. `dry_run:true` previsualiza; retirar valores requiere `confirm_delete:true` |
 | `update_section` | Aplica un cambio puntual: `add`, `update` o `delete` |
 | `sync` | `diff` + aplica `missing` y `toUpdate`. `dry_run:true` para previsualizar. Los `similar` nunca se aplican solos |
 | `screenshot` | Captura la `url` dada, o la última lista, ficha o formulario visitado, recargado tal como está ahora. Rechaza los enlaces de acción (borrar, guardar): en CvLAC abrir uno lo ejecuta |
@@ -826,6 +826,22 @@ Si trabajas con Claude Code, la skill `cvlac-sync` del
 
 Una tool que falla devuelve `isError: true`. `needs_confirmation` y `unverified` no son errores: piden
 que una persona decida o revise.
+
+### `complete_product`
+
+`label` encuentra un producto existente y la operación recibe una o más listas completas:
+
+- `keywords`: palabras clave ordenadas.
+- `areas`: áreas de conocimiento ordenadas, por nombre o código de CvLAC.
+- `coauthors`: nombres de coautores ordenados desde el catálogo de perfiles previamente registrados;
+  el propietario de la hoja de vida se conserva automáticamente.
+- `students`: solo para `tesis`; objetos `{name, participation, person_id?}`. `participation` acepta
+  `TUT`, `ASE`, `COT`, `ORI` o sus etiquetas (`Tutor`, `Asesor`, `Cotutor`, `Orientado`). Si se omite,
+  se usa `ORI`.
+
+Las listas reemplazan lo almacenado. Si la operación quitaría valores existentes, primero devuelve
+`needs_confirmation` con `removed`; repite con `confirm_delete:true`. Una persona no resuelta o con
+varios perfiles posibles vuelve en `choices` y no se escribe nada.
 
 ### `update_section`
 
@@ -1023,8 +1039,9 @@ bloqueo de duplicados y borrado. Algunos campos de edición dependen de variacio
 y quedan documentados en el roadmap. El diff y el bloqueo de duplicados también cubren las listas
 completas mediante paginación JMesa.
 
-`complete_product` ya completa palabras clave y áreas de productos existentes, con verificación e2e
-en un artículo; coautores, reconocimientos, certificados y estudiantes vinculados siguen pendientes.
+`complete_product` ya completa palabras clave, áreas y coautores de productos existentes, y vincula
+estudiantes de tesis con su participación. La operación fue verificada e2e con registros temporales;
+reconocimientos y certificados siguen pendientes.
 
 Detalle completo, limitaciones conocidas y lo que sigue:
 **[ROADMAP](https://github.com/stivenson/cvlac-mcp/blob/master/ROADMAP.md)**.

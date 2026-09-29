@@ -507,6 +507,15 @@ export type ProductCompletionSection =
   | 'consultorias'
   | 'prototipos';
 
+/** One person to link to a thesis in its second phase. */
+export interface ProductStudentInput {
+  name: string;
+  /** CvLAC code (TUT, ASE, COT, ORI) or its displayed label. Defaults to ORI. */
+  participation?: string;
+  /** Optional CvLAC person code, useful when a search returns several namesakes. */
+  personId?: string;
+}
+
 /** What the complete_product MCP tool receives. */
 export interface CompleteProductRequest {
   section: ProductCompletionSection;
@@ -516,6 +525,10 @@ export interface CompleteProductRequest {
   keywords?: string[];
   /** Replaces the product's ordered knowledge-area list when present. */
   areas?: string[];
+  /** Replaces the product's ordered coauthor list; the owner is preserved automatically. */
+  coauthors?: string[];
+  /** Replaces the linked thesis students, preserving the owner/tutor record. */
+  students?: ProductStudentInput[];
   /** Preview catalogue resolution and removals without writing. */
   dryRun?: boolean;
   /** Required when the replacement drops existing keywords or areas. */
