@@ -26,6 +26,15 @@ beforeEach(() => {
 });
 
 describe('syncTool dry run', () => {
+  it('previews by default so an omitted flag cannot write', async () => {
+    diffTool.mockResolvedValue(
+      diff({ missing: [{ section: 'cursos', action: 'add', label: 'Curso A', data: {} }] })
+    );
+    const result = await syncTool();
+    expect(updateSectionTool).not.toHaveBeenCalled();
+    expect(result.report).toContain('Dry run');
+  });
+
   it('writes nothing and says so', async () => {
     diffTool.mockResolvedValue(
       diff({ missing: [{ section: 'cursos', action: 'add', label: 'Curso A', data: {} }] })
@@ -41,7 +50,7 @@ describe('syncTool dry run', () => {
       diff({
         missing: [{ section: 'cursos', action: 'add', label: 'Curso A', data: {} }],
         toUpdate: [
-          { section: 'formacion', action: 'update', label: 'Grado B', data: {}, matchedLabel: 'Grado B viejo' },
+          { section: 'formacion', action: 'update', label: 'Grado B', data: { institution: 'I', degree: 'B', period: '2024' }, matchedLabel: 'Grado B viejo' },
         ],
         similar: [
           {
@@ -81,11 +90,21 @@ describe('syncTool dry run', () => {
 });
 
 describe('syncTool applying', () => {
+  it('rejects malformed portfolio data before calling the writer', async () => {
+    diffTool.mockResolvedValue(
+      diff({ missing: [{ section: 'cursos', action: 'add', label: 'Curso inválido', data: { name: '' } }] })
+    );
+    const result = await syncTool({ dryRun: false });
+    expect(updateSectionTool).not.toHaveBeenCalled();
+    expect(result.applied).toBe(0);
+    expect(result.errors[0]).toMatch(/datos rechazados|name/i);
+  });
+
   it('applies missing and toUpdate, and never the similar ones', async () => {
     diffTool.mockResolvedValue(
       diff({
-        missing: [{ section: 'cursos', action: 'add', label: 'Curso A', data: { name: 'A' } }],
-        toUpdate: [{ section: 'formacion', action: 'update', label: 'Grado B', data: { degree: 'B' } }],
+        missing: [{ section: 'cursos', action: 'add', label: 'Curso A', data: { name: 'A', date: '2024' } }],
+        toUpdate: [{ section: 'formacion', action: 'update', label: 'Grado B', data: { institution: 'I', degree: 'B', period: '2024' } }],
         similar: [
           {
             section: 'reconocimientos',
@@ -97,7 +116,7 @@ describe('syncTool applying', () => {
         ],
       })
     );
-    const result = await syncTool();
+    const result = await syncTool({ dryRun: false });
     expect(updateSectionTool).toHaveBeenCalledTimes(2);
     const sections = updateSectionTool.mock.calls.map(([req]) => req.section);
     expect(sections).toEqual(['cursos', 'formacion']);
@@ -107,15 +126,15 @@ describe('syncTool applying', () => {
 
   it('always passes confirmDuplicate:false as a second line of defence', async () => {
     diffTool.mockResolvedValue(
-      diff({ missing: [{ section: 'cursos', action: 'add', label: 'Curso A', data: {} }] })
+      diff({ missing: [{ section: 'cursos', action: 'add', label: 'Curso A', data: { name: 'A', date: '2024' } }] })
     );
-    await syncTool();
+    await syncTool({ dryRun: false });
     expect(updateSectionTool.mock.calls[0][0].confirmDuplicate).toBe(false);
   });
 
   it('moves an item to needsConfirmation when update_section blocks the write', async () => {
     diffTool.mockResolvedValue(
-      diff({ missing: [{ section: 'cursos', action: 'add', label: 'Curso A', data: {} }] })
+      diff({ missing: [{ section: 'cursos', action: 'add', label: 'Curso A', data: { name: 'A', date: '2024' } }] })
     );
     updateSectionTool.mockResolvedValue({
       success: false,
@@ -123,7 +142,7 @@ describe('syncTool applying', () => {
       message: 'ya existe algo parecido',
       similar: [{ label: 'Curso A bis', matchType: 'similar' }],
     });
-    const result = await syncTool();
+    const result = await syncTool({ dryRun: false });
     expect(result.applied).toBe(0);
     expect(result.skipped).toBe(1);
     expect(result.needsConfirmation).toHaveLength(1);
@@ -138,8 +157,8 @@ describe('syncTool applying', () => {
     diffTool.mockResolvedValue(
       diff({
         missing: [
-          { section: 'cursos', action: 'add', label: 'Curso A', data: {} },
-          { section: 'cursos', action: 'add', label: 'Curso B', data: {} },
+          { section: 'cursos', action: 'add', label: 'Curso A', data: { name: 'A', date: '2024' } },
+          { section: 'cursos', action: 'add', label: 'Curso B', data: { name: 'B', date: '2024' } },
         ],
       })
     );
@@ -151,7 +170,7 @@ describe('syncTool applying', () => {
         warnings: ['nro_ano_presenta: sin valor'],
       })
       .mockResolvedValueOnce(okResult);
-    const result = await syncTool();
+    const result = await syncTool({ dryRun: false });
     expect(result.applied).toBe(1);
     expect(result.skipped).toBe(1);
     expect(result.errors[0]).toContain('falta el año');
@@ -160,7 +179,7 @@ describe('syncTool applying', () => {
 
   it('surfaces warnings from a successful write', async () => {
     diffTool.mockResolvedValue(
-      diff({ missing: [{ section: 'cursos', action: 'add', label: 'Curso A', data: {} }] })
+      diff({ missing: [{ section: 'cursos', action: 'add', label: 'Curso A', data: { name: 'A', date: '2024' } }] })
     );
     updateSectionTool.mockResolvedValue({
       success: true,
@@ -168,7 +187,7 @@ describe('syncTool applying', () => {
       message: 'Added',
       warnings: ['sgl_idioma: sin valor'],
     });
-    const { report } = await syncTool();
+    const { report } = await syncTool({ dryRun: false });
     expect(report).toContain('avisos: sgl_idioma: sin valor');
   });
 });
@@ -178,12 +197,12 @@ describe('syncTool section filter', () => {
     diffTool.mockResolvedValue(
       diff({
         missing: [
-          { section: 'cursos', action: 'add', label: 'Curso A', data: {} },
-          { section: 'software', action: 'add', label: 'App B', data: {} },
+          { section: 'cursos', action: 'add', label: 'Curso A', data: { name: 'A', date: '2024' } },
+          { section: 'software', action: 'add', label: 'App B', data: { name: 'B', year: '2024' } },
         ],
       })
     );
-    const result = await syncTool({ sections: ['cursos'] });
+    const result = await syncTool({ dryRun: false, sections: ['cursos'] });
     expect(updateSectionTool).toHaveBeenCalledTimes(1);
     expect(updateSectionTool.mock.calls[0][0].section).toBe('cursos');
     expect(result.report).toContain('Secciones: cursos');
@@ -192,9 +211,9 @@ describe('syncTool section filter', () => {
 
   it('treats an empty section list as no filter', async () => {
     diffTool.mockResolvedValue(
-      diff({ missing: [{ section: 'cursos', action: 'add', label: 'Curso A', data: {} }] })
+      diff({ missing: [{ section: 'cursos', action: 'add', label: 'Curso A', data: { name: 'A', date: '2024' } }] })
     );
-    await syncTool({ sections: [] });
+    await syncTool({ dryRun: false, sections: [] });
     expect(updateSectionTool).toHaveBeenCalledTimes(1);
   });
 });

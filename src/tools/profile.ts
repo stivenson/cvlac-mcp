@@ -319,16 +319,19 @@ export async function updateProfileTool(req: UpdateProfileRequest): Promise<Upda
   let screenshotBase64: string | undefined;
 
   try {
-    if (req.networks && req.networks.length > 0) {
-      const outcome = await writeRedes(page, req.networks);
+    // Resolve and, when requested, confirm the whole areas operation before
+    // rewriting the networks table. Otherwise an ambiguous area could return
+    // after the networks had already been committed.
+    if (req.areas !== undefined) {
+      const outcome = await writeAreas(page, req.areas, req.confirmDelete === true);
+      if (outcome.status === 'needs_confirmation') return outcome.result!;
       done.push(outcome.message);
       if (outcome.status !== 'ok') status = outcome.status;
       if (outcome.warnings) warnings.push(...outcome.warnings);
     }
 
-    if (req.areas !== undefined) {
-      const outcome = await writeAreas(page, req.areas, req.confirmDelete === true);
-      if (outcome.status === 'needs_confirmation') return outcome.result!;
+    if (req.networks && req.networks.length > 0) {
+      const outcome = await writeRedes(page, req.networks);
       done.push(outcome.message);
       if (outcome.status !== 'ok') status = outcome.status;
       if (outcome.warnings) warnings.push(...outcome.warnings);

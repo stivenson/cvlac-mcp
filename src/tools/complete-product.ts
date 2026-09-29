@@ -1,5 +1,5 @@
 import type { Page } from 'playwright';
-import { BASE_URL } from '../browser/navigation.js';
+import { BASE_URL, toCvLacUrl } from '../browser/navigation.js';
 import { navigate } from '../browser/navigate.js';
 import { session } from '../browser/session.js';
 import { readAreaCatalogue, readAreas, applyAreas, type Area, type CatalogueArea } from './areas.js';
@@ -69,7 +69,7 @@ interface ResolvedArea extends Area {
 }
 
 function absolute(href: string): string {
-  return new URL(href, BASE_URL).toString();
+  return toCvLacUrl(href);
 }
 
 function stripPosition(value: string): string {
@@ -551,17 +551,20 @@ async function setStudentList(page: Page, studentUrl: string, current: StudentVa
   const productId = new URL(studentUrl).searchParams.get('cod_producto') ?? '';
   const currentByCode = new Map(current.map((student) => [student.code, student]));
   const desiredByCode = new Map(desired.map((student) => [student.code, student]));
-  for (const student of current) {
-    if (student.code !== '0' && !desiredByCode.has(student.code)) {
-      await studentMutation(page, 'delete', productId, student.code);
-    }
-  }
+  // Add/update first. If CvLAC rejects a new link, the existing list remains
+  // intact and can still be repaired; deleting first made this operation
+  // irreversible halfway through.
   for (const student of desired) {
     if (student.code === '0') continue;
     const existing = currentByCode.get(student.code);
     if (!existing) await studentMutation(page, 'insert', productId, student.code, student.participation);
     else if (existing.participation !== student.participation) {
       await studentMutation(page, 'update', productId, student.code, student.participation);
+    }
+  }
+  for (const student of current) {
+    if (student.code !== '0' && !desiredByCode.has(student.code)) {
+      await studentMutation(page, 'delete', productId, student.code);
     }
   }
   return readStudentState(page, studentUrl);
@@ -599,7 +602,6 @@ async function resolveKeywords(
   page: Page,
   keywordUrl: string,
   wanted: string[],
-  dryRun: boolean,
   warnings: string[]
 ): Promise<{ state: KeywordState; desired: KeywordValue[]; missing: string[] }> {
   await openKeywordPage(page, keywordUrl);
@@ -621,11 +623,6 @@ async function resolveKeywords(
     }
     seen.add(key);
     let item = [...state.personal, ...state.selected].find((candidate) => normStr(candidate.name) === key);
-    if (!item && !dryRun) {
-      await createKeyword(page, keywordUrl, name);
-      state = await readKeywordState(page);
-      item = [...state.personal, ...state.selected].find((candidate) => normStr(candidate.name) === key);
-    }
     if (!item) {
       missing.push(name);
       warnings.push(`keywords: "${name}" no existe en el catálogo personal; se crearía desde CvLAC`);
@@ -774,11 +771,8 @@ export async function completeProductTool(req: CompleteProductRequest): Promise<
     if (req.keywords !== undefined) {
       if (!phaseUrls.keywords) blockers.push('CvLAC no mostró la acción para registrar palabras clave');
       else {
-        const plan = await resolveKeywords(page, phaseUrls.keywords, req.keywords, req.dryRun === true, warnings);
+        const plan = await resolveKeywords(page, phaseUrls.keywords, req.keywords, warnings);
         keywordPlan = { url: phaseUrls.keywords, ...plan };
-        if (plan.missing.length && !req.dryRun) {
-          blockers.push(`keywords: CvLAC no confirmó la creación de: ${plan.missing.join(', ')}`);
-        }
         removed.push(...removedValues(plan.state.selected, plan.desired).map((name) => `palabra clave: ${name}`));
       }
     }
@@ -853,6 +847,24 @@ export async function completeProductTool(req: CompleteProductRequest): Promise<
       };
     }
 
+    if (keywordPlan && keywordPlan.missing.length) {
+      for (const name of keywordPlan.missing) {
+        await createKeyword(page, keywordPlan.url, name);
+      }
+      const refreshed = await readKeywordState(page);
+      const byName = new Map([...refreshed.personal, ...refreshed.selected].map((item) => [normStr(item.name), item]));
+      const created = keywordPlan.missing.map((name) => byName.get(normStr(name))).filter(Boolean) as KeywordValue[];
+      if (created.length !== keywordPlan.missing.length) {
+        return {
+          success: false,
+          status: 'failed',
+          message: `CvLAC no confirmó la creación de: ${keywordPlan.missing.join(', ')}`,
+          warnings,
+        };
+      }
+      keywordPlan.desired.push(...created);
+      keywordPlan.state = refreshed;
+    }
     if (keywordPlan && !sameOrderedCodes(keywordPlan.state.selected, keywordPlan.desired)) {
       const stored = await setKeywordList(page, keywordPlan.url, keywordPlan.desired);
       if (!sameOrderedCodes(stored.selected, keywordPlan.desired)) {

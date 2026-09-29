@@ -2,6 +2,7 @@ import { diffTool } from './diff.js';
 import { updateSectionTool } from './update-section.js';
 import { createLogger } from '../logger.js';
 import type { DiffItem, SimilarDiffItem, CvLACSectionName } from '../types.js';
+import { SECTION_SCHEMAS, formatIssues } from '../schemas.js';
 
 const log = createLogger('sync');
 
@@ -31,7 +32,9 @@ function inSections(item: { section: CvLACSectionName }, filter: string[] | null
  * decision belongs to a human. They are listed in the report instead.
  */
 export async function syncTool(opts: SyncOptions = {}): Promise<SyncResult> {
-  const { dryRun = false, sections } = opts;
+  // A bulk write must be opt-in. A missing flag should never turn a read/diff
+  // request into a batch of CvLAC mutations.
+  const { dryRun = true, sections } = opts;
   const filter = sections && sections.length > 0 ? sections : null;
 
   const diff = await diffTool();
@@ -91,10 +94,18 @@ export async function syncTool(opts: SyncOptions = {}): Promise<SyncResult> {
   const blocked: SimilarDiffItem[] = [...similar];
 
   for (const item of toApply) {
+    const parsed = SECTION_SCHEMAS[item.section].safeParse(item.data);
+    if (!parsed.success) {
+      skipped++;
+      const reason = `${item.label}: datos rechazados antes de escribir — ${formatIssues(parsed.error)}`;
+      errors.push(reason);
+      lines.push(`- ✗ ${reason}`);
+      continue;
+    }
     const result = await updateSectionTool({
       section: item.section,
       action: item.action,
-      data: item.data,
+      data: parsed.data,
       // Second line of defence: if the diff missed a duplicate, update_section
       // stops the write rather than creating one.
       confirmDuplicate: false,
