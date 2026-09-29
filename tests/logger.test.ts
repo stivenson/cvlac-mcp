@@ -114,7 +114,9 @@ describe('createLogger', () => {
     const contents = readFileSync(file, 'utf-8');
     expect(contents).toContain('primera');
     expect(contents).toContain('segunda');
-    expect(statSync(file).mode & 0o777).toBe(0o600);
+    // Windows enforces ACLs rather than POSIX mode bits; the logger still
+    // requests owner-only creation there and inherits the directory ACL.
+    if (process.platform !== 'win32') expect(statSync(file).mode & 0o777).toBe(0o600);
     rmSync(dir, { recursive: true, force: true });
   });
 
