@@ -55,9 +55,23 @@ Declara funciones con nombre dentro de un `$$eval`, y esbuild —que usa `tsx`�
 ### 3. Segunda fase de productos y verificación e2e
 
 La primera fase ya registra artículos, libros, capítulos, tesis, jurados y cinco familias técnicas.
-Quedan por ejecutar, con autorización explícita, las pruebas CRUD sobre una cuenta real y explorar la
-segunda fase que CvLAC muestra después de guardar: coautores, palabras clave, áreas, reconocimientos,
-certificados y estudiantes vinculados. Esos pasos no se automatizan por ahora.
+La segunda fase ya fue explorada en vivo: la ficha de cada producto abre ventanas para coautores,
+palabras clave, áreas y reconocimientos; las tesis tienen además una pantalla distinta para vincular
+estudiantes y elegir su tipo de participación. Los hallazgos y endpoints están en
+`docs/cvlac-findings.md`. Los certificados de libros siguen siendo cargas de archivos separadas.
+
+Siguiente implementación, en orden de riesgo:
+
+1. Operación explícita `complete_product`, reutilizable para productos existentes y con modo de
+   previsualización.
+2. Palabras clave y áreas, incluyendo orden, catálogos jerárquicos y reemplazo completo de listas.
+3. Coautores y estudiantes, con selección supervisada de perfiles CvLAC y tipo de participación.
+4. Reconocimientos existentes del currículo.
+5. Certificados de libros, con validación de ruta, extensión y tamaño.
+6. E2E real por tipo de producto: completar, leer la ficha, editar, verificar y limpiar.
+
+Estos pasos todavía no se automatizan y la limitación continúa visible en el README hasta cerrar la
+verificación e2e.
 
 ### 4. Separar la fuente de datos del motor
 

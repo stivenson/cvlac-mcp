@@ -423,4 +423,21 @@ Observado:
 
 ### Dos fases por registro
 
-Todos los formularios dicen: *"Al guardar esta información se desplegarán las opciones para registrar coautores, palabras clave, áreas de conocimiento y reconocimientos"*. Los coautores no están en el formulario de creación; queda como trabajo futuro con escritura supervisada.
+Todos los formularios dicen: *"Al guardar esta información se desplegarán las opciones para registrar coautores, palabras clave, áreas de conocimiento y reconocimientos"*. La segunda fase se abre desde la ficha `query.do` del producto, no desde el formulario de alta.
+
+La inspección se verificó en vivo el **2026-09-28** creando y borrando un artículo marcado para pruebas. No se dejaron datos de prueba en la cuenta.
+
+En la ficha aparecen cuatro acciones, todas como ventanas emergentes:
+
+| Acción | Ventana principal | Guardado | Observaciones |
+|---|---|---|---|
+| Palabras clave | `ReTrayectoriaEscPalabraClave/all.do` | `ReTrayectoriaEscPalabraCla/update.do` | La lista es ordenable; también permite crear una palabra propia mediante `popup/EnPalabraClave/insert.do` y luego vincularla. |
+| Coautores | `ReProductoRecursoHumOtro/all.do` | `ReProductoRecursoHumOtro/update.do` | El investigador aparece automáticamente. La lista inicial contiene perfiles CvLAC ya registrados; “Añadir” abre `popup/ReProductoRecursoHumOtro/rhOtroAll.do`. |
+| Áreas | `ReProductoAreaCon/all.do` | `ReProductoAreaCon/update.do` | La ventana de selección usa `areaPopup.do`, un `frameset` con `areaAll.do` y `areaSearchFrame.do`; el catálogo está embebido como `area_0`, `area_1` y `area_2`. |
+| Reconocimientos | `ReProductoReconocimiento/all.do` | `ReProductoReconocimiento/insert.do` | “Añadir” abre `popup/ReProductoReconocimiento/reconocimientoAll.do`; ofrece los reconocimientos que ya existen en el currículo. |
+
+Los cuatro módulos envían el listado completo, con prefijo de posición (`1.`, `2.`, …), y no una operación incremental por elemento. El orden es parte de los datos. Las palabras clave, coautores y áreas usan `select multiple`; sus botones marcan todas las opciones antes del `POST`.
+
+Para tesis, `txt_personas` es un campo oculto y la pantalla posterior es distinta: `/cvlac/exclude/ReProductoRecursoHumano/all.do`. Tiene buscador de personas, una acción **Registrar**, y al escoger una persona solicita además `tpoParticipacionPersona` (tipo de participación). La edición de una vinculación usa `tpoParticipacionCoautor`. Esto no debe tratarse como el selector simple de coautores bibliográficos.
+
+La primera implementación debe ser una operación separada y explícita —por ejemplo `complete_product`— que resuelva el producto por su ficha, lea el estado actual, devuelva `needs_confirmation` ante candidatos ambiguos y solo después envíe cada lista completa. Los certificados del libro siguen siendo una carga de archivos independiente (`file_CLCDO` y `file_CLRI`), no parte de estas cuatro ventanas.
