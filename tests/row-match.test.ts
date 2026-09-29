@@ -33,6 +33,10 @@ describe('pickRow', () => {
     expect(pickRow(rows, 'Otra cosa')).toEqual({ kind: 'none' });
     expect(pickRow(rows, '')).toEqual({ kind: 'none' });
   });
+
+  it('can require an exact title for destructive lookups', () => {
+    expect(pickRow(['IA aplicada a cultivos'], 'IA', { exactOnly: true })).toEqual({ kind: 'none' });
+  });
 });
 
 describe('exactLabelCount', () => {

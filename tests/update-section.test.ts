@@ -515,7 +515,7 @@ describe('deleteItem identifies the exact record, not a similar title', () => {
       });
     });
 
-    const result = await deleteItem({ page }, cfgFor(LIST_URL), 'Deep learning for crop yield');
+    const result = await deleteItem({ page }, cfgFor(LIST_URL), 'Deep learning for crop yield', true, 'demasTrabajos');
     expect(result.success).toBe(true);
     expect(result.status).toBe('ok');
     expect(result.message).toContain('Deleted');
@@ -547,7 +547,7 @@ describe('deleteItem identifies the exact record, not a similar title', () => {
       });
     });
 
-    const result = await deleteItem({ page }, cfgFor(LIST_URL), 'Deep learning for crop yield');
+    const result = await deleteItem({ page }, cfgFor(LIST_URL), 'Deep learning for crop yield', true, 'demasTrabajos');
     expect(result.success).toBe(false);
     expect(result.status).toBe('failed');
     expect(result.message).toMatch(/still (present|listed)/i);

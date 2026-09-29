@@ -17,6 +17,7 @@ import {
   sleep,
   type BackoffOptions,
 } from './pacing.js';
+import { toCvLacUrl } from './navigation.js';
 
 export interface NavigateOptions {
   timeoutMs?: number;
@@ -61,6 +62,7 @@ export async function navigate(
   url: string,
   opts: NavigateOptions = {}
 ): Promise<NavigateResult> {
+  const safeUrl = toCvLacUrl(url);
   const settings = pacingSettings();
   const timeoutMs = opts.timeoutMs ?? settings.timeoutMs;
   const maxAttempts = opts.maxAttempts ?? settings.maxAttempts;
@@ -86,7 +88,7 @@ export async function navigate(
 
     let retryAfterMs: number | null = null;
     try {
-      const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+      const response = await page.goto(safeUrl, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
       lastStatus = response?.status() ?? null;
       lastError = null;
 
@@ -114,6 +116,6 @@ export async function navigate(
   if (lastError) throw lastError;
   if (opts.tolerateUnavailable) return { status: lastStatus, attempts: maxAttempts };
 
-  assertAvailable(lastStatus, url);
+  assertAvailable(lastStatus, safeUrl);
   return { status: lastStatus, attempts: maxAttempts };
 }

@@ -19,7 +19,7 @@ import type {
   OtherWorkInput,
   ResearchLineInput,
 } from '../types.js';
-import { BASE_URL, URLS, SECTION_LIST } from '../browser/navigation.js';
+import { BASE_URL, URLS, SECTION_LIST, toCvLacUrl } from '../browser/navigation.js';
 import { navigate } from '../browser/navigate.js';
 import {
   catalogueQuery,
@@ -1203,11 +1203,12 @@ export async function lookupRow(
   pageRef: { page: Page },
   cfg: { listUrl: string; matchCellIndex: number },
   label: string,
-  linkText: string
+  linkText: string,
+  exactOnly = false
 ): Promise<RowLookup> {
   const go = relLoginGo(pageRef);
   const labels = await collectListPages(cfg.listUrl, go, (p) => listRowLabels(p, cfg.matchCellIndex));
-  const pick = pickRow(labels, label);
+  const pick = pickRow(labels, label, { exactOnly });
   if (pick.kind !== 'one') return pick;
 
   const wanted = labels[pick.index];
@@ -1228,14 +1229,14 @@ export async function lookupRow(
  * the same record — unlike two labels, which can merely look alike.
  */
 export function normalizeActionHref(href: string): string {
-  const url = new URL(href, BASE_URL);
+  const url = new URL(toCvLacUrl(href));
   const params = [...url.searchParams.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   return `${url.pathname}?${params.map(([k, v]) => `${k}=${v}`).join('&')}`;
 }
 
 /** Whether an action href carries anything this server can key a record by. */
 function hasStableId(href: string): boolean {
-  return new URL(href, BASE_URL).searchParams.size > 0;
+  return new URL(toCvLacUrl(href)).searchParams.size > 0;
 }
 
 /** The `linkText` action href of every data row on the page, aligned by position. */
@@ -1562,7 +1563,7 @@ async function updateItem(
   if (!editHref) {
     return failed(`No existing item matching "${label}" to update`, report);
   }
-  await gotoFormWithRelogin(pageRef, BASE_URL + editHref);
+  await gotoFormWithRelogin(pageRef, toCvLacUrl(editHref));
   await humanDelay();
   const beforeFill = await readFormValues(pageRef.page);
   await cfg.fill(pageRef.page, data, report);
@@ -1636,7 +1637,7 @@ async function updateItem(
       return ok(`Updated: ${label}`, report, screenshotBase64);
     }
     log.info('submit returned without confirming; verifying', { label });
-    const stored = await gotoFormWithRelogin(pageRef, BASE_URL + editHref)
+    const stored = await gotoFormWithRelogin(pageRef, toCvLacUrl(editHref))
       .then(() => readFormValues(pageRef.page))
       .catch(() => ({}) as Record<string, string>);
 
@@ -1672,16 +1673,23 @@ async function updateItem(
   return ok(`Updated: ${label}`, report, screenshotBase64);
 }
 
-export async function deleteItem(pageRef: { page: Page }, cfg: SectionConfig, label: string): Promise<UpdateResult> {
+export async function deleteItem(
+  pageRef: { page: Page },
+  cfg: SectionConfig,
+  label: string,
+  confirmDelete: boolean,
+  sectionName: string
+): Promise<UpdateResult> {
   const report: FillReport = { warnings: [] };
-  const row = await lookupRow(pageRef, cfg, label, 'Eliminar');
+  const row = await lookupRow(pageRef, cfg, label, 'Eliminar', true);
   if (row.kind === 'many') return manyRows(label, row.labels);
   if (row.kind === 'none') return failed(`No item matching "${label}" to delete`, report);
   // The row may be there and simply locked: CvLAC drops the Eliminar link on
   // records it will not let go of, and "not found" would be a lie.
   if (!row.href) return undeletableRefusal(label);
+  if (!confirmDelete) return deleteConfirmation(`${sectionName} › "${row.label}"`);
   const confirmHref = row.href;
-  await gotoFormWithRelogin(pageRef, BASE_URL + confirmHref);
+  await gotoFormWithRelogin(pageRef, toCvLacUrl(confirmHref));
   const deleteHref = await pageRef.page.evaluate(() => {
     const a = Array.from(document.querySelectorAll('a')).find(
       (el) => /borrar|eliminar/i.test(el.textContent ?? '') || /delete(_\w+)?\.do/i.test(el.getAttribute('href') ?? '')
@@ -1694,7 +1702,7 @@ export async function deleteItem(pageRef: { page: Page }, cfg: SectionConfig, la
   }
   // Three of CvLAC's delete endpoints answer 5xx and delete the row anyway, so
   // the status here decides nothing: the list does.
-  const deleteStatus = await gotoFormWithRelogin(pageRef, BASE_URL + deleteHref, {
+  const deleteStatus = await gotoFormWithRelogin(pageRef, toCvLacUrl(deleteHref), {
     tolerateUnavailable: true,
   });
   // Identity, not label: a surviving near-namesake ("Deep learning for crop
@@ -1737,16 +1745,13 @@ export async function updateSectionTool(req: UpdateRequest): Promise<UpdateResul
   try {
     const label = cfg.labelOf(req.data);
     log.info('update_section', { section: req.section, action: req.action, label });
-    if (req.action === 'delete' && req.confirmDelete !== true) {
-      return deleteConfirmation(`${req.section} › "${label}"`);
-    }
     switch (req.action) {
       case 'add':
         return await addItem(pageRef, cfg, req.data, label, req.confirmDuplicate === true);
       case 'update':
         return await updateItem(pageRef, cfg, req.data, label);
       case 'delete':
-        return await deleteItem(pageRef, cfg, label);
+        return await deleteItem(pageRef, cfg, label, req.confirmDelete === true, req.section);
       default: {
         const _exhaustive: never = req.action;
         return { success: false, status: 'failed', message: `Action "${String(_exhaustive)}" not supported` };

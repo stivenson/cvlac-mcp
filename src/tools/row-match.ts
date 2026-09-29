@@ -22,17 +22,20 @@ export const normalizeLabel = (s: string): string =>
 
 const norm = normalizeLabel;
 
-export function pickRow(labels: string[], wanted: string): RowPick {
+export function pickRow(labels: string[], wanted: string, options: { exactOnly?: boolean } = {}): RowPick {
   const target = norm(wanted);
   if (!target) return { kind: 'none' };
 
   const exact = labels.map((l, i) => [norm(l), i] as const).filter(([l]) => l === target);
   if (exact.length === 1) return { kind: 'one', index: exact[0][1] };
   if (exact.length > 1) return { kind: 'many', labels: exact.map(([, i]) => labels[i]) };
+  if (options.exactOnly) return { kind: 'none' };
 
   const partial = labels
     .map((l, i) => [norm(l), i] as const)
-    .filter(([l]) => l && (l.includes(target) || target.includes(l)));
+    // Only the requested label may be a shorter form of the row. The reverse
+    // direction lets a tiny query such as "IA" select a long unrelated title.
+    .filter(([l]) => l && l.includes(target));
   if (partial.length === 1) return { kind: 'one', index: partial[0][1] };
   if (partial.length > 1) return { kind: 'many', labels: partial.map(([, i]) => labels[i]) };
   return { kind: 'none' };

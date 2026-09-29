@@ -45,6 +45,14 @@ export class LoginRejectedError extends Error {
   }
 }
 
+function loginRejectedMessage(): string {
+  return (
+    'CvLAC rechazó el inicio de sesión. Revisa CVLAC_NOMBRE (tu primer nombre, tal como ' +
+    'lo registraste), CVLAC_CEDULA y CVLAC_PASSWORD en tu .env. No se reintentó, para ' +
+    'no bloquear tu cuenta.'
+  );
+}
+
 /** Random delay between min and max ms to simulate human behaviour */
 async function humanDelay(min = 800, max = 2000): Promise<void> {
   const ms = min + Math.random() * (max - min);
@@ -99,6 +107,7 @@ export async function isLoginPage(page: Page): Promise<boolean> {
 export class BrowserSession {
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
+  private activePages = new Set<Page>();
   /** In-flight login, so concurrent callers wait instead of resetting the context under each other. */
   private loginInFlight: Promise<void> | null = null;
   /**
@@ -112,6 +121,8 @@ export class BrowserSession {
       await this.init();
     }
     const page = await this.context!.newPage();
+    this.activePages.add(page);
+    page.once('close', () => this.activePages.delete(page));
     page.on('framenavigated', (frame) => {
       if (frame === page.mainFrame() && isSafeToReload(frame.url())) this.lastUrl = frame.url();
     });
@@ -126,13 +137,16 @@ export class BrowserSession {
     const headless = process.env.CVLAC_HEADLESS !== 'false';
     log.debug('launching browser', { headless });
     try {
+      const args = ['--disable-blink-features=AutomationControlled'];
+      // Chromium's sandbox is important when authenticated pages may follow
+      // untrusted content. Containers that genuinely cannot start it can opt
+      // out explicitly, rather than making every installation less safe.
+      if (process.env.CVLAC_NO_SANDBOX === 'true') {
+        args.push('--no-sandbox', '--disable-setuid-sandbox');
+      }
       this.browser = await chromium.launch({
         headless,
-        args: [
-          '--disable-blink-features=AutomationControlled',
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-        ],
+        args,
       });
     } catch (error) {
       // A missing browser is the first wall a fresh install hits, and
@@ -162,18 +176,19 @@ export class BrowserSession {
 
   /** Returns true if currently logged in, false if session expired */
   async checkSession(): Promise<boolean> {
+    const page = await this.getPage();
     try {
-      const page = await this.getPage();
       // Use formacion page — lighter than inicio and still requires auth
       const response = await page.goto(URLS.formacion, { waitUntil: 'domcontentloaded', timeout: 20000 });
       assertAvailable(response?.status() ?? null, URLS.formacion);
       const onLogin = await isLoginPage(page);
-      await page.close();
       log.debug('session check', { valid: !onLogin });
       return !onLogin;
     } catch (err) {
       log.debug('session check failed', { error: err instanceof Error ? err.message : String(err) });
       return false;
+    } finally {
+      await page.close().catch(() => undefined);
     }
   }
 
@@ -191,6 +206,12 @@ export class BrowserSession {
   }
 
   private async doLogin(force: boolean): Promise<void> {
+    if (force && this.activePages.size > 0) {
+      throw new Error(
+        'No se puede forzar el inicio de sesión mientras hay una operación de CvLAC activa. ' +
+          'Espera a que termine para no interrumpir una escritura.'
+      );
+    }
     if (!force) {
       const valid = await this.checkSession();
       if (valid) return;
@@ -206,66 +227,52 @@ export class BrowserSession {
 
     await withRetry(async () => {
       const page = await this.getPage();
+      try {
+        const response = await page.goto(URLS.login, { waitUntil: 'domcontentloaded', timeout: 20000 });
+        // Without this the next fill() fails as an opaque selector timeout.
+        assertAvailable(response?.status() ?? null, URLS.login);
+        await humanDelay(500, 1200);
 
-      const response = await page.goto(URLS.login, { waitUntil: 'domcontentloaded', timeout: 20000 });
-      // Without this the next fill() fails as an opaque selector timeout.
-      assertAvailable(response?.status() ?? null, URLS.login);
-      await humanDelay(500, 1200);
+        // Select nationality — "C" for Colombiana
+        await page.selectOption('#tpo_nacionalidad', 'C');
+        await humanDelay(300, 700);
 
-      // Select nationality — "C" for Colombiana
-      await page.selectOption('#tpo_nacionalidad', 'C');
-      await humanDelay(300, 700);
+        await page.fill('#txt_nmes_rh', nombre);
+        await humanDelay(200, 500);
+        await page.fill('#nro_documento_ident', cedula);
+        await humanDelay(200, 500);
+        await page.fill('#txt_contrasena', password);
+        await humanDelay(400, 900);
+        await page.click('#botonEnviar');
 
-      // Fill first name
-      await page.fill('#txt_nmes_rh', nombre);
-      await humanDelay(200, 500);
+        // A rejected login can return the same form without changing the URL.
+        // Treat that as a terminal credential error instead of retrying it.
+        try {
+          await page.waitForURL(
+            (url) => url.href.includes('inicio') || url.href.includes('error'),
+            { timeout: 30000 }
+          );
+        } catch (err) {
+          if (await isLoginPage(page)) {
+            log.debug('login rejected', { reason: 'login form returned without redirect' });
+            throw new LoginRejectedError(loginRejectedMessage());
+          }
+          throw err;
+        }
 
-      // Fill document number
-      await page.fill('#nro_documento_ident', cedula);
-      await humanDelay(200, 500);
+        const currentUrl = page.url();
+        if (!currentUrl.includes('inicio')) {
+          log.debug('login rejected', { reason: 'CvLAC returned its error page' });
+          throw new LoginRejectedError(loginRejectedMessage());
+        }
 
-      // Fill password
-      await page.fill('#txt_contrasena', password);
-      await humanDelay(400, 900);
-
-      // Submit form
-      await page.click('#botonEnviar');
-
-      // Wait for navigation to inicio or an error message
-      await page.waitForURL(
-        (url) => url.href.includes('inicio') || url.href.includes('error'),
-        { timeout: 30000 }
-      );
-
-      const currentUrl = page.url();
-
-      // Redirect to inicio.do means login was accepted — save session regardless
-      // of whether inicio.do itself is temporarily unavailable (503)
-      if (!currentUrl.includes('inicio')) {
-        // The page body can echo back submitted credentials, so it is only ever
-        // logged at debug level and never put in the thrown message.
-        const bodyText = (await page.textContent('body')) ?? '';
-        log.debug('login rejected', { snippet: bodyText.slice(0, 200).replace(/\s+/g, ' ') });
-        await page.close();
-        throw new LoginRejectedError(
-          'CvLAC rechazó el inicio de sesión. Revisa CVLAC_NOMBRE (tu primer nombre, tal como ' +
-            'lo registraste), CVLAC_CEDULA y CVLAC_PASSWORD en tu .env. No se reintentó, para ' +
-            'no bloquear tu cuenta. Con CVLAC_LOG_LEVEL=debug se ve la respuesta de la página.'
-        );
+        const state = await this.context!.storageState();
+        // Owner-only on POSIX: these cookies open the account without a password.
+        writeFileSync(sessionPath(), JSON.stringify(state, null, 2), { mode: 0o600 });
+        log.info('logged in to CvLAC');
+      } finally {
+        await page.close().catch(() => undefined);
       }
-
-      // Persist session
-      const state = await this.context!.storageState();
-      // Owner-only on POSIX: these cookies open the account without a password.
-      // Windows ignores the mode and inherits the profile folder's ACL.
-      writeFileSync(sessionPath(), JSON.stringify(state, null, 2), { mode: 0o600 });
-
-      await page.close();
-
-      // Reset context so next getPage() loads fresh cookies from sessionPath()
-      await this.context!.close();
-      this.context = null;
-      log.info('logged in to CvLAC');
     }, 3, 8000);
   }
 
@@ -274,6 +281,7 @@ export class BrowserSession {
     await this.browser?.close();
     this.context = null;
     this.browser = null;
+    this.activePages.clear();
   }
 
   /** Takes a full-page screenshot and returns base64 PNG */

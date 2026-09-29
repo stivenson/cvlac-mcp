@@ -2,6 +2,29 @@ import type { CvLACSectionName } from '../types.js';
 
 export const BASE_URL = 'https://scienti.minciencias.gov.co';
 
+/** Resolve a link from CvLAC and refuse cross-origin or non-HTTPS targets. */
+export function toCvLacUrl(href: string): string {
+  let url: URL;
+  try {
+    url = new URL(href, BASE_URL);
+  } catch {
+    throw new Error(`CvLAC devolvió un enlace inválido: ${href}`);
+  }
+  if (url.protocol !== 'https:' || url.origin !== BASE_URL) {
+    throw new Error(`CvLAC devolvió un enlace fuera de su origen permitido: ${url.origin}`);
+  }
+  return url.toString();
+}
+
+export function isCvLacUrl(href: string): boolean {
+  try {
+    toCvLacUrl(href);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export const URLS = {
   login:                `${BASE_URL}/cvlac/Login/pre_s_login.do`,
   inicio:               `${BASE_URL}/cvlac/EnRecursoHumano/inicio.do`,
@@ -113,7 +136,9 @@ export const SECTION_LIST: Record<
 export function isSafeToReload(url: string): boolean {
   let path: string;
   try {
-    path = new URL(url).pathname;
+    const resolved = new URL(url);
+    if (resolved.protocol !== 'https:' || resolved.origin !== BASE_URL) return false;
+    path = resolved.pathname;
   } catch {
     return false;
   }

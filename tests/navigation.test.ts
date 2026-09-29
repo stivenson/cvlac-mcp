@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BASE_URL, URLS, isSafeToReload } from '../src/browser/navigation.js';
+import { BASE_URL, URLS, isSafeToReload, isCvLacUrl, toCvLacUrl } from '../src/browser/navigation.js';
 import { SECTION_SCHEMAS } from '../src/schemas.js';
 
 const sections = Object.keys(SECTION_SCHEMAS);
@@ -63,6 +63,14 @@ describe('section-specific query strings', () => {
 });
 
 describe('isSafeToReload', () => {
+  it('accepts only HTTPS pages on the CvLAC origin', () => {
+    expect(isCvLacUrl(`${BASE_URL}/cvlac/EnProyecto/all.do`)).toBe(true);
+    expect(isCvLacUrl('https://evil.example/cvlac/EnProyecto/all.do')).toBe(false);
+    expect(isCvLacUrl('http://scienti.minciencias.gov.co/cvlac/EnProyecto/all.do')).toBe(false);
+    expect(isCvLacUrl('file:///tmp/.env')).toBe(false);
+    expect(() => toCvLacUrl('//evil.example/delete.do')).toThrow(/origen permitido/i);
+  });
+
   it('accepts every list and form page the server itself opens', () => {
     for (const [name, url] of Object.entries(URLS)) {
       if (name === 'login') continue;
@@ -88,5 +96,8 @@ describe('isSafeToReload', () => {
     expect(isSafeToReload(`${BASE_URL}/cvlac/EnProyecto/confirm.do?id=1`)).toBe(false);
     expect(isSafeToReload('about:blank')).toBe(false);
     expect(isSafeToReload('no es una url')).toBe(false);
+    expect(isSafeToReload('https://evil.example/cvlac/EnProyecto/all.do')).toBe(false);
+    expect(isSafeToReload('file:///tmp/all.do')).toBe(false);
+    expect(isSafeToReload('https://scienti.minciencias.gov.co.evil.example/cvlac/EnProyecto/all.do')).toBe(false);
   });
 });

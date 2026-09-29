@@ -3,8 +3,9 @@ import { chromium, type Browser, type Page } from 'playwright';
 import { navigate } from '../src/browser/navigate.js';
 import { OutageBreaker, RequestPacer } from '../src/browser/pacing.js';
 import { CvlacUnavailableError } from '../src/browser/availability.js';
+import { BASE_URL } from '../src/browser/navigation.js';
 
-const URL = 'https://cvlac.test/section/all.do';
+const URL = `${BASE_URL}/section/all.do`;
 
 /**
  * Backoff short enough that a retry test is not a sleep test, and a pacer and

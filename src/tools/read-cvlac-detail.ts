@@ -1,6 +1,6 @@
 import type { Page } from 'playwright';
 import { session } from '../browser/session.js';
-import { BASE_URL, SECTION_LIST } from '../browser/navigation.js';
+import { toCvLacUrl, SECTION_LIST } from '../browser/navigation.js';
 import { navigate } from '../browser/navigate.js';
 import { lookupRow } from './update-section.js';
 import { createLogger } from '../logger.js';
@@ -131,7 +131,7 @@ export async function readCvlacDetailTool(
       };
     }
 
-    const url = row.href.startsWith('http') ? row.href : BASE_URL + row.href;
+    const url = toCvLacUrl(row.href);
     await navigate(pageRef.page, url);
 
     const fields = await extractDetailFields(pageRef.page);
