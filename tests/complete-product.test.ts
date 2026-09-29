@@ -4,6 +4,8 @@ import {
   parseKeywordValue,
   parseCoauthorCatalogue,
   parseCoauthorValue,
+  parseRecognitionCatalogue,
+  parseRecognitionValue,
   parseStudentResponse,
   readKeywordState,
   removedValues,
@@ -66,6 +68,22 @@ describe('complete_product value helpers', () => {
         { code: '123', name: 'Ana María Pérez', participation: 'ORI', participationName: 'Orientado' },
       ],
     });
+  });
+
+  it('parses ordered product recognitions and the existing recognition catalogue', () => {
+    expect(parseRecognitionValue('2.7', '2. Segundo lugar - Primer Encuentro Año: 2026')).toEqual({
+      code: '7',
+      name: 'Segundo lugar - Primer Encuentro',
+    });
+    expect(
+      parseRecognitionCatalogue([
+        { href: "javascript:addReconocimiento('7','Segundo lugar - Primer Encuentro')", text: 'Segundo lugar - Primer Encuentro Año: 2026' },
+        { href: "javascript:addReconocimiento('8','E-CITIZEN Certificate')", text: 'E-CITIZEN Certificate Año: 2011' },
+      ])
+    ).toEqual([
+      { code: '7', name: 'Segundo lugar - Primer Encuentro' },
+      { code: '8', name: 'E-CITIZEN Certificate' },
+    ]);
   });
 });
 

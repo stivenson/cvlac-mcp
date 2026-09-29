@@ -84,6 +84,7 @@ describe('tool registration', () => {
     const { tools } = await client.listTools();
     const schema = tools.find((tool) => tool.name === 'complete_product')!.inputSchema as any;
     expect(schema.properties.coauthors).toBeTruthy();
+    expect(schema.properties.recognitions).toBeTruthy();
     expect(schema.properties.students).toBeTruthy();
     expect(schema.properties.students.items.properties.name).toBeTruthy();
     expect(schema.properties.students.items.properties.participation).toBeTruthy();

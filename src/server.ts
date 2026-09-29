@@ -207,7 +207,7 @@ export function createServer(): McpServer {
     'complete_product',
     {
       description:
-        'Complete the post-save CvLAC phase for an existing product. It manages ordered keywords, knowledge areas and coauthors; ' +
+        'Complete the post-save CvLAC phase for an existing product. It manages ordered keywords, knowledge areas, coauthors and recognitions; ' +
         'for theses it also links students with their participation. It reads current values, resolves catalogue names, and never removes an existing value without confirm_delete:true. ' +
         'Use dry_run:true to preview catalogue resolution and removals without writing.',
       inputSchema: {
@@ -225,6 +225,10 @@ export function createServer(): McpServer {
           .array(z.string().min(1))
           .optional()
           .describe('Complete ordered replacement list of coauthor names; the CvLAC owner is preserved'),
+        recognitions: z
+          .array(z.string().min(1))
+          .optional()
+          .describe('Complete ordered replacement list of recognition titles already registered in CvLAC'),
         students: z
           .array(
             z.object({
@@ -239,15 +243,21 @@ export function createServer(): McpServer {
         confirm_delete: z
           .boolean()
           .optional()
-          .describe('Required when the replacement drops existing keywords or areas'),
+          .describe('Required when the replacement drops existing keywords, areas, coauthors or recognitions, or unlinks thesis students'),
       },
     },
-    async ({ section, label, keywords, areas, coauthors, students, dry_run, confirm_delete }) => {
-      if (keywords === undefined && areas === undefined && coauthors === undefined && students === undefined) {
+    async ({ section, label, keywords, areas, coauthors, recognitions, students, dry_run, confirm_delete }) => {
+      if (
+        keywords === undefined &&
+        areas === undefined &&
+        coauthors === undefined &&
+        recognitions === undefined &&
+        students === undefined
+      ) {
         return jsonResult({
           success: false,
           status: 'failed',
-          message: 'Pasa keywords, areas, coauthors, students o una combinación; no hay nada que completar.',
+          message: 'Pasa keywords, areas, coauthors, recognitions, students o una combinación; no hay nada que completar.',
         });
       }
       return jsonResult(
@@ -257,6 +267,7 @@ export function createServer(): McpServer {
           keywords,
           areas,
           coauthors,
+          recognitions,
           students: students?.map((student) => ({
             name: student.name,
             participation: student.participation,

@@ -527,6 +527,8 @@ export interface CompleteProductRequest {
   areas?: string[];
   /** Replaces the product's ordered coauthor list; the owner is preserved automatically. */
   coauthors?: string[];
+  /** Replaces the product's ordered recognition list from the existing CvLAC catalogue. */
+  recognitions?: string[];
   /** Replaces the linked thesis students, preserving the owner/tutor record. */
   students?: ProductStudentInput[];
   /** Preview catalogue resolution and removals without writing. */

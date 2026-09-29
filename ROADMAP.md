@@ -62,14 +62,13 @@ estudiantes y elegir su tipo de participación. Los hallazgos y endpoints están
 
 Siguiente implementación, en orden de riesgo:
 
-1. Reconocimientos existentes del currículo.
-2. Certificados de libros, con validación de ruta, extensión y tamaño.
-3. E2E real por tipo de producto: completar, leer la ficha, editar, verificar y limpiar.
+1. Certificados de libros, con validación de ruta, extensión y tamaño.
+2. E2E real por tipo de producto: completar, leer la ficha, editar, verificar y limpiar.
 
-`complete_product` ya gestiona palabras clave, áreas y coautores, además de estudiantes vinculados en
-tesis con su tipo de participación. Resuelve perfiles CvLAC, conserva el propietario, reemplaza las
-listas completas y exige confirmación explícita antes de retirar valores. Fue verificado en vivo con
-artículos y tesis temporales. Reconocimientos y certificados siguen siendo las partes pendientes.
+`complete_product` ya gestiona palabras clave, áreas, coautores y reconocimientos, además de estudiantes
+vinculados en tesis con su tipo de participación. Resuelve catálogos CvLAC, conserva el propietario,
+reemplaza las listas completas y exige confirmación explícita antes de retirar valores. Fue verificado
+en vivo con artículos y tesis temporales. Los certificados siguen siendo la parte pendiente.
 
 ### 4. Separar la fuente de datos del motor
 

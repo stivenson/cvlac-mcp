@@ -49,6 +49,11 @@ export interface PersonValue {
   name: string;
 }
 
+export interface RecognitionValue {
+  code: string;
+  name: string;
+}
+
 export interface StudentValue extends PersonValue {
   participation: string;
   participationName: string;
@@ -97,6 +102,32 @@ export function parseCoauthorCatalogue(
     if (!match) continue;
     const code = match[1].trim();
     const name = (link.text || match[2]).replace(/\s+/g, ' ').trim();
+    if (!code || !name || seen.has(code)) continue;
+    seen.add(code);
+    out.push({ code, name });
+  }
+  return out;
+}
+
+export function parseRecognitionValue(value: string, label: string): RecognitionValue | null {
+  const code = stripPosition(value);
+  const name = stripLabelPosition(label).replace(/\s+Año:\s*\d{4}\s*$/i, '').trim();
+  return code && name ? { code, name } : null;
+}
+
+export function parseRecognitionCatalogue(
+  links: Array<{ href: string | null; text: string | null }>
+): RecognitionValue[] {
+  const out: RecognitionValue[] = [];
+  const seen = new Set<string>();
+  for (const link of links) {
+    const href = link.href ?? '';
+    const codeMatch = href.match(/addReconocimiento\(\s*['"]([^'"]+)['"]/);
+    if (!codeMatch) continue;
+    const nameFromText = (link.text ?? '').replace(/\s+Año:\s*\d{4}\s*$/i, '').trim();
+    const nameFromHref = href.match(/addReconocimiento\(\s*['"][^'"]+['"]\s*,\s*['"]([\s\S]*?)['"]\s*\)/)?.[1] ?? '';
+    const code = codeMatch[1].trim();
+    const name = (nameFromText || nameFromHref).replace(/\s+/g, ' ').trim();
     if (!code || !name || seen.has(code)) continue;
     seen.add(code);
     out.push({ code, name });
@@ -182,7 +213,7 @@ async function phaseUrl(page: Page, phase: Phase): Promise<string | null> {
   return page.evaluate((patternSource) => {
     const pattern = new RegExp(patternSource, 'i');
     const link = Array.from(document.querySelectorAll<HTMLAnchorElement>('a')).find((candidate) =>
-      pattern.test(candidate.textContent ?? '')
+      pattern.test(candidate.textContent ?? '') && /\/cvlac\/[^'"\s]+\.do\?/i.test(candidate.getAttribute('onclick') ?? '')
     );
     if (!link) return null;
     const onclick = link.getAttribute('onclick') ?? '';
@@ -290,6 +321,109 @@ async function setCoauthorList(page: Page, coauthorUrl: string, desired: PersonV
   await submitAndWait(page, 'form[name="reProductoRecursoHumOtroUpdateForm"] input[type="button"]');
   await navigate(page, coauthorUrl);
   return readCoauthorState(page);
+}
+
+async function readRecognitionState(page: Page): Promise<RecognitionValue[]> {
+  const raw = await page.$$eval('#lista_reconocimiento option', (options) =>
+    options.map((option) => {
+      const item = option as HTMLOptionElement;
+      return { value: item.value, text: item.text };
+    })
+  );
+  return raw
+    .map((item) => parseRecognitionValue(item.value, item.text))
+    .filter((item): item is RecognitionValue => item !== null);
+}
+
+async function readRecognitionCatalogue(page: Page, recognitionUrl: string): Promise<RecognitionValue[]> {
+  const query = new URL(recognitionUrl).searchParams;
+  const codRh = query.get('cod_rh') ?? '';
+  const productId = query.get('cod_producto') ?? '';
+  if (!codRh || !productId) return [];
+  const cataloguePage = await session.getPage();
+  try {
+    await navigate(
+      cataloguePage,
+      `${BASE_URL}/cvlac/popup/ReProductoReconocimiento/reconocimientoAll.do?cod_rh=${encodeURIComponent(codRh)}&cod_producto=${encodeURIComponent(productId)}`
+    );
+    const links = await cataloguePage.$$eval('a', (anchors) =>
+      anchors.map((anchor) => ({ href: anchor.getAttribute('href'), text: anchor.textContent }))
+    );
+    return parseRecognitionCatalogue(links);
+  } finally {
+    await cataloguePage.close();
+  }
+}
+
+async function resolveRecognitions(
+  page: Page,
+  recognitionUrl: string,
+  wanted: string[],
+  choices: AmbiguousChoice[],
+  blockers: string[],
+  warnings: string[]
+): Promise<{ current: RecognitionValue[]; desired: RecognitionValue[] }> {
+  await navigate(page, recognitionUrl);
+  const current = await readRecognitionState(page);
+  const catalogue = await readRecognitionCatalogue(page, recognitionUrl);
+  const desired: RecognitionValue[] = [];
+  const seen = new Set<string>();
+  for (const raw of wanted) {
+    const name = raw.trim();
+    if (!name) continue;
+    const target = normStr(name);
+    let matches = catalogue.filter((recognition) => normStr(recognition.name) === target);
+    if (matches.length === 0) {
+      const partial = catalogue.filter((recognition) => {
+        const candidate = normStr(recognition.name);
+        return candidate.includes(target) || target.includes(candidate);
+      });
+      if (partial.length === 1) matches = partial;
+      else if (partial.length > 1) {
+        choices.push({
+          field: 'reconocimiento',
+          value: name,
+          options: partial.slice(0, 10).map((recognition) => ({ id: recognition.code, label: recognition.name })),
+        });
+        continue;
+      }
+    }
+    if (matches.length === 0) {
+      blockers.push(`reconocimiento: "${name}" no existe en el catálogo de reconocimientos registrados de CvLAC`);
+      continue;
+    }
+    const recognition = matches[0];
+    if (seen.has(recognition.code)) {
+      warnings.push(`reconocimientos: se ignoró el reconocimiento repetido "${name}"`);
+      continue;
+    }
+    seen.add(recognition.code);
+    desired.push(recognition);
+  }
+  return { current, desired };
+}
+
+async function setRecognitionList(
+  page: Page,
+  recognitionUrl: string,
+  desired: RecognitionValue[]
+): Promise<RecognitionValue[]> {
+  await navigate(page, recognitionUrl);
+  await page.evaluate((recognitions) => {
+    const select = document.querySelector<HTMLSelectElement>('#lista_reconocimiento');
+    if (!select) throw new Error('CvLAC no mostró la lista de reconocimientos');
+    select.innerHTML = '';
+    recognitions.forEach((recognition, index) => {
+      // CvLAC's formSumbit() adds `${index + 1}.` immediately before posting.
+      // Keep the option value as the raw catalogue code or it gets double-prefixed.
+      const option = new Option(`${index + 1}. ${recognition.name}`, recognition.code);
+      option.selected = true;
+      select.add(option);
+    });
+  }, desired);
+  await submitAndWait(page, 'input[name="action"][value="Aceptar"]');
+  await navigate(page, recognitionUrl);
+  return readRecognitionState(page);
 }
 
 async function readStudentState(page: Page, studentUrl: string): Promise<StudentState> {
@@ -588,11 +722,17 @@ function confirmation(message: string, removed: string[]): UpdateResult {
 }
 
 export async function completeProductTool(req: CompleteProductRequest): Promise<UpdateResult> {
-  if (req.keywords === undefined && req.areas === undefined && req.coauthors === undefined && req.students === undefined) {
+  if (
+    req.keywords === undefined &&
+    req.areas === undefined &&
+    req.coauthors === undefined &&
+    req.recognitions === undefined &&
+    req.students === undefined
+  ) {
     return {
       success: false,
       status: 'failed',
-      message: 'Pasa keywords, areas, coauthors, students o una combinación; no hay nada que completar.',
+      message: 'Pasa keywords, areas, coauthors, recognitions, students o una combinación; no hay nada que completar.',
     };
   }
 
@@ -625,7 +765,7 @@ export async function completeProductTool(req: CompleteProductRequest): Promise<
 
     await navigate(page, absolute(row.href));
     const phaseUrls: Partial<Record<Phase, string>> = {};
-    for (const phase of ['keywords', 'areas', 'coauthors', 'students'] as const) {
+    for (const phase of ['keywords', 'areas', 'coauthors', 'recognitions', 'students'] as const) {
       const url = await phaseUrl(page, phase);
       if (url) phaseUrls[phase] = url;
     }
@@ -660,6 +800,23 @@ export async function completeProductTool(req: CompleteProductRequest): Promise<
         const plan = await resolveCoauthors(page, phaseUrls.coauthors, req.coauthors, choices, blockers, warnings);
         coauthorPlan = { url: phaseUrls.coauthors, ...plan };
         removed.push(...removedValues(plan.current, plan.desired).map((name) => `coautor: ${name}`));
+      }
+    }
+
+    let recognitionPlan: { url: string; current: RecognitionValue[]; desired: RecognitionValue[] } | undefined;
+    if (req.recognitions !== undefined) {
+      if (!phaseUrls.recognitions) blockers.push('CvLAC no mostró la acción para registrar reconocimientos');
+      else {
+        const plan = await resolveRecognitions(
+          page,
+          phaseUrls.recognitions,
+          req.recognitions,
+          choices,
+          blockers,
+          warnings
+        );
+        recognitionPlan = { url: phaseUrls.recognitions, ...plan };
+        removed.push(...removedValues(plan.current, plan.desired).map((name) => `reconocimiento: ${name}`));
       }
     }
 
@@ -716,6 +873,18 @@ export async function completeProductTool(req: CompleteProductRequest): Promise<
         return { success: false, status: 'failed', message: `CvLAC no confirmó los coautores de "${req.label}"`, warnings };
       }
       changed.push('coautores');
+    }
+    if (recognitionPlan && !sameOrderedCodes(recognitionPlan.current, recognitionPlan.desired)) {
+      const stored = await setRecognitionList(page, recognitionPlan.url, recognitionPlan.desired);
+      if (!sameOrderedCodes(stored, recognitionPlan.desired)) {
+        return {
+          success: false,
+          status: 'failed',
+          message: `CvLAC no confirmó los reconocimientos de "${req.label}"`,
+          warnings,
+        };
+      }
+      changed.push('reconocimientos');
     }
     if (studentPlan && !sameStudents(studentPlan.current, studentPlan.desired)) {
       const stored = await setStudentList(page, studentPlan.url, studentPlan.current, studentPlan.desired);
