@@ -73,7 +73,7 @@ siempre sin código nuevo en el servidor.
 
 ### 6. Sostener el paquete de npm
 
-**Publicado el 2026-09-27**: [`cvlac-mcp@1.0.0`](https://www.npmjs.com/package/cvlac-mcp). Verificado
+**Publicado el 2026-09-28**: [`cvlac-mcp@1.0.3`](https://www.npmjs.com/package/cvlac-mcp). Verificado
 contra el registro real: `npx -y cvlac-mcp` arranca y responde `tools/list` sin ruido en stderr.
 
 La decisión anterior era esperar a que alguien reportara fricción clonando. Se adelantó porque el
@@ -119,6 +119,10 @@ El repo **ya está público**. Queda lo que sigue pendiente de todos modos.
 
 ## Historial
 
+- **2026-09-28 (1.0.3)** — Ampliado el CRUD MCP para artículos, libros, capítulos, tesis, jurados y
+  producción técnica; añadido `lookup_doi` con Crossref, catálogos y manejo robusto de formularios.
+  Publicado con 580 pruebas locales pasando, README actualizado y dependencias de producción corregidas
+  tras la auditoría de npm.
 - **2026-09-27 (1.0.2, limpieza)** — Fuera del repo público todo dato personal del autor: los documentos
   de diseño iniciales y el script de perfil de una sola vez (pasan al workspace privado), los empleadores
   y cursos que servían de ejemplo en código y documentación, los conteos de su CvLAC, y el municipio y las
