@@ -106,6 +106,10 @@ const DISPLAY_ONLY_FIELDS = new Set([
   // Revista type is derived from the selected catalogue branch and is not
   // stable on edit.do even when the hidden revista code is preserved.
   'tpo_revista',
+  // File inputs are write-only: edit.do clears them after a request and the
+  // stored certificate is not represented as a readable form value.
+  'file_CLCDO',
+  'file_CLRI',
 ]);
 
 export function verifiableFields(fields: Record<string, string>): Record<string, string> {

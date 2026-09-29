@@ -149,7 +149,8 @@ export function createServer(): McpServer {
         'for theses provide title, tipo, year, institution and programme; for juries provide title, nivel, year, ' +
         'orientado, institution and programme; technical sections require title and year, with section-specific fields. ' +
         'Catalogue choices are answered by repeating the call with revistaId, libroId, editorialId, programaId, areaId ' +
-        'or institucionId in data. Coauthors, keywords and linked thesis students are completed from the CvLAC website; certificates remain pending.',
+        'or institucionId in data. Coauthors, keywords, recognitions and linked thesis students are completed from the CvLAC website.' +
+        ' For books, certificateCLCDO and certificateCLRI accept local PDF paths (maximum 2 MiB each).',
       inputSchema: {
         section: sectionSchema,
         action: z.enum(['add', 'update', 'delete']),

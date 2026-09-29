@@ -158,6 +158,7 @@ const bookSchema = z.object({
   title: z.string().min(1), isbn: z.string().min(10), year: yearSchema, month: monthSchema,
   editorial: z.string().min(1), editorialId: z.string().optional(), publicacion: z.string().optional(), pais: z.string().optional(),
   medio: z.string().optional(), area: z.string().min(1), areaId: z.string().optional(),
+  certificateCLCDO: z.string().min(1).optional(), certificateCLRI: z.string().min(1).optional(),
 });
 
 const technicalSchema = z.object({

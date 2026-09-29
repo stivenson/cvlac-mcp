@@ -423,6 +423,10 @@ export interface BookInput {
   medio?: string;
   area: string;
   areaId?: string;
+  /** Local PDF path for CvLAC's first book certificate. */
+  certificateCLCDO?: string;
+  /** Local PDF path for CvLAC's second book certificate. */
+  certificateCLRI?: string;
 }
 
 export interface TechnicalInput {

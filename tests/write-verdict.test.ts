@@ -169,6 +169,12 @@ describe('verifiableFields', () => {
   it('keeps ordinary fields', () => {
     expect(verifiableFields({ nro_ano_obten: '2022' })).toEqual({ nro_ano_obten: '2022' });
   });
+
+  it('drops write-only book certificate inputs', () => {
+    expect(verifiableFields({ file_CLCDO: 'C:\\fakepath\\certificate.pdf', txt_nme_prod: 'Libro' })).toEqual({
+      txt_nme_prod: 'Libro',
+    });
+  });
 });
 
 describe('disagreeingFields', () => {

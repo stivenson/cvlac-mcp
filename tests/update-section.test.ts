@@ -642,4 +642,36 @@ describe('addItem outage recovery counts the exact label, not a similar title', 
     expect(result.status).toBe('ok');
     expect(result.warnings?.some((w) => w.includes('Server Unavailable'))).toBe(true);
   }, 20000);
+
+  it('reports created when CvLAC returns the empty create form after saving', async () => {
+    const root = 'https://scienti.minciencias.gov.co/cvlac/EnAddFormAgain';
+    let listFetches = 0;
+    await page.route(`${root}/**`, (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname.endsWith('/create.do')) {
+        return route.fulfill({
+          contentType: 'text/html',
+          body: `<form><button type="submit">Guardar</button></form>`,
+        });
+      }
+      listFetches++;
+      const body = listFetches === 1
+        ? '<div>Ningún dato disponible en esta tabla</div>'
+        : '<table class="table" id="add_all"><tbody>' +
+          '<tr class="odd"><td>1</td><td>Book with certificate</td></tr>' +
+          '</tbody></table>';
+      return route.fulfill({ contentType: 'text/html', body });
+    });
+
+    const result = await addItem(
+      { page },
+      cfgFor(root),
+      { label: 'Book with certificate' },
+      'Book with certificate',
+      true
+    );
+    expect(result.success).toBe(true);
+    expect(result.status).toBe('ok');
+    expect(result.warnings?.some((w) => w.includes('fila exacta'))).toBe(true);
+  }, 20000);
 });

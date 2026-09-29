@@ -96,6 +96,13 @@ describe('picker writes', () => {
     expect(await page.$$eval('input', (els) => els.map((e) => (e as HTMLInputElement).value))).toContain('5773');
     expect(await page.locator('[name="cod_rh_programa_academico"]').inputValue()).toBe('0000000000-21873');
   });
+
+  it('uses the current book field for a non-catalogue publisher', async () => {
+    await page.setContent(`<form><input id="txt_nme_editorial1" name="txt_nme_editorial"><input name="cod_editorial"><input name="cod_editorial_otro"></form>`);
+    await applyEditorial(page, { value: 'CV123', code: '123', label: 'Otra editorial', kind: 'otra' });
+    expect(await page.locator('[name="cod_editorial"]').inputValue()).toBe('');
+    expect(await page.locator('[name="cod_editorial_otro"]').inputValue()).toBe('123');
+  });
 });
 
 describe('programme path and product areas', () => {

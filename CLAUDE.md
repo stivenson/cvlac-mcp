@@ -79,8 +79,9 @@ si hay varias opciones, la respuesta trae `choices` y se repite con el campo cor
 en `Id` (`revistaId`, `libroId`, `editorialId`, `programaId`, `areaId` o `institucionId`). Las listas
 JMesa se recorren completas, y update/delete solo actúan cuando hay una fila candidata única.
 `complete_product` gestiona palabras clave, áreas, coautores y reconocimientos ordenados para productos
-existentes; en tesis también vincula estudiantes con `TUT`, `ASE`, `COT` u `ORI`. Solo los certificados
-siguen pendientes. La operación reemplaza la lista completa, exige `confirm_delete` si retira valores y
+existentes; en tesis también vincula estudiantes con `TUT`, `ASE`, `COT` u `ORI`. Los libros aceptan
+`certificateCLCDO` y `certificateCLRI` como rutas locales a PDFs de máximo 2 MiB en `update_section`.
+La operación reemplaza la lista completa, exige `confirm_delete` si retira valores y
 admite `dry_run` para previsualizar; el propietario se conserva en coautores y tesis.
 
 `lookup_doi` es de solo lectura: consulta `api.crossref.org` y devuelve un borrador de `ArticleInput`

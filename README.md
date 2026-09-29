@@ -89,9 +89,9 @@ son ficticios.
 
 **Todavía no puede:**
 
-- **Completar automáticamente toda la segunda fase de un producto:** `complete_product` ya gestiona
-  palabras clave, áreas, coautores, reconocimientos y estudiantes vinculados en tesis. Los certificados
-  de libros todavía requieren completarse desde la web.
+- **Subir certificados desde `complete_product`:** esa operación gestiona palabras clave, áreas,
+  coautores, reconocimientos y estudiantes vinculados en tesis. Los certificados de libros se adjuntan
+  mediante `update_section` con rutas locales; no forman parte de las listas de `complete_product`.
 - **Crear revistas, libros, editoriales, programas o áreas que no existan en los catálogos de CvLAC.**
   Si un catálogo devuelve varias opciones, te las muestra para que elijas.
 - **Iniciar sesión con una cuenta de nacionalidad extranjera.** Por ahora el inicio de sesión asume
@@ -870,6 +870,10 @@ Más detalles:
 - **formacionComple** usa el mismo formulario que `formacion`, con otro catálogo de niveles (`Y` Otros,
   `8` Extensión, `F` Cursos de corta duración, `E` MBA) y `startMonth`. El `add` solo funciona con un
   programa académico que CvLAC ya tenga registrado para esa institución y nivel.
+- **libros**: `certificateCLCDO` y `certificateCLRI` son rutas locales opcionales para los dos
+  certificados PDF del formulario real. Se valida la firma `%PDF-`, la extensión, que el archivo exista
+  y el límite de 2 MiB antes de enviar. CvLAC no devuelve esos archivos como valores de formulario, así
+  que una edición solo de certificados puede responder `unverified`; confirma la ficha antes de reintentar.
 - **demasTrabajos**: `name`, `year`, `month`, `medio` (Papel, Internet u Otro), `finalidad`, y
   opcionalmente `idioma` y `ciudad`. El formulario trae Enero y Papel preseleccionados: si faltan
   `month` o `medio` se guardan esos, y lo avisa.
@@ -1042,8 +1046,9 @@ y quedan documentados en el roadmap. El diff y el bloqueo de duplicados también
 completas mediante paginación JMesa.
 
 `complete_product` ya completa palabras clave, áreas, coautores y reconocimientos de productos
-existentes, y vincula estudiantes de tesis con su participación. La operación fue verificada e2e con
-registros temporales; los certificados siguen pendientes.
+existentes, y vincula estudiantes de tesis con su participación. Los libros también aceptan las rutas
+locales `certificateCLCDO` y `certificateCLRI` en `update_section`; cada PDF debe pesar como máximo
+2 MiB. La operación fue verificada e2e con registros temporales.
 
 Detalle completo, limitaciones conocidas y lo que sigue:
 **[ROADMAP](https://github.com/stivenson/cvlac-mcp/blob/master/ROADMAP.md)**.

@@ -58,17 +58,19 @@ La primera fase ya registra artículos, libros, capítulos, tesis, jurados y cin
 La segunda fase ya fue explorada en vivo: la ficha de cada producto abre ventanas para coautores,
 palabras clave, áreas y reconocimientos; las tesis tienen además una pantalla distinta para vincular
 estudiantes y elegir su tipo de participación. Los hallazgos y endpoints están en
-`docs/cvlac-findings.md`. Los certificados de libros siguen siendo cargas de archivos separadas.
+`docs/cvlac-findings.md`. Los certificados de libros son cargas de archivos separadas del resto de la
+segunda fase y ya se adjuntan desde `update_section`.
 
 Siguiente implementación, en orden de riesgo:
 
-1. Certificados de libros, con validación de ruta, extensión y tamaño.
-2. E2E real por tipo de producto: completar, leer la ficha, editar, verificar y limpiar.
+1. E2E real por tipo de producto: completar, leer la ficha, editar, verificar y limpiar.
 
 `complete_product` ya gestiona palabras clave, áreas, coautores y reconocimientos, además de estudiantes
 vinculados en tesis con su tipo de participación. Resuelve catálogos CvLAC, conserva el propietario,
-reemplaza las listas completas y exige confirmación explícita antes de retirar valores. Fue verificado
-en vivo con artículos y tesis temporales. Los certificados siguen siendo la parte pendiente.
+reemplaza las listas completas y exige confirmación explícita antes de retirar valores. Los certificados
+PDF de libros se validan localmente y se adjuntan durante el alta o edición mediante
+`certificateCLCDO`/`certificateCLRI`. Fue verificado en vivo con libros temporales; CvLAC no ofrece una
+lectura posterior fiable de los archivos.
 
 ### 4. Separar la fuente de datos del motor
 

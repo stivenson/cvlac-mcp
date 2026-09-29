@@ -1,9 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fillJurado } from '../src/tools/products/jurado.js';
 import { fillTesis } from '../src/tools/products/tesis.js';
 import { fillCapitulo } from '../src/tools/products/capitulo.js';
-import { fillLibro } from '../src/tools/products/libro.js';
+import { fillLibro, MAX_CERTIFICATE_BYTES, validateCertificateFile } from '../src/tools/products/libro.js';
 import { fillTecnica, TECNICA_KINDS } from '../src/tools/products/tecnica.js';
 
 vi.setConfig({ testTimeout: 20000 });
@@ -30,6 +33,25 @@ const search = async (path: string): Promise<string> => {
 };
 
 describe('registro de productos CvLAC', () => {
+  it('validates certificate paths as readable PDFs under CvLAC’s 2 MiB limit', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cvlac-certificate-test-'));
+    try {
+      const valid = join(dir, 'certificate.pdf');
+      writeFileSync(valid, '%PDF-1.4\n% test');
+      expect(validateCertificateFile(valid)).toMatchObject({ ok: true, path: valid });
+
+      const wrongExtension = join(dir, 'certificate.txt');
+      writeFileSync(wrongExtension, '%PDF-1.4\n% test');
+      expect(validateCertificateFile(wrongExtension)).toMatchObject({ ok: false });
+
+      const tooLarge = join(dir, 'large.pdf');
+      writeFileSync(tooLarge, Buffer.concat([Buffer.from('%PDF-'), Buffer.alloc(MAX_CERTIFICATE_BYTES)]));
+      expect(validateCertificateFile(tooLarge)).toMatchObject({ ok: false, message: 'supera el límite de 2 MiB' });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('llena un jurado y resuelve institución y programa', async () => {
     await page.setContent(`<form>
       <select name="cod_tipo_producto"><option value="A15">Jurado</option></select>

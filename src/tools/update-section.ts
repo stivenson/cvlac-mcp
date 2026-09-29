@@ -1508,6 +1508,19 @@ export async function addItem(
     );
   }
   if (landedOnForm(pageRef.page)) {
+    // Some CvLAC insert endpoints save successfully and then render the empty
+    // create form again instead of redirecting to the list. Confirm the write
+    // by identity before treating that response as validation failure.
+    const formErrors = await readFormErrors(pageRef.page);
+    if (formErrors.length === 0) {
+      const afterCount = await labelExactCount(pageRef, cfg, label);
+      if (afterCount > beforeCount) {
+        report.warnings.push(
+          'CvLAC volvió a mostrar el formulario, pero la fila exacta sí aparece en la lista'
+        );
+        return ok(`Added: ${label}`, report, screenshotBase64);
+      }
+    }
     return failed(await describeRejection(pageRef.page, 'adding', label), report, screenshotBase64);
   }
 
@@ -1568,10 +1581,12 @@ async function updateItem(
   }
   const relaxed = await relaxHiddenRequired(pageRef.page);
   if (relaxed.length) log.debug('required dropped from hidden controls', { relaxed });
-  const edits = verifiableFields(changedFields(beforeFill, await readFormValues(pageRef.page)));
+  const changed = changedFields(beforeFill, await readFormValues(pageRef.page));
+  const uploadedCertificates = Object.keys(changed).filter((field) => field === 'file_CLCDO' || field === 'file_CLRI');
+  const edits = verifiableFields(changed);
   // Submitting an untouched form is indistinguishable from a successful save,
   // so it does not get submitted.
-  if (Object.keys(edits).length === 0) {
+  if (Object.keys(edits).length === 0 && uploadedCertificates.length === 0) {
     return noChangeRefusal(label, report.warnings);
   }
   await humanDelay(400, 800);
@@ -1606,6 +1621,17 @@ async function updateItem(
   // Reloading it shows what was stored, which is the only honest answer here.
   if (outcome === 'unverified') {
     if (Object.keys(edits).length === 0) {
+      if (uploadedCertificates.length > 0) {
+        return {
+          success: false,
+          status: 'unverified',
+          message:
+            `Se enviaron los certificados de "${label}", pero CvLAC no ofrece una lectura posterior para confirmarlos. ` +
+            'Verifica la ficha del libro antes de reintentar.',
+          warnings: report.warnings.length ? report.warnings : undefined,
+          screenshotBase64,
+        };
+      }
       report.warnings.push('the form was submitted unchanged, so there was nothing to verify');
       return ok(`Updated: ${label}`, report, screenshotBase64);
     }

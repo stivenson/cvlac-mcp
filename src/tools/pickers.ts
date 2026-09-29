@@ -156,7 +156,12 @@ export async function applyLibro(page: Page, option: LibroOption): Promise<void>
 export async function applyEditorial(page: Page, option: EditorialOption): Promise<void> {
   const catalogue = option.kind === 'catalogo';
   await setUnique(page, '[name="cod_editorial"]', catalogue ? option.code : '');
-  await setUnique(page, '[name="null"]', catalogue ? '' : option.code);
+  // The current book form calls this field cod_editorial_otro. Older product
+  // forms used an unnamed `null` field, so keep that fallback for them.
+  const otherField = (await page.locator('[name="cod_editorial_otro"]').count())
+    ? '[name="cod_editorial_otro"]'
+    : '[name="null"]';
+  await setUnique(page, otherField, catalogue ? '' : option.code);
   await setUnique(page, '#txt_nme_editorial1', option.label);
 }
 
