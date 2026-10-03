@@ -1,0 +1,30 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "maintainers": ["stivenson"],
+  "environmentVariables": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "CVLAC_NOMBRE": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Tu primer nombre, tal como lo registraste en CvLAC.",
+          "examples": ["Tu primer nombre"]
+        },
+        "CVLAC_CEDULA": {
+          "type": "string",
+          "pattern": "^[0-9]+$",
+          "description": "Tu número de cédula, solo dígitos.",
+          "examples": ["1234567890"]
+        },
+        "CVLAC_PASSWORD": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Tu clave de CvLAC.",
+          "examples": ["tu clave"]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
