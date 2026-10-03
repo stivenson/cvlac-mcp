@@ -1,6 +1,7 @@
 {
   "name": "cvlac-mcp",
-  "version": "1.0.5",
+  "version": "1.0.6",
+  "mcpName": "io.github.stivenson/cvlac-mcp",
   "description": "Actualiza tu hoja de vida de CvLAC (MinCiencias) conversando con tu asistente de IA, sin llenar formularios a mano. Servidor MCP con Playwright.",
   "type": "module",
   "main": "dist/index.js",

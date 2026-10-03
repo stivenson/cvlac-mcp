@@ -1,0 +1,31 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.stivenson/cvlac-mcp",
+  "title": "CvLAC (MinCiencias)",
+  "description": "Update your Colombian CvLAC (MinCiencias) research CV by chatting with your AI assistant.",
+  "repository": {
+    "url": "https://github.com/stivenson/cvlac-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/stivenson/cvlac-mcp#readme",
+  "version": "1.0.6",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "cvlac-mcp",
+      "version": "1.0.6",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "CVLAC_ENV_FILE",
+          "description": "Absolute path to the .env file holding your CvLAC credentials (CVLAC_NOMBRE, CVLAC_CEDULA, CVLAC_PASSWORD).",
+          "isRequired": true,
+          "isSecret": false,
+          "format": "filepath"
+        }
+      ]
+    }
+  ]
+}
